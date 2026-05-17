@@ -1,45 +1,109 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../models/parking_location.dart';
+import '../services/firebase_collection_paths.dart';
+import '../services/firestore_model_mapper.dart';
 import 'firebase_repository_exception.dart';
 import 'parking_repository.dart';
 
 class FirebaseParkingRepository implements ParkingRepository {
-  const FirebaseParkingRepository();
+  FirebaseParkingRepository({FirebaseFirestore? firestore})
+    : _firestore = firestore ?? FirebaseFirestore.instance;
 
-  Never _missingConfig() {
-    throw const FirebaseRepositoryException(
-      'Firebase packages/config are not wired in this local-first build. '
-      'Run flutterfire configure, add firebase_core/cloud_firestore/firebase_storage, '
-      'then map this repository to FirebaseFirestore.instance.',
-    );
+  final FirebaseFirestore _firestore;
+
+  @override
+  Future<ParkingLocation?> findById(String id) async {
+    final doc = await _areas.doc(id).get();
+    if (!doc.exists || doc.data() == null) {
+      return null;
+    }
+    return FirestoreModelMapper.parkingAreaFromDoc(doc);
   }
 
   @override
-  Future<ParkingLocation?> findById(String id) async => _missingConfig();
-
-  @override
-  Future<List<ParkingLocation>> getByAdmin(String adminId) async =>
-      _missingConfig();
+  Future<List<ParkingLocation>> getByAdmin(String adminId) async {
+    final snapshot = await _areas
+        .where('adminId', isEqualTo: adminId)
+        .orderBy('updatedAt', descending: true)
+        .limit(50)
+        .get();
+    return snapshot.docs.map(FirestoreModelMapper.parkingAreaFromDoc).toList();
+  }
 
   @override
   Future<List<ParkingLocation>> getByRegion(
     String regionId, {
     int limit = 30,
-  }) async => _missingConfig();
+  }) async {
+    final snapshot = await _areas
+        .where('regionId', isEqualTo: regionId)
+        .where('isOpen', isEqualTo: true)
+        .orderBy('availableSpaces', descending: true)
+        .limit(limit)
+        .get();
+    return snapshot.docs.map(FirestoreModelMapper.parkingAreaFromDoc).toList();
+  }
 
   @override
   Stream<List<ParkingLocation>> watchByRegion(
     String regionId, {
     int limit = 30,
-  }) => _missingConfig();
+  }) {
+    return _areas
+        .where('regionId', isEqualTo: regionId)
+        .where('isOpen', isEqualTo: true)
+        .orderBy('availableSpaces', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map(FirestoreModelMapper.parkingAreaFromDoc)
+              .toList(),
+        )
+        .handleError((Object error) {
+          throw FirebaseRepositoryException(
+            'Unable to watch parking areas for region $regionId: $error',
+          );
+        });
+  }
 
   @override
   Future<List<ParkingLocation>> watchNearby({
     required double latitude,
     required double longitude,
-  }) async => _missingConfig();
+  }) async {
+    final snapshot = await _areas
+        .where('isOpen', isEqualTo: true)
+        .orderBy('availableSpaces', descending: true)
+        .limit(30)
+        .get();
+    return snapshot.docs.map(FirestoreModelMapper.parkingAreaFromDoc).toList();
+  }
 
   @override
-  Future<ParkingLocation> reserveSlot(String areaId) async => _missingConfig();
+  Future<ParkingLocation> reserveSlot(String areaId) async {
+    final areaRef = _areas.doc(areaId);
+    return _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(areaRef);
+      if (!snapshot.exists || snapshot.data() == null) {
+        throw StateError('Parking area $areaId was not found.');
+      }
+      final area = FirestoreModelMapper.parkingAreaFromDoc(snapshot);
+      if (!area.isOpen || area.availableSpaces < 1) {
+        throw StateError('Parking area $areaId has no available slots.');
+      }
+      final updated = area.copyWith(
+        availableSpaces: area.availableSpaces - 1,
+        updatedAt: DateTime.now(),
+      );
+      transaction.update(areaRef, {
+        'availableSpaces': updated.availableSpaces,
+        'updatedAt': Timestamp.fromDate(updated.updatedAt),
+      });
+      return updated;
+    });
+  }
 
   @override
   Future<void> updateAvailability({
@@ -48,8 +112,26 @@ class FirebaseParkingRepository implements ParkingRepository {
     required int availableSpaces,
     required bool isOpen,
     required double pricePerHour,
-  }) async => _missingConfig();
+  }) async {
+    await _areas.doc(locationId).update({
+      'totalSpaces': totalSpaces,
+      'availableSpaces': availableSpaces.clamp(0, totalSpaces),
+      'isOpen': isOpen,
+      'pricePerHour': pricePerHour,
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    });
+  }
 
   @override
-  Future<void> upsert(ParkingLocation location) async => _missingConfig();
+  Future<void> upsert(ParkingLocation location) async {
+    await _areas
+        .doc(location.id)
+        .set(
+          FirestoreModelMapper.parkingAreaToFirestore(location),
+          SetOptions(merge: true),
+        );
+  }
+
+  CollectionReference<Map<String, dynamic>> get _areas =>
+      _firestore.collection(FirebaseCollectionPaths.parkingAreas);
 }
