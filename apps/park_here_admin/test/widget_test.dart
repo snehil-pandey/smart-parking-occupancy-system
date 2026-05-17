@@ -6,11 +6,12 @@
 // tree, read text, and verify that the values of widget properties are correct.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:park_here_admin/main.dart';
 
 void main() {
   testWidgets('admin dashboard renders', (tester) async {
-    await tester.pumpWidget(const ParkHereAdminApp());
+    await tester.pumpWidget(const ProviderScope(child: ParkHereAdminApp()));
     await tester.pumpAndSettle();
 
     expect(find.text('Parking locations'), findsOneWidget);

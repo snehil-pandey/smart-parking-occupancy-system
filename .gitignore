@@ -1,0 +1,15 @@
+# Dart / Flutter
+.dart_tool/
+.packages
+build/
+
+# Firebase / local secrets
+.env
+firebase_options.dart
+google-services.json
+GoogleService-Info.plist
+
+# IDE
+.idea/
+.vscode/
+

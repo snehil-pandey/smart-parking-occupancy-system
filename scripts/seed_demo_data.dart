@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:park_here_shared/park_here_shared.dart';
+import 'package:park_here_shared/utils/demo_seed.dart';
 
 void main() {
   final bookings = DemoSeed.bookings();

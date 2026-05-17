@@ -34,3 +34,8 @@
 ### docs: add setup, changelog, and future scope
 - Expanded README with story, features, run commands, Firebase setup, maps setup, and screenshot placeholders.
 - Added routing engine, local setup, future scope docs, and a Firestore-shaped demo seed script.
+
+### test: validate local build and fix issues
+- Resolved Riverpod ProviderScope usage in widget tests.
+- Fixed admin stats card responsiveness found during widget testing.
+- Validated dependency resolution, analysis, widget tests, and web builds for both apps.

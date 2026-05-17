@@ -365,8 +365,8 @@ class _StatsGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       itemCount: stats.length,
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: MediaQuery.sizeOf(context).width > 720 ? 4 : 2,
-        childAspectRatio: 2.2,
+        crossAxisCount: MediaQuery.sizeOf(context).width > 1100 ? 4 : 2,
+        childAspectRatio: 1.9,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
       ),
@@ -384,10 +384,18 @@ class _StatsGrid extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(stat.$1),
                       Text(
-                        stat.$2,
-                        style: Theme.of(context).textTheme.headlineSmall,
+                        stat.$1,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          stat.$2,
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
                       ),
                     ],
                   ),
