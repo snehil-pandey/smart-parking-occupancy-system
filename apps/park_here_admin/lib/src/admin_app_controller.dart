@@ -13,6 +13,12 @@ final adminBookingRepositoryProvider = Provider<BookingRepository>(
 final adminImageRepositoryProvider = Provider<ImageRepository>(
   (ref) => InMemoryImageRepository(),
 );
+final adminRegionRepositoryProvider = Provider<RegionRepository>(
+  (ref) => InMemoryRegionRepository(),
+);
+final adminIssueRepositoryProvider = Provider<IssueRepository>(
+  (ref) => InMemoryIssueRepository(),
+);
 final adminFirebaseReadinessProvider = Provider<FirebaseReadiness>(
   (ref) => const FirebaseReadinessService().check(),
 );
@@ -24,14 +30,21 @@ final adminAppControllerProvider =
         parkingRepository: ref.watch(adminParkingRepositoryProvider),
         bookingRepository: ref.watch(adminBookingRepositoryProvider),
         imageRepository: ref.watch(adminImageRepositoryProvider),
+        regionRepository: ref.watch(adminRegionRepositoryProvider),
+        issueRepository: ref.watch(adminIssueRepositoryProvider),
       )..load();
     });
+
+enum AdminSection { region, parkingAreas, issues }
 
 class AdminAppState {
   const AdminAppState({
     required this.admin,
+    required this.section,
+    required this.region,
     required this.locations,
     required this.bookings,
+    required this.issues,
     required this.selectedImages,
     required this.selectedLocation,
     required this.isLoading,
@@ -43,8 +56,11 @@ class AdminAppState {
   factory AdminAppState.initial(AdminProfile admin) {
     return AdminAppState(
       admin: admin,
+      section: AdminSection.region,
+      region: DemoSeed.sitTumkurRegion(),
       locations: const [],
       bookings: const [],
+      issues: const [],
       selectedImages: const [],
       selectedLocation: null,
       isLoading: true,
@@ -54,8 +70,11 @@ class AdminAppState {
   }
 
   final AdminProfile admin;
+  final AdminSection section;
+  final ParkingRegion region;
   final List<ParkingLocation> locations;
   final List<Booking> bookings;
+  final List<IssueReport> issues;
   final List<ParkingAreaImage> selectedImages;
   final ParkingLocation? selectedLocation;
   final bool isLoading;
@@ -88,8 +107,11 @@ class AdminAppState {
 
   AdminAppState copyWith({
     AdminProfile? admin,
+    AdminSection? section,
+    ParkingRegion? region,
     List<ParkingLocation>? locations,
     List<Booking>? bookings,
+    List<IssueReport>? issues,
     List<ParkingAreaImage>? selectedImages,
     ParkingLocation? selectedLocation,
     bool? isLoading,
@@ -99,8 +121,11 @@ class AdminAppState {
   }) {
     return AdminAppState(
       admin: admin ?? this.admin,
+      section: section ?? this.section,
+      region: region ?? this.region,
       locations: locations ?? this.locations,
       bookings: bookings ?? this.bookings,
+      issues: issues ?? this.issues,
       selectedImages: selectedImages ?? this.selectedImages,
       selectedLocation: selectedLocation ?? this.selectedLocation,
       isLoading: isLoading ?? this.isLoading,
@@ -117,31 +142,43 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     required ParkingRepository parkingRepository,
     required BookingRepository bookingRepository,
     required ImageRepository imageRepository,
+    required RegionRepository regionRepository,
+    required IssueRepository issueRepository,
   }) : _auth = auth,
        _parkingRepository = parkingRepository,
        _bookingRepository = bookingRepository,
        _imageRepository = imageRepository,
+       _regionRepository = regionRepository,
+       _issueRepository = issueRepository,
        super(AdminAppState.initial(auth.currentAdmin));
 
   final AuthService _auth;
   final ParkingRepository _parkingRepository;
   final BookingRepository _bookingRepository;
   final ImageRepository _imageRepository;
+  final RegionRepository _regionRepository;
+  final IssueRepository _issueRepository;
 
   Future<void> load() async {
-    final locations = await _parkingRepository.getByAdmin(
-      _auth.currentAdmin.id,
-    );
+    final region = await _regionRepository.getMainRegion();
+    final locations = await _parkingRepository.getByRegion(region.regionId);
     final bookings = await _bookingRepository.getForAdmin(
       _auth.currentAdmin.id,
     );
+    final issues = await _issueRepository.getForAdmin(_auth.currentAdmin.id);
     state = state.copyWith(
+      region: region,
       locations: locations,
       bookings: bookings,
+      issues: issues,
       selectedLocation: locations.firstOrNull,
       isLoading: false,
     );
     await _loadSelectedImages();
+  }
+
+  void changeSection(AdminSection section) {
+    state = state.copyWith(section: section);
   }
 
   Future<void> updateAdminProfile({
@@ -165,6 +202,60 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     await _loadSelectedImages();
   }
 
+  Future<void> saveRegionBoundary(List<GeoPointValue> points) async {
+    final updated = state.region.copyWith(
+      boundaryPoints: points,
+      updatedAt: DateTime.now(),
+    );
+    await _regionRepository.upsertRegion(updated);
+    state = state.copyWith(region: updated);
+  }
+
+  Future<void> nudgeRegionBoundary() async {
+    final updated = state.region.boundaryPoints
+        .map(
+          (point) => GeoPointValue(
+            latitude: point.latitude + 0.0001,
+            longitude: point.longitude,
+          ),
+        )
+        .toList();
+    await saveRegionBoundary(updated);
+  }
+
+  Future<void> updateSelectedAreaBoundary(List<GeoPointValue> points) async {
+    final location = state.selectedLocation;
+    if (location == null) {
+      return;
+    }
+    final updated = location.copyWith(
+      boundaryPoints: points,
+      updatedAt: DateTime.now(),
+    );
+    await _parkingRepository.upsert(updated);
+    state = state.copyWith(selectedLocation: updated);
+    await load();
+  }
+
+  Future<void> nudgeSelectedAreaBoundary() async {
+    final location = state.selectedLocation;
+    if (location == null) {
+      return;
+    }
+    final source = location.boundaryPoints.isEmpty
+        ? state.region.boundaryPoints
+        : location.boundaryPoints;
+    final updated = source
+        .map(
+          (point) => GeoPointValue(
+            latitude: point.latitude,
+            longitude: point.longitude + 0.0001,
+          ),
+        )
+        .toList();
+    await updateSelectedAreaBoundary(updated);
+  }
+
   Future<void> registerLocation({
     required String name,
     required String address,
@@ -180,9 +271,17 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     final now = DateTime.now();
     final location = ParkingLocation(
       id: 'loc_${now.millisecondsSinceEpoch}',
+      regionId: state.region.regionId,
       adminId: state.admin.id,
       name: name,
+      description: 'New parking area inside ${state.region.name}.',
       address: address,
+      boundaryPoints: const [
+        GeoPointValue(latitude: 13.3500, longitude: 77.1020),
+        GeoPointValue(latitude: 13.3502, longitude: 77.1026),
+        GeoPointValue(latitude: 13.3496, longitude: 77.1028),
+        GeoPointValue(latitude: 13.3494, longitude: 77.1021),
+      ],
       latitude: latitude,
       longitude: longitude,
       totalSpaces: totalSpaces,
@@ -234,6 +333,15 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       status: BookingStatus.completed,
     );
     await load();
+  }
+
+  Future<void> updateIssueStatus(IssueReport issue, IssueStatus status) async {
+    await _issueRepository.updateIssueStatus(
+      issueId: issue.issueId,
+      status: status,
+    );
+    final issues = await _issueRepository.getForAdmin(state.admin.id);
+    state = state.copyWith(issues: issues);
   }
 
   Future<void> uploadDemoImage() async {

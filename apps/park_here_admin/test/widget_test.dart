@@ -16,7 +16,7 @@ void main() {
     await tester.pumpWidget(const ProviderScope(child: ParkHereAdminApp()));
     await tester.pumpAndSettle();
 
-    expect(find.text('Parking locations'), findsOneWidget);
+    expect(find.text('Region Management'), findsOneWidget);
   });
 
   test('admin controller can run optimized image upload flow', () async {
@@ -26,6 +26,8 @@ void main() {
       parkingRepository: InMemoryParkingRepository(),
       bookingRepository: InMemoryBookingRepository(),
       imageRepository: InMemoryImageRepository(seed: const []),
+      regionRepository: InMemoryRegionRepository(),
+      issueRepository: InMemoryIssueRepository(),
     );
 
     await controller.load();

@@ -29,9 +29,11 @@ class AdminDashboardScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showRegisterLocationSheet(context, ref),
+        onPressed: state.section == AdminSection.parkingAreas
+            ? () => _showRegisterLocationSheet(context, ref)
+            : null,
         icon: const Icon(Icons.add_location_alt_outlined),
-        label: const Text('Add location'),
+        label: const Text('Add area'),
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -41,9 +43,15 @@ class AdminDashboardScreen extends ConsumerWidget {
             children: [
               _SetupBanner(firebase: firebase, admin: state.admin),
               const SizedBox(height: 16),
+              _AdminSectionTabs(state: state, controller: controller),
+              const SizedBox(height: 16),
               _StatsGrid(state: state),
               const SizedBox(height: 16),
-              if (wide)
+              if (state.section == AdminSection.region)
+                _RegionManagementPanel(state: state, controller: controller)
+              else if (state.section == AdminSection.issues)
+                _IssuesPanel(state: state, controller: controller)
+              else if (wide)
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -140,10 +148,10 @@ class AdminDashboardScreen extends ConsumerWidget {
   }
 
   void _showRegisterLocationSheet(BuildContext context, WidgetRef ref) {
-    final name = TextEditingController(text: 'New Parking Yard');
-    final address = TextEditingController(text: 'Indiranagar, Bengaluru');
-    final lat = TextEditingController(text: '12.9784');
-    final lon = TextEditingController(text: '77.6408');
+    final name = TextEditingController(text: 'New SIT Parking Area');
+    final address = TextEditingController(text: 'SIT Tumkur Campus');
+    final lat = TextEditingController(text: '13.3500');
+    final lon = TextEditingController(text: '77.1020');
     final total = TextEditingController(text: '36');
     final available = TextEditingController(text: '20');
     final price = TextEditingController(text: '70');
@@ -169,7 +177,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Register parking location',
+                      'Add parking area inside SIT Tumkur',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     TextField(
@@ -324,7 +332,7 @@ class _SetupBanner extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                '${admin.businessName} • ${firebase.message}',
+                '${admin.businessName} - ${firebase.message}',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
@@ -333,6 +341,237 @@ class _SetupBanner extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AdminSectionTabs extends StatelessWidget {
+  const _AdminSectionTabs({required this.state, required this.controller});
+
+  final AdminAppState state;
+  final AdminAppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<AdminSection>(
+      segments: const [
+        ButtonSegment(
+          value: AdminSection.region,
+          icon: Icon(Icons.polyline_outlined),
+          label: Text('Region Management'),
+        ),
+        ButtonSegment(
+          value: AdminSection.parkingAreas,
+          icon: Icon(Icons.local_parking),
+          label: Text('Parking Areas'),
+        ),
+        ButtonSegment(
+          value: AdminSection.issues,
+          icon: Icon(Icons.report_problem_outlined),
+          label: Text('Issues Received'),
+        ),
+      ],
+      selected: {state.section},
+      onSelectionChanged: (selection) {
+        controller.changeSection(selection.first);
+      },
+    );
+  }
+}
+
+class _RegionManagementPanel extends StatelessWidget {
+  const _RegionManagementPanel({required this.state, required this.controller});
+
+  final AdminAppState state;
+  final AdminAppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final region = state.region;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(region.name, style: Theme.of(context).textTheme.titleLarge),
+            Text(region.address),
+            const SizedBox(height: 12),
+            _MiniBoundaryMap(
+              title: 'SIT Tumkur region boundary',
+              regionPoints: region.boundaryPoints,
+              areaPoints: const [],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                Chip(
+                  avatar: const Icon(Icons.center_focus_strong, size: 18),
+                  label: Text('${region.centerLat}, ${region.centerLng}'),
+                ),
+                Chip(
+                  avatar: const Icon(Icons.timeline, size: 18),
+                  label: Text('${region.boundaryPoints.length} polygon points'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: controller.nudgeRegionBoundary,
+              icon: const Icon(Icons.edit_location_alt_outlined),
+              label: const Text('Mark/edit region boundary'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniBoundaryMap extends StatelessWidget {
+  const _MiniBoundaryMap({
+    required this.title,
+    required this.regionPoints,
+    required this.areaPoints,
+  });
+
+  final String title;
+  final List<GeoPointValue> regionPoints;
+  final List<GeoPointValue> areaPoints;
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 2.8,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFFE9EFEA),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFD5DFDA)),
+        ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _BoundaryPainter(
+                  regionPoints: regionPoints,
+                  areaPoints: areaPoints,
+                ),
+              ),
+            ),
+            Positioned(
+              left: 12,
+              top: 12,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  child: Text(title),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BoundaryPainter extends CustomPainter {
+  const _BoundaryPainter({
+    required this.regionPoints,
+    required this.areaPoints,
+  });
+
+  final List<GeoPointValue> regionPoints;
+  final List<GeoPointValue> areaPoints;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final road = Paint()
+      ..color = Colors.white.withAlpha(160)
+      ..strokeWidth = 18
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      Offset(size.width * 0.08, size.height * 0.72),
+      Offset(size.width * 0.92, size.height * 0.22),
+      road,
+    );
+    _drawPolygon(
+      canvas,
+      size,
+      regionPoints,
+      Paint()
+        ..color = ParkHereTheme.adminBlue.withAlpha(42)
+        ..style = PaintingStyle.fill,
+      Paint()
+        ..color = ParkHereTheme.adminBlue
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3,
+    );
+    _drawPolygon(
+      canvas,
+      size,
+      areaPoints,
+      Paint()
+        ..color = ParkHereTheme.yellow.withAlpha(90)
+        ..style = PaintingStyle.fill,
+      Paint()
+        ..color = ParkHereTheme.black
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+  }
+
+  void _drawPolygon(
+    Canvas canvas,
+    Size size,
+    List<GeoPointValue> points,
+    Paint fill,
+    Paint stroke,
+  ) {
+    if (points.length < 3) {
+      return;
+    }
+    final minLat = points
+        .map((point) => point.latitude)
+        .reduce((a, b) => a < b ? a : b);
+    final maxLat = points
+        .map((point) => point.latitude)
+        .reduce((a, b) => a > b ? a : b);
+    final minLng = points
+        .map((point) => point.longitude)
+        .reduce((a, b) => a < b ? a : b);
+    final maxLng = points
+        .map((point) => point.longitude)
+        .reduce((a, b) => a > b ? a : b);
+    Offset project(GeoPointValue point) {
+      final x =
+          (point.longitude - minLng) / ((maxLng - minLng).abs() + 0.00001);
+      final y = (maxLat - point.latitude) / ((maxLat - minLat).abs() + 0.00001);
+      return Offset(24 + x * (size.width - 48), 24 + y * (size.height - 48));
+    }
+
+    final path = Path()
+      ..moveTo(project(points.first).dx, project(points.first).dy);
+    for (final point in points.skip(1)) {
+      path.lineTo(project(point).dx, project(point).dy);
+    }
+    path.close();
+    canvas.drawPath(path, fill);
+    canvas.drawPath(path, stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _BoundaryPainter oldDelegate) =>
+      oldDelegate.regionPoints != regionPoints ||
+      oldDelegate.areaPoints != areaPoints;
 }
 
 class _StatsGrid extends StatelessWidget {
@@ -417,12 +656,12 @@ class _LocationsPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Parking locations',
+              'Parking areas in SIT Tumkur',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 10),
             if (state.locations.isEmpty)
-              const _EmptyState(message: 'No parking locations yet.')
+              const _EmptyState(message: 'No parking areas yet.')
             else
               for (final location in state.locations)
                 ListTile(
@@ -433,7 +672,7 @@ class _LocationsPanel extends StatelessWidget {
                   leading: const Icon(Icons.local_parking),
                   title: Text(location.name),
                   subtitle: Text(
-                    '${location.availableSpaces}/${location.totalSpaces} spaces • ${formatInr(location.pricePerHour)}/hr',
+                    '${location.availableSpaces}/${location.totalSpaces} spaces - ${formatInr(location.pricePerHour)}/hr - ${location.ratingAverage.toStringAsFixed(1)} rating',
                   ),
                   trailing: Icon(
                     location.isOpen ? Icons.lock_open : Icons.lock_outline,
@@ -441,10 +680,127 @@ class _LocationsPanel extends StatelessWidget {
                 ),
             if (selected != null) ...[
               const Divider(height: 28),
+              _AreaBoundaryEditor(
+                region: state.region,
+                location: selected,
+                controller: controller,
+              ),
+              const Divider(height: 28),
               _AvailabilityEditor(location: selected, controller: controller),
               const Divider(height: 28),
               _ImageManager(state: state, controller: controller),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AreaBoundaryEditor extends StatelessWidget {
+  const _AreaBoundaryEditor({
+    required this.region,
+    required this.location,
+    required this.controller,
+  });
+
+  final ParkingRegion region;
+  final ParkingLocation location;
+  final AdminAppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Area editor map', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        _MiniBoundaryMap(
+          title: location.name,
+          regionPoints: region.boundaryPoints,
+          areaPoints: location.boundaryPoints,
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            Chip(
+              avatar: const Icon(Icons.polyline_outlined, size: 18),
+              label: Text('${location.boundaryPoints.length} area points'),
+            ),
+            Chip(
+              avatar: const Icon(Icons.pin_drop_outlined, size: 18),
+              label: Text('${location.centerLat}, ${location.centerLng}'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: controller.nudgeSelectedAreaBoundary,
+          icon: const Icon(Icons.edit_location_outlined),
+          label: const Text('Draw/mark area boundary'),
+        ),
+      ],
+    );
+  }
+}
+
+class _IssuesPanel extends StatelessWidget {
+  const _IssuesPanel({required this.state, required this.controller});
+
+  final AdminAppState state;
+  final AdminAppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final byArea = {
+      for (final location in state.locations) location.id: location.name,
+    };
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Issues Received',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 10),
+            if (state.issues.isEmpty)
+              const _EmptyState(message: 'No parking area issues received.')
+            else
+              for (final issue in state.issues)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    issue.status == IssueStatus.resolved
+                        ? Icons.task_alt
+                        : Icons.report_problem_outlined,
+                  ),
+                  title: Text(
+                    '${issue.type} - ${byArea[issue.areaId] ?? issue.areaId}',
+                  ),
+                  subtitle: Text('${issue.message}\n${issue.createdAt}'),
+                  isThreeLine: true,
+                  trailing: DropdownButton<IssueStatus>(
+                    value: issue.status,
+                    onChanged: (status) {
+                      if (status != null) {
+                        controller.updateIssueStatus(issue, status);
+                      }
+                    },
+                    items: IssueStatus.values
+                        .map(
+                          (status) => DropdownMenuItem(
+                            value: status,
+                            child: Text(status.label),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
           ],
         ),
       ),
