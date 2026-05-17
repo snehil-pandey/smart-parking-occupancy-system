@@ -119,8 +119,27 @@ class InMemoryBookingRepository implements BookingRepository {
   }
 
   @override
+  Stream<List<Booking>> watchForAdmin(String adminId, {int limit = 50}) {
+    return Stream.fromFuture(
+      getForAdmin(adminId).then((bookings) => bookings.take(limit).toList()),
+    );
+  }
+
+  @override
   Future<List<Booking>> getForUser(String userId) async {
     return _bookings.where((booking) => booking.userId == userId).toList();
+  }
+
+  @override
+  Stream<List<Booking>> watchForUser(String userId, {int limit = 30}) {
+    return Stream.fromFuture(
+      getForUser(userId).then((bookings) => bookings.take(limit).toList()),
+    );
+  }
+
+  @override
+  Stream<ActiveQrTicket?> watchActiveQrForBooking(String bookingId) {
+    return Stream.fromFuture(getActiveQrForBooking(bookingId));
   }
 
   @override

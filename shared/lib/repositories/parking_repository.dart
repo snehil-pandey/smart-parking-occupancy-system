@@ -19,6 +19,8 @@ abstract interface class ParkingRepository {
 
   Future<void> upsert(ParkingLocation location);
 
+  Future<ParkingLocation> reserveSlot(String areaId);
+
   Future<void> updateAvailability({
     required String locationId,
     required int totalSpaces,

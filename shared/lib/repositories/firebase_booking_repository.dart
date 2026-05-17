@@ -28,13 +28,25 @@ class FirebaseBookingRepository implements BookingRepository {
       _missingConfig();
 
   @override
+  Stream<ActiveQrTicket?> watchActiveQrForBooking(String bookingId) =>
+      _missingConfig();
+
+  @override
   Future<void> consumeQrTicket(String qrId) async => _missingConfig();
 
   @override
   Future<List<Booking>> getForAdmin(String adminId) async => _missingConfig();
 
   @override
+  Stream<List<Booking>> watchForAdmin(String adminId, {int limit = 50}) =>
+      _missingConfig();
+
+  @override
   Future<List<Booking>> getForUser(String userId) async => _missingConfig();
+
+  @override
+  Stream<List<Booking>> watchForUser(String userId, {int limit = 30}) =>
+      _missingConfig();
 
   @override
   Future<void> updateStatus({

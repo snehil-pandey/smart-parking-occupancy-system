@@ -39,6 +39,9 @@ class FirebaseParkingRepository implements ParkingRepository {
   }) async => _missingConfig();
 
   @override
+  Future<ParkingLocation> reserveSlot(String areaId) async => _missingConfig();
+
+  @override
   Future<void> updateAvailability({
     required String locationId,
     required int totalSpaces,

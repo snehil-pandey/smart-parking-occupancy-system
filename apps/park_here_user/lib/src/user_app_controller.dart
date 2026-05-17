@@ -246,15 +246,22 @@ class UserAppController extends StateNotifier<UserAppState> {
     }
 
     final now = DateTime.now();
+    late final ParkingLocation reservedLocation;
+    try {
+      reservedLocation = await _parkingRepository.reserveSlot(location.id);
+    } on StateError catch (error) {
+      state = state.copyWith(error: error.message);
+      return;
+    }
     final bookingId = 'book_${now.millisecondsSinceEpoch}';
     final qrId = 'qr_$bookingId';
     final end = now.add(Duration(hours: state.durationHours));
-    final price = state.durationHours * location.pricePerHour;
+    final price = state.durationHours * reservedLocation.pricePerHour;
     final payload = _qrPayloadService.buildPayload(
       bookingId: bookingId,
       qrId: qrId,
       userId: state.user.id,
-      parkingLocationId: location.id,
+      parkingLocationId: reservedLocation.id,
       vehicleNumber: state.user.vehicleNumber,
       startTime: now,
       endTime: end,
@@ -262,8 +269,8 @@ class UserAppController extends StateNotifier<UserAppState> {
     final booking = Booking(
       id: bookingId,
       userId: state.user.id,
-      adminId: location.adminId,
-      parkingLocationId: location.id,
+      adminId: reservedLocation.adminId,
+      parkingLocationId: reservedLocation.id,
       qrId: qrId,
       vehicleNumber: state.user.vehicleNumber,
       startTime: now,
@@ -276,15 +283,8 @@ class UserAppController extends StateNotifier<UserAppState> {
     );
     await _bookingRepository.createBooking(booking);
     await _bookingRepository.createActiveQrTicket(booking);
-    await _parkingRepository.updateAvailability(
-      locationId: location.id,
-      totalSpaces: location.totalSpaces,
-      availableSpaces: location.availableSpaces - 1,
-      isOpen: location.isOpen,
-      pricePerHour: location.pricePerHour,
-    );
     await load();
-    final refreshed = await _parkingRepository.findById(location.id);
+    final refreshed = await _parkingRepository.findById(reservedLocation.id);
     if (refreshed != null) {
       await selectLocation(refreshed);
     }

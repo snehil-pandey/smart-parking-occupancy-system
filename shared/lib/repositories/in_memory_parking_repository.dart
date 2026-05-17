@@ -83,4 +83,22 @@ class InMemoryParkingRepository implements ParkingRepository {
       _locations[index] = location;
     }
   }
+
+  @override
+  Future<ParkingLocation> reserveSlot(String areaId) async {
+    final index = _locations.indexWhere((location) => location.id == areaId);
+    if (index == -1) {
+      throw StateError('Parking area $areaId was not found.');
+    }
+    final location = _locations[index];
+    if (!location.isOpen || location.availableSpaces < 1) {
+      throw StateError('Parking area $areaId has no available slots.');
+    }
+    final updated = location.copyWith(
+      availableSpaces: location.availableSpaces - 1,
+      updatedAt: DateTime.now(),
+    );
+    _locations[index] = updated;
+    return updated;
+  }
 }
