@@ -409,6 +409,14 @@ class _ParkingBottomSheet extends StatelessWidget {
           const SizedBox(height: 16),
           if (state.activeBooking != null)
             _ActiveBookingCard(booking: state.activeBooking!),
+          if (state.actionMessage != null) ...[
+            _StatusStrip(message: state.actionMessage!),
+            const SizedBox(height: 10),
+          ],
+          if (state.error != null) ...[
+            _StatusStrip(message: state.error!, isError: true),
+            const SizedBox(height: 10),
+          ],
           Text('Nearby parking', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 10),
           for (final location in state.locations)
@@ -427,12 +435,45 @@ class _ParkingBottomSheet extends StatelessWidget {
             _BookingPanel(
               location: selected,
               previewImages: state.previewImages,
+              reviews: state.selectedReviews,
               durationHours: state.durationHours,
               onDurationChanged: controller.changeDuration,
               onBook: controller.createBooking,
+              onReview: controller.submitReview,
+              onReport: controller.reportIssue,
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _StatusStrip extends StatelessWidget {
+  const _StatusStrip({required this.message, this.isError = false});
+
+  final String message;
+  final bool isError;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: isError ? const Color(0xFFFFECEC) : const Color(0xFFEAF7EE),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle_outline,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
       ),
     );
   }
@@ -527,7 +568,7 @@ class _LocationTile extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
-          '${location.availableSpaces}/${location.totalSpaces} slots - ${location.address}',
+          '${location.availableSpaces}/${location.totalSpaces} slots - ${location.ratingAverage.toStringAsFixed(1)} star - ${location.address}',
         ),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -576,16 +617,24 @@ class _BookingPanel extends StatelessWidget {
   const _BookingPanel({
     required this.location,
     required this.previewImages,
+    required this.reviews,
     required this.durationHours,
     required this.onDurationChanged,
     required this.onBook,
+    required this.onReview,
+    required this.onReport,
   });
 
   final ParkingLocation location;
   final List<ParkingAreaImage> previewImages;
+  final List<ParkingReview> reviews;
   final int durationHours;
   final ValueChanged<int> onDurationChanged;
   final Future<void> Function() onBook;
+  final Future<void> Function({required int rating, required String comment})
+  onReview;
+  final Future<void> Function({required String type, required String message})
+  onReport;
 
   @override
   Widget build(BuildContext context) {
@@ -605,6 +654,36 @@ class _BookingPanel extends StatelessWidget {
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(color: Colors.white),
+            ),
+            if (location.description.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                location.description,
+                style: const TextStyle(color: Colors.white70),
+              ),
+            ],
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _DarkChip(
+                  icon: Icons.star,
+                  label:
+                      '${location.ratingAverage.toStringAsFixed(1)} (${location.ratingCount})',
+                ),
+                _DarkChip(
+                  icon: Icons.local_parking,
+                  label:
+                      '${location.availableSpaces}/${location.totalSpaces} slots',
+                ),
+                _DarkChip(
+                  icon: Icons.two_wheeler,
+                  label: location.vehicleTypes
+                      .map((type) => type.label)
+                      .join(', '),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             if (previewImages.isNotEmpty) ...[
@@ -651,14 +730,238 @@ class _BookingPanel extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: ParkHereTheme.yellow,
-                foregroundColor: ParkHereTheme.black,
+            if (reviews.isNotEmpty) ...[
+              Text(
+                'Recent comments',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(color: Colors.white),
               ),
-              onPressed: onBook,
-              icon: const Icon(Icons.qr_code_2),
-              label: Text('Book slot - ${formatInr(total)}'),
+              const SizedBox(height: 6),
+              for (final review in reviews.take(2))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    '${review.rating}/5 - ${review.comment}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                ),
+              const SizedBox(height: 6),
+            ],
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: ParkHereTheme.yellow,
+                    foregroundColor: ParkHereTheme.black,
+                  ),
+                  onPressed: onBook,
+                  icon: const Icon(Icons.qr_code_2),
+                  label: Text('Book slot - ${formatInr(total)}'),
+                ),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white54),
+                  ),
+                  onPressed: () => _showReviewSheet(context, onReview),
+                  icon: const Icon(Icons.rate_review_outlined),
+                  label: const Text('Rate'),
+                ),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white54),
+                  ),
+                  onPressed: () => _showIssueSheet(context, onReport),
+                  icon: const Icon(Icons.report_problem_outlined),
+                  label: const Text('Report'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showReviewSheet(
+    BuildContext context,
+    Future<void> Function({required int rating, required String comment})
+    onSubmit,
+  ) {
+    final comment = TextEditingController();
+    var rating = 5;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                20,
+                20,
+                MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Rate ${location.name}',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  SegmentedButton<int>(
+                    segments: const [
+                      ButtonSegment(value: 1, label: Text('1')),
+                      ButtonSegment(value: 2, label: Text('2')),
+                      ButtonSegment(value: 3, label: Text('3')),
+                      ButtonSegment(value: 4, label: Text('4')),
+                      ButtonSegment(value: 5, label: Text('5')),
+                    ],
+                    selected: {rating},
+                    onSelectionChanged: (value) =>
+                        setSheetState(() => rating = value.first),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: comment,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Comment',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  FilledButton.icon(
+                    onPressed: () {
+                      onSubmit(rating: rating, comment: comment.text);
+                      Navigator.pop(context);
+                    },
+                    icon: const Icon(Icons.save_outlined),
+                    label: const Text('Save review'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showIssueSheet(
+    BuildContext context,
+    Future<void> Function({required String type, required String message})
+    onSubmit,
+  ) {
+    final message = TextEditingController();
+    var type = 'availability';
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                20,
+                20,
+                MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Report ${location.name}',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: type,
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'availability',
+                        child: Text('Availability'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'pricing',
+                        child: Text('Pricing'),
+                      ),
+                      DropdownMenuItem(value: 'access', child: Text('Access')),
+                      DropdownMenuItem(value: 'safety', child: Text('Safety')),
+                    ],
+                    onChanged: (value) =>
+                        setSheetState(() => type = value ?? type),
+                    decoration: const InputDecoration(
+                      labelText: 'Issue type',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: message,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Message',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  FilledButton.icon(
+                    onPressed: () {
+                      onSubmit(type: type, message: message.text);
+                      Navigator.pop(context);
+                    },
+                    icon: const Icon(Icons.send_outlined),
+                    label: const Text('Send issue'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _DarkChip extends StatelessWidget {
+  const _DarkChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(24),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 16),
+            const SizedBox(width: 6),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: Text(
+                label,
+                style: const TextStyle(color: Colors.white),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
