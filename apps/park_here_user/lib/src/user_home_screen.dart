@@ -47,6 +47,7 @@ class UserHomeScreen extends ConsumerWidget {
                       user: state.user!,
                       firebase: firebase,
                       onProfileTap: () => _showProfileSheet(context, ref),
+                      onSignOut: controller.signOut,
                     ),
                   ),
                   DraggableScrollableSheet(
@@ -160,11 +161,13 @@ class _SearchPanel extends StatelessWidget {
     required this.user,
     required this.firebase,
     required this.onProfileTap,
+    required this.onSignOut,
   });
 
   final AppUser user;
   final FirebaseReadiness firebase;
   final VoidCallback onProfileTap;
+  final Future<void> Function() onSignOut;
 
   @override
   Widget build(BuildContext context) {
@@ -194,6 +197,11 @@ class _SearchPanel extends StatelessWidget {
                   tooltip: 'Profile',
                   onPressed: onProfileTap,
                   icon: const Icon(Icons.account_circle_outlined),
+                ),
+                IconButton(
+                  tooltip: 'Sign out',
+                  onPressed: onSignOut,
+                  icon: const Icon(Icons.logout),
                 ),
               ],
             ),

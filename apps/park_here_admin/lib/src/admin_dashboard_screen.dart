@@ -40,6 +40,11 @@ class AdminDashboardScreen extends ConsumerWidget {
             onPressed: () => _showAdminProfileSheet(context, ref),
             icon: const Icon(Icons.account_circle_outlined),
           ),
+          IconButton(
+            tooltip: 'Sign out',
+            onPressed: controller.signOut,
+            icon: const Icon(Icons.logout),
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
