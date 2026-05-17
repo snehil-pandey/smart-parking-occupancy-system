@@ -1,11 +1,12 @@
 # Firebase Schema
 
-The apps run locally by default, but the models are shaped to move into Firestore without UI rewrites.
+The apps use Firebase-backed repositories in normal runtime. In-memory repositories are kept only for tests and explicit development overrides. Seed/demo records should be loaded through `/demo/seed_firebase_demo.py`, not from app-bundled runtime data.
 
 ## `/users/{userId}`
 
 | Field | Type | Notes |
 | --- | --- | --- |
+| `userId` / `id` | string | Must match Firebase Auth uid |
 | `name` | string | Driver display name |
 | `phone` | string | Driver contact number |
 | `vehicleNumber` | string | Default vehicle registration |
@@ -16,6 +17,7 @@ The apps run locally by default, but the models are shaped to move into Firestor
 
 | Field | Type | Notes |
 | --- | --- | --- |
+| `adminId` / `id` | string | Must match Firebase Auth uid |
 | `businessName` | string | Parking owner/business name |
 | `ownerName` | string | Owner contact person |
 | `phone` | string | Admin phone |
@@ -177,7 +179,8 @@ Create indexes only after Firestore asks for them, but these are expected:
 | Collection | Fields | Screen/Use |
 | --- | --- | --- |
 | `parking_areas` | `regionId ASC`, `isOpen ASC`, `availableSpaces DESC` | User nearby availability |
-| `parking_areas` | `adminId ASC`, `regionId ASC`, `updatedAt DESC` | Admin parking area list |
+| `parking_areas` | `adminId ASC`, `updatedAt DESC` | Admin parking area realtime list, including closed areas |
+| `parking_areas` | `adminId ASC`, `regionId ASC`, `updatedAt DESC` | Optional admin region-filtered list |
 | `bookings` | `userId ASC`, `status ASC`, `createdAt DESC` | User active booking/history |
 | `bookings` | `adminId ASC`, `status ASC`, `createdAt DESC` | Admin active bookings |
 | `active_qr_tickets` | `bookingId ASC`, `status ASC`, `expiresAt ASC` | Active QR status |
@@ -195,3 +198,13 @@ If Firebase Storage is enabled later, keep `/parking_area_images` as metadata an
 - `previewUrl`
 
 The app should continue using `ImageRepository`, swapping `FirestoreImageRepository` for `FirebaseStorageImageRepository` without changing the UI flow.
+
+## Runtime Notes
+
+- User and admin identity comes from Firebase Auth uid.
+- Sign-up writes the matching `/users/{uid}` or `/admins/{uid}` profile.
+- Sign-in creates a minimal profile if Auth exists but the role-specific Firestore profile is missing.
+- User discovery reads open parking areas only.
+- Admin area management reads by `adminId` so closed areas remain manageable.
+- Images are not stored on parking area documents; parking areas store image ids only.
+- Active QR tickets are operational records. Booking history remains in `/bookings`.

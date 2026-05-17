@@ -81,4 +81,24 @@
 - Added tests for Firestore date mapping and ignored generated Flutter plugin metadata.
 
 ### docs: refresh Firebase repository setup notes
-- Updated README, architecture, and local setup docs to reflect that Firestore repositories now exist while local mode remains the default.
+- Updated README, architecture, and local setup docs at that milestone to reflect that Firestore repositories existed while local mode was still the default.
+
+### fix(firebase): wire runtime apps to Firebase repositories
+- Initialized Firebase in both apps and switched runtime providers to Firebase Auth, Firestore repositories, and Firestore image mode.
+- Added setup error handling when Firebase config is missing instead of falling back to fake app data.
+
+### feat(auth): add Firebase login and profile loading
+- Added Firebase Auth email/password signup and login for user and admin apps.
+- Runtime sessions now load `/users/{uid}` and `/admins/{uid}` profiles and create role-specific profiles when needed.
+
+### feat(location): add realtime GPS based parking discovery
+- Added user GPS permission handling and live location updates for nearby distance and route origin.
+- Added clear SIT Tumkur fallback messaging when location permission or service access is unavailable.
+
+### refactor(demo): isolate demo data from app runtime
+- Removed runtime app dependencies on `DemoSeed` and in-memory repositories.
+- Added a straight-line route provider for Firebase runtime fallback routing.
+- Reworked admin image upload/replace flows to use selected image bytes and Firestore image records.
+
+### docs(firebase): update setup and runtime data flow
+- Updated setup, architecture, and schema docs for Firebase-only runtime data, Auth profiles, GPS permissions, Firestore image mode, and demo seeding.

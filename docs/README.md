@@ -1,6 +1,6 @@
 # Park Here
 
-Park Here is a local-first production-style MVP for parking occupancy with two Flutter apps:
+Park Here is a Firebase-backed production-style MVP for parking occupancy with two Flutter apps:
 
 - **Park Here**: driver app for finding, comparing, booking, and navigating to parking.
 - **Park Here: Location Administrator**: owner app for registering parking locations, managing spaces, viewing bookings, and tracking income.
@@ -13,7 +13,7 @@ A driver should not need to circle the same road three times hoping for a space.
 
 Driver app:
 
-- Local/Firebase-ready auth profile
+- Firebase Auth profile
 - Map-first nearby parking discovery
 - Parking areas only, with available slots, price, ratings, images, and route comparison
 - Dijkstra fallback route provider
@@ -23,7 +23,7 @@ Driver app:
 
 Admin app:
 
-- Local/Firebase-ready owner profile
+- Firebase Auth owner profile
 - SIT Tumkur region and parking area management
 - Region and parking area boundary editing
 - Availability, price, and open/closed controls
@@ -75,23 +75,23 @@ flutter run -d chrome
 
 ## Firebase Setup
 
-The current build runs locally without Firebase config. Firebase packages and Firestore repository implementations are present, but app providers still default to local in-memory repositories so the MVP runs immediately.
+The current build uses Firebase repositories at runtime. If Firebase configuration is missing, the apps show a setup error instead of loading in-app demo data.
 
 To connect Firebase:
 
 1. Create a Firebase project.
-2. Enable Firebase Auth, Cloud Firestore, and Firebase Storage.
+2. Enable Firebase Auth and Cloud Firestore.
 3. Install FlutterFire CLI.
 4. Run `flutterfire configure` in each app folder.
-5. Confirm `firebase_core`, `firebase_auth`, `cloud_firestore`, and `firebase_storage` are resolved.
-6. Replace local repository providers with Firebase repository implementations where needed.
+5. Confirm `firebase_core`, `firebase_auth`, `cloud_firestore`, and `geolocator` are resolved.
+6. Seed Firestore with `demo/seed_firebase_demo.py` or create real data manually.
 7. Use the schema in [FIREBASE_SCHEMA.md](FIREBASE_SCHEMA.md).
 
-Default image mode is Firestore-only and stores compressed thumbnails/previews in `/parking_area_images`. Firebase Storage remains an optional future mode for teams that can use Blaze/pay-as-you-go.
+Default image mode is Firestore-only and stores compressed thumbnails/previews in `/parking_area_images`. Firebase Storage remains optional for teams that can use Blaze/pay-as-you-go.
 
 ## Maps Setup
 
-The MVP uses a local map-style canvas and Dijkstra route provider so it runs free and offline-friendly. For production maps, add a provider behind `RouteProvider`:
+The MVP uses live GPS for route origin and a local map-style canvas with route providers so it runs free and offline-friendly. For production maps, add a provider behind `RouteProvider`:
 
 - Google Maps + Directions API
 - OpenStreetMap tiles with OSRM/OpenRouteService

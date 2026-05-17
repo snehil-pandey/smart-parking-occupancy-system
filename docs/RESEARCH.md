@@ -15,9 +15,9 @@ Keeping them separate makes the interface faster, reduces role checks in the UI,
 
 ## Why Firebase
 
-Firebase is a good MVP backend because it covers authentication, realtime-ish data, document storage, and image hosting without a custom server. The architecture keeps Firebase behind repositories so the apps can run locally first and move to Firestore when project configuration is ready.
+Firebase is a good MVP backend because it covers authentication, realtime data, document storage, and operational dashboards without a custom server. The architecture keeps Firebase behind repositories so app code stays modular while runtime data comes from Firestore.
 
-The MVP uses local in-memory repositories by default. Firebase-ready collection shapes and repository boundaries are documented so production integration can be added without rebuilding the UI.
+The app runtime now uses Firebase repositories by default. Local in-memory repositories remain only for tests and explicit development overrides, while demo records are seeded through `/demo/seed_firebase_demo.py`.
 
 ## Why Map-First UI
 
@@ -43,7 +43,6 @@ The current MVP keeps map rendering dependency-light and draws a local route can
 ## Limitations
 
 - Demo routing is graph-based, not real road navigation.
-- Firebase packages are intentionally not hardwired into the runtime yet, so missing project config does not crash the apps.
+- Firebase config is required for normal runtime; missing config shows a setup error instead of app-bundled demo data.
 - QR signing uses a local deterministic checksum for MVP verification readiness. Production should use a server-side HMAC or signed token.
-- Image upload is represented as URL/preview management in local mode. Firebase Storage wiring is documented for the next integration step.
-
+- Images use Firestore-only optimized thumbnail/preview records by default. Firebase Storage is optional later because it may require Blaze billing.

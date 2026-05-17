@@ -1,116 +1,137 @@
 # Architecture
 
-Park Here uses a clean, feature-first shape with a shared Dart package for domain models, repository contracts, fallback services, routing, QR payload generation, and theme tokens.
+Park Here uses a clean, feature-first monorepo with two Flutter apps and a shared Dart package for models, repositories, services, routing, image handling, QR payloads, and theme tokens.
+
+Normal runtime is Firebase-backed. Local in-memory repositories remain only for tests and explicit dev overrides; they are not the production app data source.
 
 ```mermaid
 flowchart LR
   UserApp["Park Here User App"] --> Shared["shared package"]
   AdminApp["Location Administrator App"] --> Shared
-  Shared --> Repos["Repository Interfaces"]
-  Repos --> Local["Local Demo Repositories"]
-  Repos --> Firestore["Firestore Repository Implementations"]
-  Repos -. future .-> FirebaseAuth["Firebase Auth Service"]
-  Repos -. optional .-> Storage["Firebase Storage"]
-  Shared --> Routing["RouteProvider + Dijkstra Engine"]
-  Shared --> QR["QR Payload Service"]
-  Shared --> Images["ImageRepository + ImageOptimizer"]
+  UserApp --> FirebaseInit["Firebase.initializeApp"]
+  AdminApp --> FirebaseInit
+  Shared --> Contracts["Repository Interfaces"]
+  Contracts --> FirebaseRepos["Firebase Repository Implementations"]
+  Contracts -. tests only .-> LocalRepos["In-memory test repositories"]
+  FirebaseRepos --> Firestore["Cloud Firestore"]
+  FirebaseRepos --> Auth["Firebase Auth"]
+  Shared --> Routing["RouteProvider + StraightLine/Dijkstra fallback"]
+  Shared --> Images["ImageRepository + Firestore image mode"]
+  Shared --> QR["QR Payload + Active Ticket Services"]
 ```
 
 ## User App Flow
 
 ```mermaid
 flowchart TD
-  Start["Open Park Here"] --> Auth["Local/Firebase-ready auth"]
-  Auth --> Home["Map-first home"]
-  Home --> Discover["Nearby parking suggestions"]
-  Discover --> Details["Location details"]
-  Details --> Route["Compare shortest and alternate routes"]
-  Route --> Book["Select duration and book"]
-  Book --> Ticket["QR ticket + active booking"]
-  Ticket --> History["Booking history"]
+  Start["Open Park Here"] --> Init["Initialize Firebase"]
+  Init --> Auth["Firebase Auth login/signup"]
+  Auth --> Profile["Load or create /users/{uid}"]
+  Profile --> GPS["Request GPS permission"]
+  GPS --> Home["Map-first home"]
+  Home --> Areas["Stream open parking areas"]
+  Areas --> Details["Area details, thumbnails, reviews"]
+  Details --> Route["Compare route options from GPS origin"]
+  Route --> Book["Reserve slot with Firestore transaction"]
+  Book --> QR["Create booking and active QR ticket"]
+  QR --> Status["Stream active booking/QR status"]
+  Status --> History["Booking history remains in /bookings"]
 ```
 
 ## Admin App Flow
 
 ```mermaid
 flowchart TD
-  Start["Open Admin App"] --> Auth["Owner sign in"]
-  Auth --> Dashboard["Stats dashboard"]
-  Dashboard --> Register["Register parking area"]
-  Dashboard --> Availability["Manage availability and price"]
-  Dashboard --> Bookings["View active/recent bookings"]
-  Bookings --> Complete["Mark booking completed"]
+  Start["Open Admin App"] --> Init["Initialize Firebase"]
+  Init --> Auth["Firebase Auth login/signup"]
+  Auth --> Profile["Load or create /admins/{uid}"]
+  Profile --> Region["Load SIT Tumkur region"]
+  Region --> Areas["Stream admin parking areas"]
+  Areas --> Editor["Edit boundary, slots, price, images"]
+  Profile --> Bookings["Stream admin bookings"]
+  Profile --> Issues["Stream Issues Received"]
+  Bookings --> Complete["Complete booking or consume QR"]
 ```
 
 ## Region To Parking Area Flow
 
-SIT Tumkur is the current demo region. Admins manage that boundary and then publish bookable parking areas inside it. Users only see parking areas, never the region as a selectable parking object.
+SIT Tumkur is the current main region. Admins manage that region boundary, then publish bookable parking areas inside it. Users only see parking areas; the region is not a selectable parking object.
 
 ```mermaid
 flowchart TD
-  Region["Region: SIT Tumkur"] --> Boundary["Admin edits region polygon"]
-  Boundary --> Area["Admin draws parking area boundary"]
-  Area --> Publish["Publish area with slots, price, images"]
+  Region["/regions/region_sit_tumkur"] --> Boundary["Admin edits region polygon"]
+  Boundary --> Area["Admin creates parking area polygon"]
+  Area --> Publish["Publish area with slots, price, vehicle types, images"]
   Publish --> UserMap["User map/list shows parking areas only"]
   UserMap --> Booking["User books area"]
-  Booking --> QR["Active QR ticket"]
-  Booking --> History["Permanent booking history"]
+  Booking --> ActiveQR["/active_qr_tickets/{qrId}"]
+  Booking --> History["Permanent /bookings/{bookingId}"]
 ```
 
-## Issue Report Flow
-
-```mermaid
-flowchart LR
-  User["User opens area details"] --> Report["Report issue"]
-  Report --> Firestore["/issue_reports filtered by adminId"]
-  Firestore --> Admin["Issues Received screen"]
-  Admin --> Status["open / in_progress / resolved / rejected"]
-  Status --> UserContext["Future user/admin notifications"]
-```
-
-## Firebase Backend Flow
-
-```mermaid
-flowchart LR
-  Auth["Firebase Auth"] --> Profiles["/users and /admins"]
-  Profiles --> Regions["/regions"]
-  Regions --> Areas["/parking_areas"]
-  Areas --> Images["/parking_area_images"]
-  Areas --> Reviews["/reviews"]
-  Areas --> Issues["/issue_reports"]
-  Areas --> Bookings["/bookings"]
-  Bookings --> ActiveQR["/active_qr_tickets"]
-  Bookings --> Payments["/payments"]
-  Storage["Optional Firebase Storage"] -. future .-> Images
-  Bookings --> AdminDash["Admin dashboard aggregates"]
-  Bookings --> UserHistory["User history"]
-```
-
-## Realtime Listener Flow
+## Realtime Firebase Listener Flow
 
 ```mermaid
 flowchart TD
-  UserHome["User map home"] --> AreaQuery["parking_areas by regionId + isOpen, limited"]
-  UserHome --> ActiveBooking["bookings by userId + active"]
-  ActiveBooking --> ActiveQR["active_qr_tickets by bookingId"]
-  AdminDash["Admin dashboard"] --> AdminAreas["parking_areas by adminId/regionId"]
-  AdminDash --> AdminBookings["bookings by adminId/status"]
-  AdminDash --> AdminIssues["issue_reports by adminId/status"]
-  AreaQuery --> Cache["Local Riverpod/ImagePayloadCache state"]
-  AdminAreas --> Cache
+  UserHome["User Home"] --> UserAreas["parking_areas: regionId + isOpen + limit"]
+  UserHome --> UserBookings["bookings: userId + limit"]
+  UserBookings --> UserQR["active_qr_tickets: bookingId + active"]
+  UserHome --> Reviews["reviews: areaId + limit"]
+  AdminHome["Admin Dashboard"] --> AdminAreas["parking_areas: adminId + limit"]
+  AdminHome --> AdminBookings["bookings: adminId + limit"]
+  AdminHome --> AdminIssues["issue_reports: adminId + limit"]
+  UserAreas --> Riverpod["Riverpod state"]
+  AdminAreas --> Riverpod
+  UserQR --> Riverpod
 ```
 
-## Hybrid Image Flow
+Bounded listeners are used only where live updates matter. Image payloads are lazy-loaded, not streamed as entire collections.
 
-Firebase Storage can require a pay-as-you-go billing setup, so Park Here does not make Storage mandatory. The default image path stores only compressed, Firestore-safe image payloads in a separate collection. Parking area documents keep lightweight references, not large base64 blobs.
+## Booking And QR Flow
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant App as Park Here
+  participant Firestore
+  participant Gate as Future Gate/API
+
+  User->>App: Selects area and duration
+  App->>Firestore: Transaction decrements availableSpaces
+  App->>Firestore: Creates /bookings/{bookingId}
+  App->>Firestore: Creates /active_qr_tickets/{qrId}
+  App-->>User: Shows QR payload
+  Gate->>Firestore: Looks up active QR
+  Firestore-->>Gate: Active ticket + booking
+  Gate->>Firestore: Consumes QR once
+  Firestore->>Firestore: Marks ticket used and booking completed
+```
+
+```mermaid
+stateDiagram-v2
+  [*] --> Active: booking created
+  Active --> Used: consumeQrTicket
+  Active --> Expired: expiresAt passes
+  Used --> [*]
+  Expired --> [*]
+```
+
+Booking history is never deleted. Active QR records are operational and may be marked `used` or expired.
+
+## Firestore-Only Image Flow
+
+Firebase Storage may require billing, so the default image path is Firestore-only and optimized.
 
 ```mermaid
 flowchart LR
-  Admin["Admin Upload"] --> Compress["Compression"]
-  Compress --> Thumb["Thumbnail Generation"]
-  Thumb --> Images["Firestore Image Collection"]
-  Images --> Lazy["Lazy User Fetch"]
-  Lazy --> Cache["Local Image Cache"]
+  Admin["Admin selects image"] --> Compress["Compress original"]
+  Compress --> Thumb["Generate <=30KB thumbnail"]
+  Compress --> Preview["Generate <=120KB preview"]
+  Thumb --> ImageDoc["/parking_area_images"]
+  Preview --> ImageDoc
+  ImageDoc --> Refs["thumbnailRefs/imagePreviewRefs on area"]
+  Refs --> UserList["User list lazy thumbnail"]
+  Refs --> Details["Details carousel lazy previews"]
+  Details --> Cache["ImagePayloadCache"]
 ```
 
 The repository boundary stays extensible:
@@ -132,49 +153,16 @@ classDiagram
   ImageRepository <|.. InMemoryImageRepository
 ```
 
-Default mode:
+Default runtime uses `FirestoreImageRepository`. `FirebaseStorageImageRepository` is a future optional swap behind the same interface.
 
-- `InMemoryImageRepository` locally
-- `FirestoreImageRepository` when Firebase is enabled; this implementation is now present
-- `FirebaseStorageImageRepository` only when Storage billing/config is acceptable
-
-Image performance rules:
-
-- Generate thumbnail and preview versions before upload.
-- Store image payloads in `/parking_area_images`, not in `/parking_areas`.
-- Keep thumbnails under 30KB and previews under 120KB.
-- Load one thumbnail per parking area in list views.
-- Lazy-load preview images only when the user opens area details.
-- Cache fetched image records locally.
-- Use query limits and pagination for large image sets.
-
-## QR Verification Flow
+## Issue Report Flow
 
 ```mermaid
-sequenceDiagram
-  participant User
-  participant App as Park Here App
-  participant Firestore
-  participant Gate as Future Gate Scanner
-
-  User->>App: Books parking slot
-  App->>Firestore: Creates booking with qrPayload
-  App->>User: Shows QR ticket
-  Gate->>Firestore: Looks up bookingId from QR
-  Firestore-->>Gate: Booking status and expected fields
-  Gate->>Gate: Validates checksum/signature and time window
-  Gate-->>User: Allows entry or rejects
-```
-
-Active QR tickets are short-lived records. Booking history is permanent.
-
-```mermaid
-stateDiagram-v2
-  [*] --> Active: booking created
-  Active --> Used: gate verifies or admin completes
-  Active --> Expired: time window passes
-  Used --> [*]
-  Expired --> [*]
+flowchart LR
+  User["User opens area details"] --> Report["Submit issue"]
+  Report --> Firestore["/issue_reports with adminId + areaId"]
+  Firestore --> Admin["Issues Received"]
+  Admin --> Status["open / in_progress / resolved / rejected"]
 ```
 
 ## Folder Strategy
