@@ -13,7 +13,35 @@ import 'package:park_here_shared/park_here_shared.dart';
 
 void main() {
   testWidgets('admin dashboard renders', (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: ParkHereAdminApp()));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          adminAuthProvider.overrideWithValue(LocalAuthService()),
+          adminParkingRepositoryProvider.overrideWithValue(
+            InMemoryParkingRepository(),
+          ),
+          adminBookingRepositoryProvider.overrideWithValue(
+            InMemoryBookingRepository(),
+          ),
+          adminImageRepositoryProvider.overrideWithValue(
+            InMemoryImageRepository(),
+          ),
+          adminRegionRepositoryProvider.overrideWithValue(
+            InMemoryRegionRepository(),
+          ),
+          adminIssueRepositoryProvider.overrideWithValue(
+            InMemoryIssueRepository(),
+          ),
+          adminFirebaseReadinessProvider.overrideWithValue(
+            const FirebaseReadiness(
+              isConfigured: true,
+              message: 'Test Firebase readiness.',
+            ),
+          ),
+        ],
+        child: const ParkHereAdminApp(),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Region Management'), findsOneWidget);

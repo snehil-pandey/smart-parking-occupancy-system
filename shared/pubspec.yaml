@@ -12,6 +12,7 @@ dependencies:
   flutter:
     sdk: flutter
   cloud_firestore: ^6.4.1
+  firebase_auth: ^6.5.1
   image: ^4.8.0
 
 dev_dependencies:

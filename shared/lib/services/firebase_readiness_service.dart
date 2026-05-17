@@ -6,13 +6,22 @@ class FirebaseReadiness {
 }
 
 class FirebaseReadinessService {
-  const FirebaseReadinessService();
+  const FirebaseReadinessService({this.isConfigured = true, this.error});
+
+  final bool isConfigured;
+  final Object? error;
 
   FirebaseReadiness check() {
+    if (!isConfigured) {
+      return FirebaseReadiness(
+        isConfigured: false,
+        message:
+            'Firebase setup failed: ${error ?? 'missing configuration'}. Run FlutterFire setup and restart.',
+      );
+    }
     return const FirebaseReadiness(
-      isConfigured: false,
-      message:
-          'Firebase is not configured yet. The app is running with local demo repositories.',
+      isConfigured: true,
+      message: 'Firebase is connected. Runtime data is loaded from Firestore.',
     );
   }
 }

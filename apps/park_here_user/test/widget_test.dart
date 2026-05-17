@@ -8,10 +8,36 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:park_here_user/main.dart';
+import 'package:park_here_user/src/user_app_controller.dart';
+import 'package:park_here_shared/park_here_shared.dart';
 
 void main() {
   testWidgets('Park Here user app renders', (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: ParkHereUserApp()));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authServiceProvider.overrideWithValue(LocalAuthService()),
+          parkingRepositoryProvider.overrideWithValue(
+            InMemoryParkingRepository(),
+          ),
+          bookingRepositoryProvider.overrideWithValue(
+            InMemoryBookingRepository(),
+          ),
+          imageRepositoryProvider.overrideWithValue(InMemoryImageRepository()),
+          reviewRepositoryProvider.overrideWithValue(
+            InMemoryReviewRepository(),
+          ),
+          issueRepositoryProvider.overrideWithValue(InMemoryIssueRepository()),
+          firebaseReadinessProvider.overrideWithValue(
+            const FirebaseReadiness(
+              isConfigured: true,
+              message: 'Test Firebase readiness.',
+            ),
+          ),
+        ],
+        child: const ParkHereUserApp(),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Nearby parking'), findsOneWidget);

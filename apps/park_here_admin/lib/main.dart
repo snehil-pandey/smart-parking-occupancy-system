@@ -1,11 +1,35 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:park_here_shared/park_here_shared.dart';
 
+import 'firebase_options.dart';
+import 'src/admin_app_controller.dart';
 import 'src/admin_dashboard_screen.dart';
 
-void main() {
-  runApp(const ProviderScope(child: ParkHereAdminApp()));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  Object? setupError;
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } on Object catch (error) {
+    setupError = error;
+  }
+  runApp(
+    ProviderScope(
+      overrides: [
+        adminFirebaseReadinessProvider.overrideWithValue(
+          FirebaseReadinessService(
+            isConfigured: setupError == null,
+            error: setupError,
+          ).check(),
+        ),
+      ],
+      child: const ParkHereAdminApp(),
+    ),
+  );
 }
 
 class ParkHereAdminApp extends StatelessWidget {

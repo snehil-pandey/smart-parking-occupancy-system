@@ -3,21 +3,21 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:park_here_shared/park_here_shared.dart';
 
-final adminAuthProvider = Provider<AuthService>((ref) => LocalAuthService());
+final adminAuthProvider = Provider<AuthService>((ref) => FirebaseAuthService());
 final adminParkingRepositoryProvider = Provider<ParkingRepository>(
-  (ref) => InMemoryParkingRepository(),
+  (ref) => FirebaseParkingRepository(),
 );
 final adminBookingRepositoryProvider = Provider<BookingRepository>(
-  (ref) => InMemoryBookingRepository(),
+  (ref) => FirebaseBookingRepository(),
 );
 final adminImageRepositoryProvider = Provider<ImageRepository>(
-  (ref) => InMemoryImageRepository(),
+  (ref) => FirestoreImageRepository(),
 );
 final adminRegionRepositoryProvider = Provider<RegionRepository>(
-  (ref) => InMemoryRegionRepository(),
+  (ref) => FirebaseRegionRepository(),
 );
 final adminIssueRepositoryProvider = Provider<IssueRepository>(
-  (ref) => InMemoryIssueRepository(),
+  (ref) => FirebaseIssueRepository(),
 );
 final adminFirebaseReadinessProvider = Provider<FirebaseReadiness>(
   (ref) => const FirebaseReadinessService().check(),
@@ -37,9 +37,12 @@ final adminAppControllerProvider =
 
 enum AdminSection { region, parkingAreas, issues }
 
+enum AdminAuthStatus { checking, signedOut, signedIn }
+
 class AdminAppState {
   const AdminAppState({
     required this.admin,
+    required this.authStatus,
     required this.section,
     required this.region,
     required this.locations,
@@ -56,8 +59,9 @@ class AdminAppState {
   factory AdminAppState.initial(AdminProfile admin) {
     return AdminAppState(
       admin: admin,
+      authStatus: AdminAuthStatus.checking,
       section: AdminSection.region,
-      region: DemoSeed.sitTumkurRegion(),
+      region: _emptySitRegion,
       locations: const [],
       bookings: const [],
       issues: const [],
@@ -69,7 +73,25 @@ class AdminAppState {
     );
   }
 
-  final AdminProfile admin;
+  factory AdminAppState.signedOut() {
+    return AdminAppState(
+      admin: null,
+      authStatus: AdminAuthStatus.signedOut,
+      section: AdminSection.region,
+      region: _emptySitRegion,
+      locations: const [],
+      bookings: const [],
+      issues: const [],
+      selectedImages: const [],
+      selectedLocation: null,
+      isLoading: false,
+      imageUploadProgress: 0,
+      imageStatusMessage: 'Sign in to manage Firebase image records.',
+    );
+  }
+
+  final AdminProfile? admin;
+  final AdminAuthStatus authStatus;
   final AdminSection section;
   final ParkingRegion region;
   final List<ParkingLocation> locations;
@@ -81,6 +103,18 @@ class AdminAppState {
   final double imageUploadProgress;
   final String imageStatusMessage;
   final String? error;
+
+  static final _emptySitRegion = ParkingRegion(
+    regionId: 'region_sit_tumkur',
+    name: 'SIT Tumkur',
+    address: 'SIT Tumkur',
+    boundaryPoints: const [],
+    centerLat: 0,
+    centerLng: 0,
+    createdByAdminId: '',
+    createdAt: DateTime.fromMillisecondsSinceEpoch(0),
+    updatedAt: DateTime.fromMillisecondsSinceEpoch(0),
+  );
 
   int get totalSpaces =>
       locations.fold(0, (total, location) => total + location.totalSpaces);
@@ -107,6 +141,7 @@ class AdminAppState {
 
   AdminAppState copyWith({
     AdminProfile? admin,
+    AdminAuthStatus? authStatus,
     AdminSection? section,
     ParkingRegion? region,
     List<ParkingLocation>? locations,
@@ -121,6 +156,7 @@ class AdminAppState {
   }) {
     return AdminAppState(
       admin: admin ?? this.admin,
+      authStatus: authStatus ?? this.authStatus,
       section: section ?? this.section,
       region: region ?? this.region,
       locations: locations ?? this.locations,
@@ -150,7 +186,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
        _imageRepository = imageRepository,
        _regionRepository = regionRepository,
        _issueRepository = issueRepository,
-       super(AdminAppState.initial(auth.currentAdmin));
+       super(AdminAppState.signedOut());
 
   final AuthService _auth;
   final ParkingRepository _parkingRepository;
@@ -160,13 +196,19 @@ class AdminAppController extends StateNotifier<AdminAppState> {
   final IssueRepository _issueRepository;
 
   Future<void> load() async {
+    state = state.copyWith(isLoading: true);
+    final admin = await _auth.loadCurrentAdmin();
+    if (admin == null) {
+      state = AdminAppState.signedOut();
+      return;
+    }
     final region = await _regionRepository.getMainRegion();
     final locations = await _parkingRepository.getByRegion(region.regionId);
-    final bookings = await _bookingRepository.getForAdmin(
-      _auth.currentAdmin.id,
-    );
-    final issues = await _issueRepository.getForAdmin(_auth.currentAdmin.id);
+    final bookings = await _bookingRepository.getForAdmin(admin.id);
+    final issues = await _issueRepository.getForAdmin(admin.id);
     state = state.copyWith(
+      admin: admin,
+      authStatus: AdminAuthStatus.signedIn,
       region: region,
       locations: locations,
       bookings: bookings,
@@ -175,6 +217,45 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       isLoading: false,
     );
     await _loadSelectedImages();
+  }
+
+  Future<void> signIn({required String email, required String password}) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _auth.signInAdminWithEmail(email: email, password: password);
+      await load();
+    } on Object catch (error) {
+      state = AdminAppState.signedOut().copyWith(error: error.toString());
+    }
+  }
+
+  Future<void> signUp({
+    required String email,
+    required String password,
+    required String businessName,
+    required String ownerName,
+    required String phone,
+    String? upiId,
+  }) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _auth.signUpAdminWithEmail(
+        email: email,
+        password: password,
+        businessName: businessName,
+        ownerName: ownerName,
+        phone: phone,
+        upiId: upiId,
+      );
+      await load();
+    } on Object catch (error) {
+      state = AdminAppState.signedOut().copyWith(error: error.toString());
+    }
+  }
+
+  Future<void> signOut() async {
+    await _auth.signOut();
+    state = AdminAppState.signedOut();
   }
 
   void changeSection(AdminSection section) {
@@ -193,7 +274,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       phone: phone,
       upiId: upiId,
     );
-    state = state.copyWith(admin: admin);
+    state = state.copyWith(admin: admin, authStatus: AdminAuthStatus.signedIn);
     await load();
   }
 
@@ -272,7 +353,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     final location = ParkingLocation(
       id: 'loc_${now.millisecondsSinceEpoch}',
       regionId: state.region.regionId,
-      adminId: state.admin.id,
+      adminId: state.admin!.id,
       name: name,
       description: 'New parking area inside ${state.region.name}.',
       address: address,
@@ -344,7 +425,11 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       issueId: issue.issueId,
       status: status,
     );
-    final issues = await _issueRepository.getForAdmin(state.admin.id);
+    final admin = state.admin;
+    if (admin == null) {
+      return;
+    }
+    final issues = await _issueRepository.getForAdmin(admin.id);
     state = state.copyWith(issues: issues);
   }
 
@@ -367,7 +452,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     try {
       final image = await _imageRepository.uploadOptimizedAreaImage(
         areaId: location.id,
-        uploadedByAdminId: state.admin.id,
+        uploadedByAdminId: state.admin!.id,
         originalBytes: bytes,
       );
       state = state.copyWith(

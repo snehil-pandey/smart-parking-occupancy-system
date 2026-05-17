@@ -1,24 +1,26 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:park_here_shared/park_here_shared.dart';
 
-final authServiceProvider = Provider<AuthService>((ref) => LocalAuthService());
+final authServiceProvider = Provider<AuthService>(
+  (ref) => FirebaseAuthService(),
+);
 final parkingRepositoryProvider = Provider<ParkingRepository>(
-  (ref) => InMemoryParkingRepository(),
+  (ref) => FirebaseParkingRepository(),
 );
 final bookingRepositoryProvider = Provider<BookingRepository>(
-  (ref) => InMemoryBookingRepository(),
+  (ref) => FirebaseBookingRepository(),
 );
 final imageRepositoryProvider = Provider<ImageRepository>(
-  (ref) => InMemoryImageRepository(),
+  (ref) => FirestoreImageRepository(),
 );
 final imagePayloadCacheProvider = Provider<ImagePayloadCache>(
   (ref) => ImagePayloadCache(),
 );
 final reviewRepositoryProvider = Provider<ReviewRepository>(
-  (ref) => InMemoryReviewRepository(),
+  (ref) => FirebaseReviewRepository(),
 );
 final issueRepositoryProvider = Provider<IssueRepository>(
-  (ref) => InMemoryIssueRepository(),
+  (ref) => FirebaseIssueRepository(),
 );
 final routeProvider = Provider<RouteProvider>((ref) => DemoSeed.routeEngine());
 final firebaseReadinessProvider = Provider<FirebaseReadiness>(
@@ -27,6 +29,8 @@ final firebaseReadinessProvider = Provider<FirebaseReadiness>(
 final qrPayloadProvider = Provider<QrPayloadService>(
   (ref) => const QrPayloadService(),
 );
+
+enum UserAuthStatus { checking, signedOut, signedIn }
 
 final userAppControllerProvider =
     StateNotifierProvider<UserAppController, UserAppState>((ref) {
@@ -46,6 +50,7 @@ final userAppControllerProvider =
 class UserAppState {
   const UserAppState({
     required this.user,
+    required this.authStatus,
     required this.locations,
     required this.bookings,
     required this.routes,
@@ -63,6 +68,7 @@ class UserAppState {
   factory UserAppState.initial(AppUser user) {
     return UserAppState(
       user: user,
+      authStatus: UserAuthStatus.checking,
       locations: const [],
       bookings: const [],
       routes: const [],
@@ -76,7 +82,25 @@ class UserAppState {
     );
   }
 
-  final AppUser user;
+  factory UserAppState.signedOut() {
+    return UserAppState(
+      user: null,
+      authStatus: UserAuthStatus.signedOut,
+      locations: const [],
+      bookings: const [],
+      routes: const [],
+      thumbnailByArea: const {},
+      previewImages: const [],
+      selectedReviews: const [],
+      activeQrTicket: null,
+      selectedLocation: null,
+      durationHours: 2,
+      isLoading: false,
+    );
+  }
+
+  final AppUser? user;
+  final UserAuthStatus authStatus;
   final List<ParkingLocation> locations;
   final List<Booking> bookings;
   final List<RouteOption> routes;
@@ -96,6 +120,7 @@ class UserAppState {
 
   UserAppState copyWith({
     AppUser? user,
+    UserAuthStatus? authStatus,
     List<ParkingLocation>? locations,
     List<Booking>? bookings,
     List<RouteOption>? routes,
@@ -113,6 +138,7 @@ class UserAppState {
   }) {
     return UserAppState(
       user: user ?? this.user,
+      authStatus: authStatus ?? this.authStatus,
       locations: locations ?? this.locations,
       bookings: bookings ?? this.bookings,
       routes: routes ?? this.routes,
@@ -153,7 +179,7 @@ class UserAppController extends StateNotifier<UserAppState> {
        _imageCache = imageCache,
        _routeProvider = routeProvider,
        _qrPayloadService = qrPayloadService,
-       super(UserAppState.initial(auth.currentUser));
+       super(UserAppState.signedOut());
 
   final AuthService _auth;
   final ParkingRepository _parkingRepository;
@@ -174,11 +200,16 @@ class UserAppController extends StateNotifier<UserAppState> {
 
   Future<void> load() async {
     state = state.copyWith(isLoading: true);
+    final user = await _auth.loadCurrentUser();
+    if (user == null) {
+      state = UserAppState.signedOut();
+      return;
+    }
     final locations = await _parkingRepository.watchNearby(
       latitude: _currentPosition.latitude,
       longitude: _currentPosition.longitude,
     );
-    final bookings = await _bookingRepository.getForUser(_auth.currentUser.id);
+    final bookings = await _bookingRepository.getForUser(user.id);
     final activeBooking = bookings
         .where((booking) => booking.status == BookingStatus.active)
         .firstOrNull;
@@ -188,6 +219,8 @@ class UserAppController extends StateNotifier<UserAppState> {
     state = state.copyWith(
       locations: locations,
       bookings: bookings,
+      user: user,
+      authStatus: UserAuthStatus.signedIn,
       activeQrTicket: activeQrTicket,
       clearActiveQrTicket: activeQrTicket == null,
       selectedLocation: locations.firstOrNull,
@@ -197,6 +230,45 @@ class UserAppController extends StateNotifier<UserAppState> {
     if (locations.isNotEmpty) {
       await selectLocation(locations.first);
     }
+  }
+
+  Future<void> signIn({required String email, required String password}) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _auth.signInUserWithEmail(email: email, password: password);
+      await load();
+    } on Object catch (error) {
+      state = UserAppState.signedOut().copyWith(error: error.toString());
+    }
+  }
+
+  Future<void> signUp({
+    required String email,
+    required String password,
+    required String name,
+    required String phone,
+    required String vehicleNumber,
+    required VehicleType vehicleType,
+  }) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _auth.signUpUserWithEmail(
+        email: email,
+        password: password,
+        name: name,
+        phone: phone,
+        vehicleNumber: vehicleNumber,
+        vehicleType: vehicleType,
+      );
+      await load();
+    } on Object catch (error) {
+      state = UserAppState.signedOut().copyWith(error: error.toString());
+    }
+  }
+
+  Future<void> signOut() async {
+    await _auth.signOut();
+    state = UserAppState.signedOut();
   }
 
   Future<void> updateProfile({
@@ -211,7 +283,7 @@ class UserAppController extends StateNotifier<UserAppState> {
       vehicleNumber: vehicleNumber,
       vehicleType: vehicleType,
     );
-    state = state.copyWith(user: user);
+    state = state.copyWith(user: user, authStatus: UserAuthStatus.signedIn);
   }
 
   Future<void> selectLocation(ParkingLocation location) async {
@@ -236,8 +308,13 @@ class UserAppController extends StateNotifier<UserAppState> {
 
   Future<void> createBooking() async {
     final location = state.selectedLocation;
+    final user = state.user;
     if (location == null) {
       state = state.copyWith(error: 'Choose a parking area first.');
+      return;
+    }
+    if (user == null) {
+      state = state.copyWith(error: 'Sign in before booking.');
       return;
     }
     if (!location.isOpen || location.availableSpaces < 1) {
@@ -260,19 +337,19 @@ class UserAppController extends StateNotifier<UserAppState> {
     final payload = _qrPayloadService.buildPayload(
       bookingId: bookingId,
       qrId: qrId,
-      userId: state.user.id,
+      userId: user.id,
       parkingLocationId: reservedLocation.id,
-      vehicleNumber: state.user.vehicleNumber,
+      vehicleNumber: user.vehicleNumber,
       startTime: now,
       endTime: end,
     );
     final booking = Booking(
       id: bookingId,
-      userId: state.user.id,
+      userId: user.id,
       adminId: reservedLocation.adminId,
       parkingLocationId: reservedLocation.id,
       qrId: qrId,
-      vehicleNumber: state.user.vehicleNumber,
+      vehicleNumber: user.vehicleNumber,
       startTime: now,
       endTime: end,
       price: price,
@@ -295,14 +372,19 @@ class UserAppController extends StateNotifier<UserAppState> {
     required String comment,
   }) async {
     final location = state.selectedLocation;
+    final user = state.user;
     if (location == null) {
       state = state.copyWith(error: 'Choose a parking area before reviewing.');
       return;
     }
+    if (user == null) {
+      state = state.copyWith(error: 'Sign in before reviewing.');
+      return;
+    }
     final now = DateTime.now();
     final review = ParkingReview(
-      reviewId: 'review_${state.user.id}_${location.id}',
-      userId: state.user.id,
+      reviewId: 'review_${user.id}_${location.id}',
+      userId: user.id,
       areaId: location.id,
       rating: rating.clamp(1, 5),
       comment: comment.trim(),
@@ -337,15 +419,20 @@ class UserAppController extends StateNotifier<UserAppState> {
     required String message,
   }) async {
     final location = state.selectedLocation;
+    final user = state.user;
     if (location == null) {
       state = state.copyWith(error: 'Choose a parking area before reporting.');
+      return;
+    }
+    if (user == null) {
+      state = state.copyWith(error: 'Sign in before reporting.');
       return;
     }
     final now = DateTime.now();
     await _issueRepository.createIssue(
       IssueReport(
         issueId: 'issue_${now.millisecondsSinceEpoch}',
-        userId: state.user.id,
+        userId: user.id,
         areaId: location.id,
         adminId: location.adminId,
         type: type.trim().isEmpty ? 'general' : type.trim(),

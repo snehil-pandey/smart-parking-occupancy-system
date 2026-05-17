@@ -54,7 +54,7 @@ class AppUser {
   };
 
   factory AppUser.fromJson(Map<String, Object?> json) => AppUser(
-    id: json['id'] as String,
+    id: (json['userId'] ?? json['id']) as String,
     name: json['name'] as String,
     phone: json['phone'] as String,
     vehicleNumber: json['vehicleNumber'] as String,

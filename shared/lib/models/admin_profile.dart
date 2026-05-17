@@ -41,4 +41,13 @@ class AdminProfile {
     'upiId': upiId,
     'role': role,
   };
+
+  factory AdminProfile.fromJson(Map<String, Object?> json) => AdminProfile(
+    id: (json['adminId'] ?? json['id']) as String,
+    businessName: json['businessName'] as String,
+    phone: json['phone'] as String,
+    ownerName: json['ownerName'] as String? ?? '',
+    upiId: json['upiId'] as String?,
+    role: json['role'] as String? ?? 'admin',
+  );
 }
