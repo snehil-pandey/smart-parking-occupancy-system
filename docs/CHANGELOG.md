@@ -22,3 +22,7 @@
 ### feat(admin): build location administrator MVP
 - Replaced the starter app with a Riverpod dashboard for parking owners.
 - Added owner profile editing, parking location registration, availability/price controls, booking list, booking completion, and income placeholders.
+
+### feat(firebase): add Firebase repositories and schema docs
+- Added Firebase collection path constants and repository placeholders behind existing interfaces.
+- Documented the Firestore collections, fields, and security direction.
