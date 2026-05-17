@@ -52,6 +52,7 @@ class UserAppState {
     required this.thumbnailByArea,
     required this.previewImages,
     required this.selectedReviews,
+    required this.activeQrTicket,
     required this.selectedLocation,
     required this.durationHours,
     required this.isLoading,
@@ -68,6 +69,7 @@ class UserAppState {
       thumbnailByArea: const {},
       previewImages: const [],
       selectedReviews: const [],
+      activeQrTicket: null,
       selectedLocation: null,
       durationHours: 2,
       isLoading: true,
@@ -81,6 +83,7 @@ class UserAppState {
   final Map<String, ParkingAreaImage> thumbnailByArea;
   final List<ParkingAreaImage> previewImages;
   final List<ParkingReview> selectedReviews;
+  final ActiveQrTicket? activeQrTicket;
   final ParkingLocation? selectedLocation;
   final int durationHours;
   final bool isLoading;
@@ -99,6 +102,8 @@ class UserAppState {
     Map<String, ParkingAreaImage>? thumbnailByArea,
     List<ParkingAreaImage>? previewImages,
     List<ParkingReview>? selectedReviews,
+    ActiveQrTicket? activeQrTicket,
+    bool clearActiveQrTicket = false,
     ParkingLocation? selectedLocation,
     bool clearSelectedLocation = false,
     int? durationHours,
@@ -114,6 +119,9 @@ class UserAppState {
       thumbnailByArea: thumbnailByArea ?? this.thumbnailByArea,
       previewImages: previewImages ?? this.previewImages,
       selectedReviews: selectedReviews ?? this.selectedReviews,
+      activeQrTicket: clearActiveQrTicket
+          ? null
+          : activeQrTicket ?? this.activeQrTicket,
       selectedLocation: clearSelectedLocation
           ? null
           : selectedLocation ?? this.selectedLocation,
@@ -171,9 +179,17 @@ class UserAppController extends StateNotifier<UserAppState> {
       longitude: _currentPosition.longitude,
     );
     final bookings = await _bookingRepository.getForUser(_auth.currentUser.id);
+    final activeBooking = bookings
+        .where((booking) => booking.status == BookingStatus.active)
+        .firstOrNull;
+    final activeQrTicket = activeBooking == null
+        ? null
+        : await _bookingRepository.getActiveQrForBooking(activeBooking.id);
     state = state.copyWith(
       locations: locations,
       bookings: bookings,
+      activeQrTicket: activeQrTicket,
+      clearActiveQrTicket: activeQrTicket == null,
       selectedLocation: locations.firstOrNull,
       isLoading: false,
     );
@@ -231,10 +247,12 @@ class UserAppController extends StateNotifier<UserAppState> {
 
     final now = DateTime.now();
     final bookingId = 'book_${now.millisecondsSinceEpoch}';
+    final qrId = 'qr_$bookingId';
     final end = now.add(Duration(hours: state.durationHours));
     final price = state.durationHours * location.pricePerHour;
     final payload = _qrPayloadService.buildPayload(
       bookingId: bookingId,
+      qrId: qrId,
       userId: state.user.id,
       parkingLocationId: location.id,
       vehicleNumber: state.user.vehicleNumber,
@@ -246,6 +264,7 @@ class UserAppController extends StateNotifier<UserAppState> {
       userId: state.user.id,
       adminId: location.adminId,
       parkingLocationId: location.id,
+      qrId: qrId,
       vehicleNumber: state.user.vehicleNumber,
       startTime: now,
       endTime: end,
@@ -256,6 +275,7 @@ class UserAppController extends StateNotifier<UserAppState> {
       updatedAt: now,
     );
     await _bookingRepository.createBooking(booking);
+    await _bookingRepository.createActiveQrTicket(booking);
     await _parkingRepository.updateAvailability(
       locationId: location.id,
       totalSpaces: location.totalSpaces,

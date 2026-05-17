@@ -6,6 +6,7 @@ class QrPayload {
   const QrPayload({
     required this.issuer,
     required this.bookingId,
+    required this.qrId,
     required this.userId,
     required this.parkingLocationId,
     required this.vehicleNumber,
@@ -17,6 +18,7 @@ class QrPayload {
 
   final String issuer;
   final String bookingId;
+  final String qrId;
   final String userId;
   final String parkingLocationId;
   final String vehicleNumber;
@@ -33,6 +35,7 @@ class QrPayloadService {
 
   String buildPayload({
     required String bookingId,
+    required String qrId,
     required String userId,
     required String parkingLocationId,
     required String vehicleNumber,
@@ -42,6 +45,7 @@ class QrPayloadService {
     final base = <String, Object?>{
       'issuer': issuer,
       'bookingId': bookingId,
+      'qrId': qrId,
       'userId': userId,
       'parkingLocationId': parkingLocationId,
       'vehicleNumber': vehicleNumber,
@@ -64,6 +68,7 @@ class QrPayloadService {
     return QrPayload(
       issuer: decoded['issuer'] as String,
       bookingId: decoded['bookingId'] as String,
+      qrId: decoded['qrId'] as String,
       userId: decoded['userId'] as String,
       parkingLocationId: decoded['parkingLocationId'] as String,
       vehicleNumber: decoded['vehicleNumber'] as String,

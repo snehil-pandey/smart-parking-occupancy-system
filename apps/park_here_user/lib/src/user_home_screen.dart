@@ -408,7 +408,10 @@ class _ParkingBottomSheet extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           if (state.activeBooking != null)
-            _ActiveBookingCard(booking: state.activeBooking!),
+            _ActiveBookingCard(
+              booking: state.activeBooking!,
+              activeQrTicket: state.activeQrTicket,
+            ),
           if (state.actionMessage != null) ...[
             _StatusStrip(message: state.actionMessage!),
             const SizedBox(height: 10),
@@ -480,9 +483,13 @@ class _StatusStrip extends StatelessWidget {
 }
 
 class _ActiveBookingCard extends StatelessWidget {
-  const _ActiveBookingCard({required this.booking});
+  const _ActiveBookingCard({
+    required this.booking,
+    required this.activeQrTicket,
+  });
 
   final Booking booking;
+  final ActiveQrTicket? activeQrTicket;
 
   @override
   Widget build(BuildContext context) {
@@ -509,6 +516,11 @@ class _ActiveBookingCard extends StatelessWidget {
                   Text(booking.vehicleNumber),
                   Text(
                     '${formatInr(booking.price)} - ${booking.durationHours} hours',
+                  ),
+                  Text(
+                    activeQrTicket == null
+                        ? 'QR waiting for active ticket sync'
+                        : 'QR ${activeQrTicket!.status.name} until ${activeQrTicket!.expiresAt.hour.toString().padLeft(2, '0')}:${activeQrTicket!.expiresAt.minute.toString().padLeft(2, '0')}',
                   ),
                 ],
               ),

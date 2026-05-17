@@ -299,8 +299,9 @@ class DemoSeed {
     final end = start.add(const Duration(hours: 3));
     final payload = qr.buildPayload(
       bookingId: 'book_demo_001',
+      qrId: 'qr_book_demo_001',
       userId: 'user_demo_001',
-      parkingLocationId: 'loc_metro_park',
+      parkingLocationId: 'area_sit_main_gate',
       vehicleNumber: 'KA 05 MN 4242',
       startTime: start,
       endTime: end,
@@ -310,7 +311,8 @@ class DemoSeed {
         id: 'book_demo_001',
         userId: 'user_demo_001',
         adminId: 'admin_demo_001',
-        parkingLocationId: 'loc_metro_park',
+        parkingLocationId: 'area_sit_main_gate',
+        qrId: 'qr_book_demo_001',
         vehicleNumber: 'KA 05 MN 4242',
         startTime: start,
         endTime: end,

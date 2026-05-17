@@ -328,10 +328,14 @@ class AdminAppController extends StateNotifier<AdminAppState> {
   }
 
   Future<void> markCompleted(Booking booking) async {
-    await _bookingRepository.updateStatus(
-      bookingId: booking.id,
-      status: BookingStatus.completed,
-    );
+    if (booking.qrId == null) {
+      await _bookingRepository.updateStatus(
+        bookingId: booking.id,
+        status: BookingStatus.completed,
+      );
+    } else {
+      await _bookingRepository.consumeQrTicket(booking.qrId!);
+    }
     await load();
   }
 

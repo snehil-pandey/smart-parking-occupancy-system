@@ -1,3 +1,4 @@
+import '../models/active_qr_ticket.dart';
 import '../models/booking.dart';
 import 'booking_repository.dart';
 import 'firebase_repository_exception.dart';
@@ -17,6 +18,17 @@ class FirebaseBookingRepository implements BookingRepository {
 
   @override
   Future<Booking> createBooking(Booking booking) async => _missingConfig();
+
+  @override
+  Future<ActiveQrTicket> createActiveQrTicket(Booking booking) async =>
+      _missingConfig();
+
+  @override
+  Future<ActiveQrTicket?> getActiveQrForBooking(String bookingId) async =>
+      _missingConfig();
+
+  @override
+  Future<void> consumeQrTicket(String qrId) async => _missingConfig();
 
   @override
   Future<List<Booking>> getForAdmin(String adminId) async => _missingConfig();
