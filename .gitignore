@@ -13,3 +13,8 @@ serviceAccountKey.json
 # IDE
 .idea/
 .vscode/
+
+# Python
+.venv/
+.__pycache__/
+*.pyc
