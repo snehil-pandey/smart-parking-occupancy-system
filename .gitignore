@@ -8,8 +8,8 @@ build/
 firebase_options.dart
 google-services.json
 GoogleService-Info.plist
+serviceAccountKey.json
 
 # IDE
 .idea/
 .vscode/
-
