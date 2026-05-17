@@ -23,6 +23,13 @@ class InMemoryParkingRepository implements ParkingRepository {
   }
 
   @override
+  Stream<List<ParkingLocation>> watchByAdmin(String adminId, {int limit = 50}) {
+    return Stream.fromFuture(
+      getByAdmin(adminId).then((locations) => locations.take(limit).toList()),
+    );
+  }
+
+  @override
   Future<List<ParkingLocation>> getByRegion(
     String regionId, {
     int limit = 30,

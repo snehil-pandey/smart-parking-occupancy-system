@@ -33,6 +33,7 @@ export 'repositories/region_repository.dart';
 export 'repositories/review_repository.dart';
 export 'routing/dijkstra_route_engine.dart';
 export 'routing/route_provider.dart';
+export 'routing/straight_line_route_provider.dart';
 export 'services/auth_service.dart';
 export 'services/firebase_collection_paths.dart';
 export 'services/firebase_auth_service.dart';

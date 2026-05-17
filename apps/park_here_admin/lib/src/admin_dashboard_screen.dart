@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:park_here_shared/park_here_shared.dart';
 
 import 'admin_app_controller.dart';
@@ -1080,7 +1081,7 @@ class _ImageManager extends StatelessWidget {
                                 IconButton(
                                   tooltip: 'Replace image',
                                   onPressed: () =>
-                                      controller.replaceImage(image),
+                                      _replaceImage(controller, image),
                                   icon: const Icon(
                                     Icons.change_circle_outlined,
                                   ),
@@ -1105,7 +1106,7 @@ class _ImageManager extends StatelessWidget {
               height: 148,
               child: OutlinedButton.icon(
                 key: const ValueKey('upload-optimized-image'),
-                onPressed: controller.uploadDemoImage,
+                onPressed: () => _uploadImage(controller),
                 icon: const Icon(Icons.add_photo_alternate_outlined),
                 label: const Text('Upload optimized image'),
               ),
@@ -1114,6 +1115,25 @@ class _ImageManager extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _uploadImage(AdminAppController controller) async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (picked == null) {
+      return;
+    }
+    await controller.uploadAreaImage(await picked.readAsBytes());
+  }
+
+  Future<void> _replaceImage(
+    AdminAppController controller,
+    ParkingAreaImage image,
+  ) async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (picked == null) {
+      return;
+    }
+    await controller.replaceImage(image, await picked.readAsBytes());
   }
 }
 

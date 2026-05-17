@@ -32,6 +32,25 @@ class FirebaseParkingRepository implements ParkingRepository {
   }
 
   @override
+  Stream<List<ParkingLocation>> watchByAdmin(String adminId, {int limit = 50}) {
+    return _areas
+        .where('adminId', isEqualTo: adminId)
+        .orderBy('updatedAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map(FirestoreModelMapper.parkingAreaFromDoc)
+              .toList(),
+        )
+        .handleError((Object error) {
+          throw FirebaseRepositoryException(
+            'Unable to watch parking areas for admin $adminId: $error',
+          );
+        });
+  }
+
+  @override
   Future<List<ParkingLocation>> getByRegion(
     String regionId, {
     int limit = 30,

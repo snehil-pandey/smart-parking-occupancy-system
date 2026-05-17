@@ -29,7 +29,9 @@ final reviewRepositoryProvider = Provider<ReviewRepository>(
 final issueRepositoryProvider = Provider<IssueRepository>(
   (ref) => FirebaseIssueRepository(),
 );
-final routeProvider = Provider<RouteProvider>((ref) => DemoSeed.routeEngine());
+final routeProvider = Provider<RouteProvider>(
+  (ref) => const StraightLineRouteProvider(),
+);
 final firebaseReadinessProvider = Provider<FirebaseReadiness>(
   (ref) => const FirebaseReadinessService().check(),
 );
@@ -309,6 +311,10 @@ class UserAppController extends StateNotifier<UserAppState> {
   final RouteProvider _routeProvider;
   final QrPayloadService _qrPayloadService;
   StreamSubscription<UserPosition>? _positionSubscription;
+  StreamSubscription<List<ParkingLocation>>? _parkingSubscription;
+  StreamSubscription<List<Booking>>? _bookingSubscription;
+  StreamSubscription<ActiveQrTicket?>? _activeQrSubscription;
+  StreamSubscription<List<ParkingReview>>? _reviewSubscription;
 
   Future<void> load() async {
     state = state.copyWith(isLoading: true);
@@ -319,6 +325,8 @@ class UserAppController extends StateNotifier<UserAppState> {
     }
     final position = await _locationService.currentPosition();
     _startLocationUpdates();
+    _startParkingUpdates();
+    _startBookingUpdates(user.id);
     final locations = await _parkingRepository.watchNearby(
       latitude: position.latitude,
       longitude: position.longitude,
@@ -383,7 +391,15 @@ class UserAppController extends StateNotifier<UserAppState> {
 
   Future<void> signOut() async {
     await _positionSubscription?.cancel();
+    await _parkingSubscription?.cancel();
+    await _bookingSubscription?.cancel();
+    await _activeQrSubscription?.cancel();
+    await _reviewSubscription?.cancel();
     _positionSubscription = null;
+    _parkingSubscription = null;
+    _bookingSubscription = null;
+    _activeQrSubscription = null;
+    _reviewSubscription = null;
     await _auth.signOut();
     state = UserAppState.signedOut();
   }
@@ -424,6 +440,7 @@ class UserAppController extends StateNotifier<UserAppState> {
     state = state.copyWith(selectedLocation: location, routes: routes);
     await _loadPreviewImages(location);
     await _loadReviews(location.id);
+    _startReviewUpdates(location.id);
   }
 
   void changeDuration(int hours) {
@@ -628,9 +645,58 @@ class UserAppController extends StateNotifier<UserAppState> {
     });
   }
 
+  void _startParkingUpdates() {
+    _parkingSubscription ??= _parkingRepository
+        .watchByRegion('region_sit_tumkur', limit: 30)
+        .listen((locations) async {
+          state = state.copyWith(locations: locations);
+          await _loadThumbnails(locations);
+        });
+  }
+
+  void _startBookingUpdates(String userId) {
+    _bookingSubscription ??= _bookingRepository
+        .watchForUser(userId, limit: 30)
+        .listen((bookings) {
+          final activeBooking = bookings
+              .where((booking) => booking.status == BookingStatus.active)
+              .firstOrNull;
+          state = state.copyWith(bookings: bookings);
+          _startActiveQrUpdates(activeBooking?.id);
+        });
+  }
+
+  void _startActiveQrUpdates(String? bookingId) {
+    _activeQrSubscription?.cancel();
+    _activeQrSubscription = null;
+    if (bookingId == null) {
+      state = state.copyWith(clearActiveQrTicket: true);
+      return;
+    }
+    _activeQrSubscription = _bookingRepository
+        .watchActiveQrForBooking(bookingId)
+        .listen(
+          (ticket) => state = state.copyWith(
+            activeQrTicket: ticket,
+            clearActiveQrTicket: ticket == null,
+          ),
+        );
+  }
+
+  void _startReviewUpdates(String areaId) {
+    _reviewSubscription?.cancel();
+    _reviewSubscription = _reviewRepository
+        .watchForArea(areaId, limit: 5)
+        .listen((reviews) => state = state.copyWith(selectedReviews: reviews));
+  }
+
   @override
   void dispose() {
     _positionSubscription?.cancel();
+    _parkingSubscription?.cancel();
+    _bookingSubscription?.cancel();
+    _activeQrSubscription?.cancel();
+    _reviewSubscription?.cancel();
     super.dispose();
   }
 }

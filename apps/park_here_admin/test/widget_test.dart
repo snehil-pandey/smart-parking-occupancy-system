@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 // This is a basic Flutter widget test.
 //
 // To perform an interaction with a widget in your test, use the WidgetTester
@@ -59,7 +61,9 @@ void main() {
     );
 
     await controller.load();
-    await controller.uploadDemoImage();
+    await controller.uploadAreaImage(
+      Uint8List.fromList(DemoSeed.demoUploadBytes()),
+    );
 
     expect(controller.state.selectedImages, isNotEmpty);
     expect(

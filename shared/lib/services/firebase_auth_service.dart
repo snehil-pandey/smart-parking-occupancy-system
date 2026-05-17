@@ -66,6 +66,18 @@ class FirebaseAuthService implements AuthService {
     return _currentUser;
   }
 
+  Future<AppUser> _createMinimalUserProfile(firebase_auth.User firebaseUser) {
+    final name = firebaseUser.displayName?.trim().isNotEmpty == true
+        ? firebaseUser.displayName!.trim()
+        : (firebaseUser.email ?? 'Park Here user');
+    return signInUser(
+      name: name,
+      phone: '',
+      vehicleNumber: '',
+      vehicleType: VehicleType.car,
+    );
+  }
+
   @override
   Future<AdminProfile?> loadCurrentAdmin() async {
     final firebaseUser = _auth.currentUser;
@@ -87,13 +99,26 @@ class FirebaseAuthService implements AuthService {
     return _currentAdmin;
   }
 
+  Future<AdminProfile> _createMinimalAdminProfile(
+    firebase_auth.User firebaseUser,
+  ) {
+    final businessName = firebaseUser.displayName?.trim().isNotEmpty == true
+        ? firebaseUser.displayName!.trim()
+        : (firebaseUser.email ?? 'Park Here administrator');
+    return signInAdmin(businessName: businessName, ownerName: '', phone: '');
+  }
+
   @override
   Future<AppUser> signInUserWithEmail({
     required String email,
     required String password,
   }) async {
     await _auth.signInWithEmailAndPassword(email: email, password: password);
-    final profile = await loadCurrentUser();
+    final firebaseUser = _auth.currentUser;
+    var profile = await loadCurrentUser();
+    if (profile == null && firebaseUser != null) {
+      profile = await _createMinimalUserProfile(firebaseUser);
+    }
     if (profile == null || profile.role != 'user') {
       await _auth.signOut();
       throw StateError('No user profile exists for this account.');
@@ -138,7 +163,11 @@ class FirebaseAuthService implements AuthService {
     required String password,
   }) async {
     await _auth.signInWithEmailAndPassword(email: email, password: password);
-    final profile = await loadCurrentAdmin();
+    final firebaseUser = _auth.currentUser;
+    var profile = await loadCurrentAdmin();
+    if (profile == null && firebaseUser != null) {
+      profile = await _createMinimalAdminProfile(firebaseUser);
+    }
     if (profile == null || profile.role != 'admin') {
       await _auth.signOut();
       throw StateError('No admin profile exists for this account.');

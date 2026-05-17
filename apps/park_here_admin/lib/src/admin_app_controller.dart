@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -194,6 +195,9 @@ class AdminAppController extends StateNotifier<AdminAppState> {
   final ImageRepository _imageRepository;
   final RegionRepository _regionRepository;
   final IssueRepository _issueRepository;
+  StreamSubscription<List<ParkingLocation>>? _parkingSubscription;
+  StreamSubscription<List<Booking>>? _bookingSubscription;
+  StreamSubscription<List<IssueReport>>? _issueSubscription;
 
   Future<void> load() async {
     state = state.copyWith(isLoading: true);
@@ -203,9 +207,10 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       return;
     }
     final region = await _regionRepository.getMainRegion();
-    final locations = await _parkingRepository.getByRegion(region.regionId);
+    final locations = await _parkingRepository.getByAdmin(admin.id);
     final bookings = await _bookingRepository.getForAdmin(admin.id);
     final issues = await _issueRepository.getForAdmin(admin.id);
+    _startRealtimeListeners(admin.id);
     state = state.copyWith(
       admin: admin,
       authStatus: AdminAuthStatus.signedIn,
@@ -254,6 +259,12 @@ class AdminAppController extends StateNotifier<AdminAppState> {
   }
 
   Future<void> signOut() async {
+    await _parkingSubscription?.cancel();
+    await _bookingSubscription?.cancel();
+    await _issueSubscription?.cancel();
+    _parkingSubscription = null;
+    _bookingSubscription = null;
+    _issueSubscription = null;
     await _auth.signOut();
     state = AdminAppState.signedOut();
   }
@@ -433,10 +444,6 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     state = state.copyWith(issues: issues);
   }
 
-  Future<void> uploadDemoImage() async {
-    await uploadAreaImage(Uint8List.fromList(DemoSeed.demoUploadBytes()));
-  }
-
   Future<void> uploadAreaImage(Uint8List bytes) async {
     final location = state.selectedLocation;
     if (location == null) {
@@ -507,14 +514,14 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     await _loadSelectedImages();
   }
 
-  Future<void> replaceImage(ParkingAreaImage image) async {
+  Future<void> replaceImage(ParkingAreaImage image, Uint8List bytes) async {
     state = state.copyWith(
       imageUploadProgress: 0.25,
       imageStatusMessage: 'Replacing image with optimized version...',
     );
     final replacement = await _imageRepository.replaceImage(
       imageId: image.imageId,
-      originalBytes: Uint8List.fromList(DemoSeed.demoUploadBytes()),
+      originalBytes: bytes,
     );
     state = state.copyWith(
       imageUploadProgress: 1,
@@ -535,5 +542,25 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       limit: 6,
     );
     state = state.copyWith(selectedImages: images);
+  }
+
+  void _startRealtimeListeners(String adminId) {
+    _parkingSubscription ??= _parkingRepository
+        .watchByAdmin(adminId, limit: 50)
+        .listen((locations) => state = state.copyWith(locations: locations));
+    _bookingSubscription ??= _bookingRepository
+        .watchForAdmin(adminId, limit: 50)
+        .listen((bookings) => state = state.copyWith(bookings: bookings));
+    _issueSubscription ??= _issueRepository
+        .watchForAdmin(adminId)
+        .listen((issues) => state = state.copyWith(issues: issues));
+  }
+
+  @override
+  void dispose() {
+    _parkingSubscription?.cancel();
+    _bookingSubscription?.cancel();
+    _issueSubscription?.cancel();
+    super.dispose();
   }
 }
