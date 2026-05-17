@@ -47,3 +47,30 @@
 - Added Firestore-first image model, repository abstraction, local image repository, optimizer, and cache.
 - Updated admin and user image flows to use optimized thumbnail/preview payloads instead of raw URLs.
 - Documented Firebase Storage as an optional future repository rather than a required dependency.
+
+### feat(schema): add region and parking area models
+- Added SIT Tumkur region, parking area boundary, review, issue report, and active QR ticket models.
+- Extended parking and booking models with region/area aliases, ratings, QR ids, and QR use timestamps.
+
+### feat(admin): add region and parking area management
+- Added Region Management, Parking Areas, Area Boundary Editor, Issues Received, and image management flows for SIT Tumkur.
+- Preserved existing admin dashboard, availability, booking, and income flows.
+
+### feat(user): show parking areas with ratings and reporting
+- Updated the user app to show parking areas only, with ratings, recent comments, optimized images, and report/rate actions.
+- Added issue reporting and review submission through shared repositories.
+
+### feat(qr): add active QR ticket lifecycle
+- Added active QR ticket creation, lookup, consumption, and consume-once test coverage.
+- QR payloads now include `qrId`; consuming a QR preserves booking history and marks the active ticket inactive.
+
+### feat(firebase): optimize realtime listeners and transactions
+- Added bounded booking/QR stream contracts for realtime screens.
+- Added atomic local slot reservation API mirroring the future Firestore transaction path.
+
+### feat(demo): add Firebase demo seed script for SIT Tumkur
+- Added `/demo` with Firebase Admin SDK seed script, requirements, `.env.example`, and setup guide.
+- Seed includes SIT Tumkur region, demo admin/users, parking areas, images, reviews, issues, booking, and active QR ticket.
+
+### docs: update architecture, setup, schema, and QR docs
+- Documented region-to-area flow, active QR lifecycle, realtime listener strategy, issue reports, indexes, and Firebase demo setup.

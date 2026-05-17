@@ -36,11 +36,31 @@ Run this from the repository root to print Firestore-shaped JSON:
 dart run scripts/seed_demo_data.dart
 ```
 
+To seed a real Firebase project with SIT Tumkur demo data:
+
+```bash
+cd demo
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+python seed_firebase_demo.py
+```
+
+Edit `demo/.env` before running:
+
+```text
+FIREBASE_SERVICE_ACCOUNT_PATH=./serviceAccountKey.json
+FIREBASE_PROJECT_ID=your-project-id
+```
+
+See `demo/setup_demo.md` for the full service-account and verification flow. Never commit `serviceAccountKey.json`.
+
 ## Firebase Mode
 
-The current repository is intentionally local-first. It has Firebase-ready models, collection path constants, repository interfaces, and placeholder Firebase repositories, but it does **not** include real Firebase app configuration yet.
+The current repository is intentionally local-first. It has Firebase-ready models, collection path constants, repository interfaces, and placeholder Firebase repositories. Real Firebase config files can exist locally, but app logic still defaults to in-memory repositories until you wire the Firebase providers.
 
-Current Firebase-related files already in the repo:
+Current Firebase-related code/docs already in the repo:
 
 - `shared/lib/services/firebase_collection_paths.dart`
 - `shared/lib/services/firebase_readiness_service.dart`
@@ -50,12 +70,17 @@ Current Firebase-related files already in the repo:
 - `.env.example`
 - `.gitignore` entries for `.env`, `firebase_options.dart`, `google-services.json`, and `GoogleService-Info.plist`
 
-Files that do **not** exist yet and must be generated or downloaded during setup:
+Local Firebase config files currently present in this workspace:
 
 - `apps/park_here_user/lib/firebase_options.dart`
 - `apps/park_here_admin/lib/firebase_options.dart`
 - `apps/park_here_user/android/app/google-services.json`
 - `apps/park_here_admin/android/app/google-services.json`
+
+These files are intentionally ignored by git. Treat them as local Firebase setup artifacts, and regenerate them for your own project with FlutterFire CLI when moving machines or Firebase projects.
+
+Files still missing unless you configure iOS manually or via FlutterFire:
+
 - `apps/park_here_user/ios/Runner/GoogleService-Info.plist`
 - `apps/park_here_admin/ios/Runner/GoogleService-Info.plist`
 
@@ -157,7 +182,7 @@ Default Firestore image collection:
 Parking area documents store only refs:
 
 ```text
-/parking_locations/{locationId}
+/parking_areas/{areaId}
   thumbnailRefs: ["img_..."]
   imagePreviewRefs: ["img_..."]
 ```
@@ -407,7 +432,7 @@ Storage upload denied:
 
 - Check Storage rules and bucket creation.
 - Confirm the admin is authenticated.
-- Confirm the file path convention, for example `parking_locations/{locationId}/images/{fileName}`.
+- Confirm the file path convention, for example `parking_areas/{areaId}/images/{fileName}`.
 - If you are using default Firestore-only image mode, this error usually means Storage code was enabled too early. Use `FirestoreImageRepository` instead.
 
 Image document too large:
@@ -415,7 +440,7 @@ Image document too large:
 - Lower preview dimensions or JPEG quality.
 - Keep decoded thumbnail <= 30KB and decoded preview <= 120KB.
 - Reject original images above the configured upload limit.
-- Store additional images as separate `/parking_area_images` documents, not as fields on `/parking_locations`.
+- Store additional images as separate `/parking_area_images` documents, not as fields on `/parking_areas`.
 
 Image-heavy screens feel slow:
 

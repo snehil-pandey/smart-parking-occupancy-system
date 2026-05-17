@@ -34,10 +34,36 @@ flowchart TD
 flowchart TD
   Start["Open Admin App"] --> Auth["Owner sign in"]
   Auth --> Dashboard["Stats dashboard"]
-  Dashboard --> Register["Register parking location"]
+  Dashboard --> Register["Register parking area"]
   Dashboard --> Availability["Manage availability and price"]
   Dashboard --> Bookings["View active/recent bookings"]
   Bookings --> Complete["Mark booking completed"]
+```
+
+## Region To Parking Area Flow
+
+SIT Tumkur is the current demo region. Admins manage that boundary and then publish bookable parking areas inside it. Users only see parking areas, never the region as a selectable parking object.
+
+```mermaid
+flowchart TD
+  Region["Region: SIT Tumkur"] --> Boundary["Admin edits region polygon"]
+  Boundary --> Area["Admin draws parking area boundary"]
+  Area --> Publish["Publish area with slots, price, images"]
+  Publish --> UserMap["User map/list shows parking areas only"]
+  UserMap --> Booking["User books area"]
+  Booking --> QR["Active QR ticket"]
+  Booking --> History["Permanent booking history"]
+```
+
+## Issue Report Flow
+
+```mermaid
+flowchart LR
+  User["User opens area details"] --> Report["Report issue"]
+  Report --> Firestore["/issue_reports filtered by adminId"]
+  Firestore --> Admin["Issues Received screen"]
+  Admin --> Status["open / in_progress / resolved / rejected"]
+  Status --> UserContext["Future user/admin notifications"]
 ```
 
 ## Firebase Backend Flow
@@ -45,12 +71,31 @@ flowchart TD
 ```mermaid
 flowchart LR
   Auth["Firebase Auth"] --> Profiles["/users and /admins"]
-  Profiles --> Locations["/parking_locations"]
-  Locations --> Bookings["/bookings"]
+  Profiles --> Regions["/regions"]
+  Regions --> Areas["/parking_areas"]
+  Areas --> Images["/parking_area_images"]
+  Areas --> Reviews["/reviews"]
+  Areas --> Issues["/issue_reports"]
+  Areas --> Bookings["/bookings"]
+  Bookings --> ActiveQR["/active_qr_tickets"]
   Bookings --> Payments["/payments"]
-  Storage["Firebase Storage"] --> Locations
+  Storage["Optional Firebase Storage"] -. future .-> Images
   Bookings --> AdminDash["Admin dashboard aggregates"]
   Bookings --> UserHistory["User history"]
+```
+
+## Realtime Listener Flow
+
+```mermaid
+flowchart TD
+  UserHome["User map home"] --> AreaQuery["parking_areas by regionId + isOpen, limited"]
+  UserHome --> ActiveBooking["bookings by userId + active"]
+  ActiveBooking --> ActiveQR["active_qr_tickets by bookingId"]
+  AdminDash["Admin dashboard"] --> AdminAreas["parking_areas by adminId/regionId"]
+  AdminDash --> AdminBookings["bookings by adminId/status"]
+  AdminDash --> AdminIssues["issue_reports by adminId/status"]
+  AreaQuery --> Cache["Local Riverpod/ImagePayloadCache state"]
+  AdminAreas --> Cache
 ```
 
 ## Hybrid Image Flow
@@ -94,7 +139,7 @@ Default mode:
 Image performance rules:
 
 - Generate thumbnail and preview versions before upload.
-- Store image payloads in `/parking_area_images`, not in `/parking_locations`.
+- Store image payloads in `/parking_area_images`, not in `/parking_areas`.
 - Keep thumbnails under 30KB and previews under 120KB.
 - Load one thumbnail per parking area in list views.
 - Lazy-load preview images only when the user opens area details.
@@ -119,6 +164,17 @@ sequenceDiagram
   Gate-->>User: Allows entry or rejects
 ```
 
+Active QR tickets are short-lived records. Booking history is permanent.
+
+```mermaid
+stateDiagram-v2
+  [*] --> Active: booking created
+  Active --> Used: gate verifies or admin completes
+  Active --> Expired: time window passes
+  Used --> [*]
+  Expired --> [*]
+```
+
 ## Folder Strategy
 
 ```text
@@ -134,4 +190,5 @@ sequenceDiagram
   /lib/theme
 /docs
 /scripts
+/demo
 ```

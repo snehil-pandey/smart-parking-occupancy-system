@@ -10,16 +10,26 @@ A route graph has:
 - **Edges**: roads between nodes.
 - **Weights**: cost to travel an edge, usually distance or time.
 
-Dijkstra’s algorithm starts at the origin, repeatedly picks the cheapest known next node, and relaxes its neighbors until it reaches the destination. The result is the lowest-weight path.
+Dijkstra's algorithm starts at the origin, repeatedly picks the cheapest known next node, and relaxes its neighbors until it reaches the destination. The result is the lowest-weight path.
 
 ## In This MVP
 
-`DijkstraRouteEngine` receives demo nodes and edges from `DemoSeed.routeEngine()`. When the driver selects a parking location, the user app:
+`DijkstraRouteEngine` receives demo nodes and edges from `DemoSeed.routeEngine()`. When the driver selects a parking area, the user app:
 
 1. Creates an origin point for the driver.
-2. Creates a destination point from the parking location.
+2. Creates a destination point from the parking area's center point.
 3. Calls `RouteProvider.findRoutes`.
 4. Shows the shortest route and an alternate route when available.
+
+## Region-Aware Routing
+
+The SIT Tumkur region is an admin organization boundary, not a user destination. Routing should only target `parking_areas/{areaId}` center points or future entrance nodes. When real maps are added, keep the provider behind `RouteProvider` and prefer these inputs:
+
+- origin: user GPS/current map pin
+- destination: selected parking area entry point or center
+- alternatives: shortest, fastest, and least congested when provider data allows
+
+The local Dijkstra fallback remains useful for demos, offline testing, and explaining the shortest-route choice without tying the UI to any paid routing API.
 
 ## Replacing With Real Maps
 
@@ -35,4 +45,3 @@ abstract interface class RouteProvider {
 ```
 
 A Google/OSRM provider can call an API, map its response into `RouteOption`, and leave the UI untouched.
-
