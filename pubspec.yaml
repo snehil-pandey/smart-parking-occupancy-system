@@ -1,0 +1,10 @@
+name: park_here_workspace
+publish_to: none
+environment:
+  sdk: ^3.11.0
+
+workspace:
+  - apps/park_here_user
+  - apps/park_here_admin
+  - shared
+
