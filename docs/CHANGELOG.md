@@ -39,3 +39,6 @@
 - Resolved Riverpod ProviderScope usage in widget tests.
 - Fixed admin stats card responsiveness found during widget testing.
 - Validated dependency resolution, analysis, widget tests, and web builds for both apps.
+
+### docs: add Firebase local setup guide
+- Expanded local setup documentation with Firebase project creation, CLI installation, FlutterFire configuration, platform file locations, product enablement, security notes, and troubleshooting.
