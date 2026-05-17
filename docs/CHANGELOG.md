@@ -14,3 +14,7 @@
 - Added typed models for users, admins, parking locations, bookings, and payments.
 - Added repository interfaces with local in-memory implementations.
 - Added route provider contract, Dijkstra fallback engine, QR payload service, demo seed data, and shared themes.
+
+### feat(user): build Park Here user app MVP
+- Replaced the starter app with a Riverpod-driven map-first parking discovery flow.
+- Added local profile editing, nearby parking suggestions, Dijkstra route comparison, duration selection, booking creation, and in-app QR ticket rendering.
