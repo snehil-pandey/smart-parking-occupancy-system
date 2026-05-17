@@ -9,3 +9,8 @@
 ### docs: add project research and architecture plan
 - Added research notes covering the parking occupancy problem, two-app split, Firebase choice, map-first UI, routing options, and MVP limitations.
 - Added architecture diagrams for app flow, backend flow, and QR verification.
+
+### feat(shared): add shared models and routing abstractions
+- Added typed models for users, admins, parking locations, bookings, and payments.
+- Added repository interfaces with local in-memory implementations.
+- Added route provider contract, Dijkstra fallback engine, QR payload service, demo seed data, and shared themes.

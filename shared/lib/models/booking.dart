@@ -1,0 +1,78 @@
+enum BookingStatus { pending, active, completed, cancelled }
+
+class Booking {
+  const Booking({
+    required this.id,
+    required this.userId,
+    required this.adminId,
+    required this.parkingLocationId,
+    required this.vehicleNumber,
+    required this.startTime,
+    required this.endTime,
+    required this.price,
+    required this.status,
+    required this.qrPayload,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String userId;
+  final String adminId;
+  final String parkingLocationId;
+  final String vehicleNumber;
+  final DateTime startTime;
+  final DateTime endTime;
+  final double price;
+  final BookingStatus status;
+  final String qrPayload;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  int get durationHours => endTime.difference(startTime).inHours;
+
+  Booking copyWith({
+    String? id,
+    String? userId,
+    String? adminId,
+    String? parkingLocationId,
+    String? vehicleNumber,
+    DateTime? startTime,
+    DateTime? endTime,
+    double? price,
+    BookingStatus? status,
+    String? qrPayload,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return Booking(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      adminId: adminId ?? this.adminId,
+      parkingLocationId: parkingLocationId ?? this.parkingLocationId,
+      vehicleNumber: vehicleNumber ?? this.vehicleNumber,
+      startTime: startTime ?? this.startTime,
+      endTime: endTime ?? this.endTime,
+      price: price ?? this.price,
+      status: status ?? this.status,
+      qrPayload: qrPayload ?? this.qrPayload,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'bookingId': id,
+    'userId': userId,
+    'adminId': adminId,
+    'parkingLocationId': parkingLocationId,
+    'vehicleNumber': vehicleNumber,
+    'startTime': startTime.toIso8601String(),
+    'endTime': endTime.toIso8601String(),
+    'price': price,
+    'status': status.name,
+    'qrPayload': qrPayload,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
+}

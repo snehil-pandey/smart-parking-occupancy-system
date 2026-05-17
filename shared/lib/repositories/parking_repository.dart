@@ -1,0 +1,22 @@
+import '../models/parking_location.dart';
+
+abstract interface class ParkingRepository {
+  Future<List<ParkingLocation>> watchNearby({
+    required double latitude,
+    required double longitude,
+  });
+
+  Future<List<ParkingLocation>> getByAdmin(String adminId);
+
+  Future<ParkingLocation?> findById(String id);
+
+  Future<void> upsert(ParkingLocation location);
+
+  Future<void> updateAvailability({
+    required String locationId,
+    required int totalSpaces,
+    required int availableSpaces,
+    required bool isOpen,
+    required double pricePerHour,
+  });
+}
