@@ -58,7 +58,7 @@ See `demo/setup_demo.md` for the full service-account and verification flow. Nev
 
 ## Firebase Mode
 
-The current repository is intentionally local-first. It has Firebase-ready models, collection path constants, repository interfaces, and placeholder Firebase repositories. Real Firebase config files can exist locally, but app logic still defaults to in-memory repositories until you wire the Firebase providers.
+The current repository is intentionally local-first. It has Firebase-ready models, collection path constants, repository interfaces, and Firestore repository implementations. Real Firebase config files can exist locally, but app logic still defaults to in-memory repositories until you wire the Firebase providers.
 
 Current Firebase-related code/docs already in the repo:
 
@@ -66,6 +66,11 @@ Current Firebase-related code/docs already in the repo:
 - `shared/lib/services/firebase_readiness_service.dart`
 - `shared/lib/repositories/firebase_parking_repository.dart`
 - `shared/lib/repositories/firebase_booking_repository.dart`
+- `shared/lib/repositories/firebase_region_repository.dart`
+- `shared/lib/repositories/firebase_review_repository.dart`
+- `shared/lib/repositories/firebase_issue_repository.dart`
+- `shared/lib/repositories/firestore_image_repository.dart`
+- `shared/lib/services/firestore_model_mapper.dart`
 - `docs/FIREBASE_SCHEMA.md`
 - `.env.example`
 - `.gitignore` entries for `.env`, `firebase_options.dart`, `google-services.json`, and `GoogleService-Info.plist`
@@ -318,7 +323,7 @@ Use `ParkHereAdminApp` in the admin app. Keep the local-first fallback until Fir
 
 ### 9. Wire repositories after setup
 
-After Firebase config is generated, dependencies are added, and the repository methods are implemented, replace the local providers with Firebase providers.
+After Firebase config is generated and each app initializes Firebase, replace the local providers with Firebase providers.
 
 ```dart
 final parkingRepositoryProvider = Provider<ParkingRepository>(
@@ -327,6 +332,7 @@ final parkingRepositoryProvider = Provider<ParkingRepository>(
 ```
 
 Do the same for booking and auth repositories when their Firebase implementations are ready.
+Firestore-backed region, booking, review, issue, and Firestore image repositories are already implemented in `shared`. Auth remains local-first until a Firebase Auth service is added.
 
 For images, keep Firestore mode as the default:
 

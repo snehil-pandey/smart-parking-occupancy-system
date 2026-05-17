@@ -8,7 +8,9 @@ flowchart LR
   AdminApp["Location Administrator App"] --> Shared
   Shared --> Repos["Repository Interfaces"]
   Repos --> Local["Local Demo Repositories"]
-  Repos -. future .-> Firebase["Firebase Auth / Firestore / Storage"]
+  Repos --> Firestore["Firestore Repository Implementations"]
+  Repos -. future .-> FirebaseAuth["Firebase Auth Service"]
+  Repos -. optional .-> Storage["Firebase Storage"]
   Shared --> Routing["RouteProvider + Dijkstra Engine"]
   Shared --> QR["QR Payload Service"]
   Shared --> Images["ImageRepository + ImageOptimizer"]
@@ -133,7 +135,7 @@ classDiagram
 Default mode:
 
 - `InMemoryImageRepository` locally
-- `FirestoreImageRepository` when Firebase is enabled
+- `FirestoreImageRepository` when Firebase is enabled; this implementation is now present
 - `FirebaseStorageImageRepository` only when Storage billing/config is acceptable
 
 Image performance rules:

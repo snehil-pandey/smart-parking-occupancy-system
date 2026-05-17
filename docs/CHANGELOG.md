@@ -74,3 +74,11 @@
 
 ### docs: update architecture, setup, schema, and QR docs
 - Documented region-to-area flow, active QR lifecycle, realtime listener strategy, issue reports, indexes, and Firebase demo setup.
+
+### feat(firebase): implement Firestore repositories
+- Replaced placeholder Firestore repository bodies for regions, parking areas, bookings, reviews, issues, and Firestore image mode.
+- Added Firestore timestamp/string mapper support so repositories can read both app-written and Admin SDK seeded demo documents.
+- Added tests for Firestore date mapping and ignored generated Flutter plugin metadata.
+
+### docs: refresh Firebase repository setup notes
+- Updated README, architecture, and local setup docs to reflect that Firestore repositories now exist while local mode remains the default.

@@ -15,20 +15,22 @@ Driver app:
 
 - Local/Firebase-ready auth profile
 - Map-first nearby parking discovery
-- Available slots, price, vehicle support, and route comparison
+- Parking areas only, with available slots, price, ratings, images, and route comparison
 - Dijkstra fallback route provider
 - Duration-based booking
-- QR ticket generation
-- Active booking and history-ready model
+- QR ticket generation with active QR lifecycle data
+- Reviews, comments, and issue reporting
 
 Admin app:
 
 - Local/Firebase-ready owner profile
-- Parking location registration
+- SIT Tumkur region and parking area management
+- Region and parking area boundary editing
 - Availability, price, and open/closed controls
 - Booking list and completion action
+- Issues Received workflow
 - Today income and future weekly/monthly analytics placeholder
-- Image URL support ready for Firebase Storage
+- Firestore-first optimized image upload flow, with Firebase Storage left optional
 
 ## Project Structure
 
@@ -44,6 +46,7 @@ Admin app:
   /lib/utils
   /lib/theme
 /docs
+/demo
 /scripts
 ```
 
@@ -72,15 +75,19 @@ flutter run -d chrome
 
 ## Firebase Setup
 
-The current build runs locally without Firebase config. To connect Firebase:
+The current build runs locally without Firebase config. Firebase packages and Firestore repository implementations are present, but app providers still default to local in-memory repositories so the MVP runs immediately.
+
+To connect Firebase:
 
 1. Create a Firebase project.
 2. Enable Firebase Auth, Cloud Firestore, and Firebase Storage.
 3. Install FlutterFire CLI.
 4. Run `flutterfire configure` in each app folder.
-5. Add `firebase_core`, `firebase_auth`, `cloud_firestore`, and `firebase_storage`.
-6. Replace local repository providers with Firebase repository implementations.
+5. Confirm `firebase_core`, `firebase_auth`, `cloud_firestore`, and `firebase_storage` are resolved.
+6. Replace local repository providers with Firebase repository implementations where needed.
 7. Use the schema in [FIREBASE_SCHEMA.md](FIREBASE_SCHEMA.md).
+
+Default image mode is Firestore-only and stores compressed thumbnails/previews in `/parking_area_images`. Firebase Storage remains an optional future mode for teams that can use Blaze/pay-as-you-go.
 
 ## Maps Setup
 
@@ -98,4 +105,3 @@ Screenshots should be added after running the apps on target devices:
 - `docs/screenshots/user-qr-ticket.png`
 - `docs/screenshots/admin-dashboard.png`
 - `docs/screenshots/admin-location-form.png`
-
