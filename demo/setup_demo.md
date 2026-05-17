@@ -16,7 +16,7 @@ The script uses fixed document IDs and `merge=True`, so repeated runs refresh th
 
 ## Setup
 
-1. Create or open a Firebase project.
+1. Open the Firebase project.
 2. Enable Cloud Firestore in Native mode.
 3. Open Firebase Console > Project settings > Service accounts.
 4. Generate a new private key.
