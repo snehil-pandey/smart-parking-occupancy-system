@@ -24,6 +24,9 @@ void main() {
             InMemoryBookingRepository(),
           ),
           imageRepositoryProvider.overrideWithValue(InMemoryImageRepository()),
+          userLocationServiceProvider.overrideWithValue(
+            const _TestLocationService(),
+          ),
           reviewRepositoryProvider.overrideWithValue(
             InMemoryReviewRepository(),
           ),
@@ -42,4 +45,21 @@ void main() {
 
     expect(find.text('Nearby parking'), findsOneWidget);
   });
+}
+
+class _TestLocationService implements UserLocationService {
+  const _TestLocationService();
+
+  static const _position = UserPosition(
+    latitude: 13.0007,
+    longitude: 77.0941,
+    isFallback: false,
+    message: 'Test GPS location.',
+  );
+
+  @override
+  Future<UserPosition> currentPosition() async => _position;
+
+  @override
+  Stream<UserPosition> positionStream() => Stream.value(_position);
 }

@@ -627,12 +627,20 @@ class _ParkingBottomSheet extends StatelessWidget {
             _StatusStrip(message: state.error!, isError: true),
             const SizedBox(height: 10),
           ],
+          if (state.position != null) ...[
+            _StatusStrip(
+              message: state.position!.message,
+              isError: state.position!.isFallback,
+            ),
+            const SizedBox(height: 10),
+          ],
           Text('Nearby parking', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 10),
           for (final location in state.locations)
             _LocationTile(
               location: location,
               thumbnail: state.thumbnailByArea[location.id],
+              distanceKm: state.distanceKmFor(location),
               selected: location.id == selected?.id,
               onTap: () {
                 controller.selectLocation(location);
@@ -743,12 +751,14 @@ class _LocationTile extends StatelessWidget {
   const _LocationTile({
     required this.location,
     required this.thumbnail,
+    required this.distanceKm,
     required this.selected,
     required this.onTap,
   });
 
   final ParkingLocation location;
   final ParkingAreaImage? thumbnail;
+  final double? distanceKm;
   final bool selected;
   final VoidCallback onTap;
 
@@ -787,7 +797,7 @@ class _LocationTile extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
-          '${location.availableSpaces}/${location.totalSpaces} slots - ${location.ratingAverage.toStringAsFixed(1)} star - ${location.address}',
+          '${location.availableSpaces}/${location.totalSpaces} slots - ${location.ratingAverage.toStringAsFixed(1)} star - ${distanceKm == null ? 'distance pending' : '${distanceKm!.toStringAsFixed(1)} km'}',
         ),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,

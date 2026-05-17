@@ -1,4 +1,8 @@
+import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:park_here_shared/park_here_shared.dart';
 
 final authServiceProvider = Provider<AuthService>(
@@ -16,6 +20,9 @@ final imageRepositoryProvider = Provider<ImageRepository>(
 final imagePayloadCacheProvider = Provider<ImagePayloadCache>(
   (ref) => ImagePayloadCache(),
 );
+final userLocationServiceProvider = Provider<UserLocationService>(
+  (ref) => GeolocatorUserLocationService(),
+);
 final reviewRepositoryProvider = Provider<ReviewRepository>(
   (ref) => FirebaseReviewRepository(),
 );
@@ -32,6 +39,104 @@ final qrPayloadProvider = Provider<QrPayloadService>(
 
 enum UserAuthStatus { checking, signedOut, signedIn }
 
+class UserPosition {
+  const UserPosition({
+    required this.latitude,
+    required this.longitude,
+    required this.isFallback,
+    required this.message,
+  });
+
+  final double latitude;
+  final double longitude;
+  final bool isFallback;
+  final String message;
+
+  RoutePoint toRoutePoint() => RoutePoint(
+    id: 'driver_origin',
+    label: isFallback ? 'Fallback location' : 'Your location',
+    latitude: latitude,
+    longitude: longitude,
+  );
+
+  double distanceKmTo(ParkingLocation location) {
+    const earthRadiusKm = 6371.0;
+    final dLat = _degreesToRadians(location.latitude - latitude);
+    final dLon = _degreesToRadians(location.longitude - longitude);
+    final a =
+        sin(dLat / 2) * sin(dLat / 2) +
+        cos(_degreesToRadians(latitude)) *
+            cos(_degreesToRadians(location.latitude)) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
+    return earthRadiusKm * 2 * atan2(sqrt(a), sqrt(1 - a));
+  }
+
+  static double _degreesToRadians(double degrees) => degrees * pi / 180;
+}
+
+abstract interface class UserLocationService {
+  Future<UserPosition> currentPosition();
+
+  Stream<UserPosition> positionStream();
+}
+
+class GeolocatorUserLocationService implements UserLocationService {
+  static const _fallback = UserPosition(
+    latitude: 13.0007,
+    longitude: 77.0941,
+    isFallback: true,
+    message:
+        'Location permission is unavailable. Showing parking near SIT Tumkur.',
+  );
+
+  @override
+  Future<UserPosition> currentPosition() async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      return _fallback;
+    }
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return _fallback;
+    }
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+    );
+    return UserPosition(
+      latitude: position.latitude,
+      longitude: position.longitude,
+      isFallback: false,
+      message: 'Using live GPS for nearby parking.',
+    );
+  }
+
+  @override
+  Stream<UserPosition> positionStream() async* {
+    final first = await currentPosition();
+    yield first;
+    if (first.isFallback) {
+      return;
+    }
+    yield* Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 75,
+      ),
+    ).map(
+      (position) => UserPosition(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        isFallback: false,
+        message: 'Using live GPS for nearby parking.',
+      ),
+    );
+  }
+}
+
 final userAppControllerProvider =
     StateNotifierProvider<UserAppController, UserAppState>((ref) {
       return UserAppController(
@@ -42,6 +147,7 @@ final userAppControllerProvider =
         reviewRepository: ref.watch(reviewRepositoryProvider),
         issueRepository: ref.watch(issueRepositoryProvider),
         imageCache: ref.watch(imagePayloadCacheProvider),
+        locationService: ref.watch(userLocationServiceProvider),
         routeProvider: ref.watch(routeProvider),
         qrPayloadService: ref.watch(qrPayloadProvider),
       )..load();
@@ -58,6 +164,7 @@ class UserAppState {
     required this.previewImages,
     required this.selectedReviews,
     required this.activeQrTicket,
+    required this.position,
     required this.selectedLocation,
     required this.durationHours,
     required this.isLoading,
@@ -76,6 +183,7 @@ class UserAppState {
       previewImages: const [],
       selectedReviews: const [],
       activeQrTicket: null,
+      position: null,
       selectedLocation: null,
       durationHours: 2,
       isLoading: true,
@@ -93,6 +201,7 @@ class UserAppState {
       previewImages: const [],
       selectedReviews: const [],
       activeQrTicket: null,
+      position: null,
       selectedLocation: null,
       durationHours: 2,
       isLoading: false,
@@ -108,6 +217,7 @@ class UserAppState {
   final List<ParkingAreaImage> previewImages;
   final List<ParkingReview> selectedReviews;
   final ActiveQrTicket? activeQrTicket;
+  final UserPosition? position;
   final ParkingLocation? selectedLocation;
   final int durationHours;
   final bool isLoading;
@@ -117,6 +227,9 @@ class UserAppState {
   Booking? get activeBooking => bookings
       .where((booking) => booking.status == BookingStatus.active)
       .firstOrNull;
+
+  double? distanceKmFor(ParkingLocation location) =>
+      position?.distanceKmTo(location);
 
   UserAppState copyWith({
     AppUser? user,
@@ -129,6 +242,7 @@ class UserAppState {
     List<ParkingReview>? selectedReviews,
     ActiveQrTicket? activeQrTicket,
     bool clearActiveQrTicket = false,
+    UserPosition? position,
     ParkingLocation? selectedLocation,
     bool clearSelectedLocation = false,
     int? durationHours,
@@ -148,6 +262,7 @@ class UserAppState {
       activeQrTicket: clearActiveQrTicket
           ? null
           : activeQrTicket ?? this.activeQrTicket,
+      position: position ?? this.position,
       selectedLocation: clearSelectedLocation
           ? null
           : selectedLocation ?? this.selectedLocation,
@@ -168,6 +283,7 @@ class UserAppController extends StateNotifier<UserAppState> {
     required ReviewRepository reviewRepository,
     required IssueRepository issueRepository,
     required ImagePayloadCache imageCache,
+    required UserLocationService locationService,
     required RouteProvider routeProvider,
     required QrPayloadService qrPayloadService,
   }) : _auth = auth,
@@ -177,6 +293,7 @@ class UserAppController extends StateNotifier<UserAppState> {
        _reviewRepository = reviewRepository,
        _issueRepository = issueRepository,
        _imageCache = imageCache,
+       _locationService = locationService,
        _routeProvider = routeProvider,
        _qrPayloadService = qrPayloadService,
        super(UserAppState.signedOut());
@@ -188,15 +305,10 @@ class UserAppController extends StateNotifier<UserAppState> {
   final ReviewRepository _reviewRepository;
   final IssueRepository _issueRepository;
   final ImagePayloadCache _imageCache;
+  final UserLocationService _locationService;
   final RouteProvider _routeProvider;
   final QrPayloadService _qrPayloadService;
-
-  static const _currentPosition = RoutePoint(
-    id: 'driver_origin',
-    label: 'Your location',
-    latitude: 12.9722,
-    longitude: 77.6081,
-  );
+  StreamSubscription<UserPosition>? _positionSubscription;
 
   Future<void> load() async {
     state = state.copyWith(isLoading: true);
@@ -205,9 +317,11 @@ class UserAppController extends StateNotifier<UserAppState> {
       state = UserAppState.signedOut();
       return;
     }
+    final position = await _locationService.currentPosition();
+    _startLocationUpdates();
     final locations = await _parkingRepository.watchNearby(
-      latitude: _currentPosition.latitude,
-      longitude: _currentPosition.longitude,
+      latitude: position.latitude,
+      longitude: position.longitude,
     );
     final bookings = await _bookingRepository.getForUser(user.id);
     final activeBooking = bookings
@@ -221,6 +335,7 @@ class UserAppController extends StateNotifier<UserAppState> {
       bookings: bookings,
       user: user,
       authStatus: UserAuthStatus.signedIn,
+      position: position,
       activeQrTicket: activeQrTicket,
       clearActiveQrTicket: activeQrTicket == null,
       selectedLocation: locations.firstOrNull,
@@ -267,6 +382,8 @@ class UserAppController extends StateNotifier<UserAppState> {
   }
 
   Future<void> signOut() async {
+    await _positionSubscription?.cancel();
+    _positionSubscription = null;
     await _auth.signOut();
     state = UserAppState.signedOut();
   }
@@ -294,7 +411,14 @@ class UserAppController extends StateNotifier<UserAppState> {
       longitude: location.longitude,
     );
     final routes = await _routeProvider.findRoutes(
-      origin: _currentPosition,
+      origin:
+          state.position?.toRoutePoint() ??
+          const UserPosition(
+            latitude: 13.0007,
+            longitude: 77.0941,
+            isFallback: true,
+            message: 'Using SIT Tumkur fallback location.',
+          ).toRoutePoint(),
       destination: destination,
     );
     state = state.copyWith(selectedLocation: location, routes: routes);
@@ -487,5 +611,26 @@ class UserAppController extends StateNotifier<UserAppState> {
   Future<void> _loadReviews(String areaId) async {
     final reviews = await _reviewRepository.getForArea(areaId, limit: 5);
     state = state.copyWith(selectedReviews: reviews);
+  }
+
+  void _startLocationUpdates() {
+    if (_positionSubscription != null) {
+      return;
+    }
+    _positionSubscription = _locationService.positionStream().listen((
+      position,
+    ) async {
+      state = state.copyWith(position: position);
+      final selected = state.selectedLocation;
+      if (selected != null) {
+        await selectLocation(selected);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _positionSubscription?.cancel();
+    super.dispose();
   }
 }
