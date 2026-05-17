@@ -26,3 +26,7 @@
 ### feat(firebase): add Firebase repositories and schema docs
 - Added Firebase collection path constants and repository placeholders behind existing interfaces.
 - Documented the Firestore collections, fields, and security direction.
+
+### feat(qr): add booking QR generation flow
+- Added QR payload parsing support to the shared service.
+- Documented the future hardware/API verification flow and production signing direction.
