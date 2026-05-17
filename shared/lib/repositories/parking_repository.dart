@@ -8,6 +8,13 @@ abstract interface class ParkingRepository {
 
   Future<List<ParkingLocation>> getByAdmin(String adminId);
 
+  Future<List<ParkingLocation>> getByRegion(String regionId, {int limit = 30});
+
+  Stream<List<ParkingLocation>> watchByRegion(
+    String regionId, {
+    int limit = 30,
+  });
+
   Future<ParkingLocation?> findById(String id);
 
   Future<void> upsert(ParkingLocation location);

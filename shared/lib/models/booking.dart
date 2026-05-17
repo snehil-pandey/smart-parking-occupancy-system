@@ -1,4 +1,4 @@
-enum BookingStatus { pending, active, completed, cancelled }
+enum BookingStatus { pending, active, completed, cancelled, expired }
 
 class Booking {
   const Booking({
@@ -6,6 +6,8 @@ class Booking {
     required this.userId,
     required this.adminId,
     required this.parkingLocationId,
+    this.qrId,
+    this.qrUsedAt,
     required this.vehicleNumber,
     required this.startTime,
     required this.endTime,
@@ -20,6 +22,8 @@ class Booking {
   final String userId;
   final String adminId;
   final String parkingLocationId;
+  final String? qrId;
+  final DateTime? qrUsedAt;
   final String vehicleNumber;
   final DateTime startTime;
   final DateTime endTime;
@@ -36,6 +40,8 @@ class Booking {
     String? userId,
     String? adminId,
     String? parkingLocationId,
+    String? qrId,
+    DateTime? qrUsedAt,
     String? vehicleNumber,
     DateTime? startTime,
     DateTime? endTime,
@@ -50,6 +56,8 @@ class Booking {
       userId: userId ?? this.userId,
       adminId: adminId ?? this.adminId,
       parkingLocationId: parkingLocationId ?? this.parkingLocationId,
+      qrId: qrId ?? this.qrId,
+      qrUsedAt: qrUsedAt ?? this.qrUsedAt,
       vehicleNumber: vehicleNumber ?? this.vehicleNumber,
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
@@ -66,6 +74,9 @@ class Booking {
     'userId': userId,
     'adminId': adminId,
     'parkingLocationId': parkingLocationId,
+    'areaId': parkingLocationId,
+    'qrId': qrId,
+    'qrUsedAt': qrUsedAt?.toIso8601String(),
     'vehicleNumber': vehicleNumber,
     'startTime': startTime.toIso8601String(),
     'endTime': endTime.toIso8601String(),

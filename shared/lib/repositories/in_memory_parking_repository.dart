@@ -23,6 +23,25 @@ class InMemoryParkingRepository implements ParkingRepository {
   }
 
   @override
+  Future<List<ParkingLocation>> getByRegion(
+    String regionId, {
+    int limit = 30,
+  }) async {
+    return _locations
+        .where((location) => location.regionId == regionId)
+        .take(limit)
+        .toList();
+  }
+
+  @override
+  Stream<List<ParkingLocation>> watchByRegion(
+    String regionId, {
+    int limit = 30,
+  }) {
+    return Stream.fromFuture(getByRegion(regionId, limit: limit));
+  }
+
+  @override
   Future<List<ParkingLocation>> watchNearby({
     required double latitude,
     required double longitude,

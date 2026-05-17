@@ -21,6 +21,18 @@ class FirebaseParkingRepository implements ParkingRepository {
       _missingConfig();
 
   @override
+  Future<List<ParkingLocation>> getByRegion(
+    String regionId, {
+    int limit = 30,
+  }) async => _missingConfig();
+
+  @override
+  Stream<List<ParkingLocation>> watchByRegion(
+    String regionId, {
+    int limit = 30,
+  }) => _missingConfig();
+
+  @override
   Future<List<ParkingLocation>> watchNearby({
     required double latitude,
     required double longitude,
