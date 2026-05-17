@@ -30,3 +30,7 @@
 ### feat(qr): add booking QR generation flow
 - Added QR payload parsing support to the shared service.
 - Documented the future hardware/API verification flow and production signing direction.
+
+### docs: add setup, changelog, and future scope
+- Expanded README with story, features, run commands, Firebase setup, maps setup, and screenshot placeholders.
+- Added routing engine, local setup, future scope docs, and a Firestore-shaped demo seed script.
