@@ -18,3 +18,7 @@
 ### feat(user): build Park Here user app MVP
 - Replaced the starter app with a Riverpod-driven map-first parking discovery flow.
 - Added local profile editing, nearby parking suggestions, Dijkstra route comparison, duration selection, booking creation, and in-app QR ticket rendering.
+
+### feat(admin): build location administrator MVP
+- Replaced the starter app with a Riverpod dashboard for parking owners.
+- Added owner profile editing, parking location registration, availability/price controls, booking list, booking completion, and income placeholders.
