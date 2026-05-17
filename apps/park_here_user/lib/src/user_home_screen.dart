@@ -207,7 +207,7 @@ class _SearchPanel extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '${user.vehicleNumber} • ${firebase.message}',
+                    '${user.vehicleNumber} - ${firebase.message}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
@@ -414,8 +414,11 @@ class _ParkingBottomSheet extends StatelessWidget {
           for (final location in state.locations)
             _LocationTile(
               location: location,
+              thumbnail: state.thumbnailByArea[location.id],
               selected: location.id == selected?.id,
-              onTap: () => controller.selectLocation(location),
+              onTap: () {
+                controller.selectLocation(location);
+              },
             ),
           if (selected != null) ...[
             const SizedBox(height: 12),
@@ -423,6 +426,7 @@ class _ParkingBottomSheet extends StatelessWidget {
             const SizedBox(height: 12),
             _BookingPanel(
               location: selected,
+              previewImages: state.previewImages,
               durationHours: state.durationHours,
               onDurationChanged: controller.changeDuration,
               onBook: controller.createBooking,
@@ -463,7 +467,7 @@ class _ActiveBookingCard extends StatelessWidget {
                   ),
                   Text(booking.vehicleNumber),
                   Text(
-                    '${formatInr(booking.price)} • ${booking.durationHours} hours',
+                    '${formatInr(booking.price)} - ${booking.durationHours} hours',
                   ),
                 ],
               ),
@@ -478,11 +482,13 @@ class _ActiveBookingCard extends StatelessWidget {
 class _LocationTile extends StatelessWidget {
   const _LocationTile({
     required this.location,
+    required this.thumbnail,
     required this.selected,
     required this.onTap,
   });
 
   final ParkingLocation location;
+  final ParkingAreaImage? thumbnail;
   final bool selected;
   final VoidCallback onTap;
 
@@ -496,12 +502,24 @@ class _LocationTile extends StatelessWidget {
         selectedTileColor: const Color(0xFFFFF4BC),
         tileColor: const Color(0xFFF8F8F8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        leading: CircleAvatar(
-          backgroundColor: selected
-              ? ParkHereTheme.black
-              : const Color(0xFFEDEDED),
-          foregroundColor: selected ? Colors.white : ParkHereTheme.black,
-          child: const Icon(Icons.local_parking),
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            width: 52,
+            height: 52,
+            child: thumbnail == null
+                ? ColoredBox(
+                    color: selected
+                        ? ParkHereTheme.yellow
+                        : const Color(0xFFEDEDED),
+                    child: const Icon(Icons.local_parking),
+                  )
+                : Image.memory(
+                    thumbnail!.thumbnailBytes,
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                  ),
+          ),
         ),
         title: Text(
           location.name,
@@ -509,7 +527,7 @@ class _LocationTile extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
-          '${location.availableSpaces}/${location.totalSpaces} slots • ${location.address}',
+          '${location.availableSpaces}/${location.totalSpaces} slots - ${location.address}',
         ),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -545,7 +563,7 @@ class _RouteSummary extends StatelessWidget {
                 size: 18,
               ),
               label: Text(
-                '${route.name}: ${route.distanceKm} km • ${route.durationMinutes} min',
+                '${route.name}: ${route.distanceKm} km - ${route.durationMinutes} min',
               ),
             ),
           )
@@ -557,12 +575,14 @@ class _RouteSummary extends StatelessWidget {
 class _BookingPanel extends StatelessWidget {
   const _BookingPanel({
     required this.location,
+    required this.previewImages,
     required this.durationHours,
     required this.onDurationChanged,
     required this.onBook,
   });
 
   final ParkingLocation location;
+  final List<ParkingAreaImage> previewImages;
   final int durationHours;
   final ValueChanged<int> onDurationChanged;
   final Future<void> Function() onBook;
@@ -587,6 +607,30 @@ class _BookingPanel extends StatelessWidget {
               ).textTheme.titleMedium?.copyWith(color: Colors.white),
             ),
             const SizedBox(height: 10),
+            if (previewImages.isNotEmpty) ...[
+              SizedBox(
+                height: 118,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: previewImages.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 10),
+                  itemBuilder: (context, index) {
+                    final image = previewImages[index];
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.memory(
+                        image.previewBytes,
+                        width: 180,
+                        height: 118,
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
             Row(
               children: [
                 const Text('Duration', style: TextStyle(color: Colors.white70)),
@@ -614,7 +658,7 @@ class _BookingPanel extends StatelessWidget {
               ),
               onPressed: onBook,
               icon: const Icon(Icons.qr_code_2),
-              label: Text('Book slot • ${formatInr(total)}'),
+              label: Text('Book slot - ${formatInr(total)}'),
             ),
           ],
         ),

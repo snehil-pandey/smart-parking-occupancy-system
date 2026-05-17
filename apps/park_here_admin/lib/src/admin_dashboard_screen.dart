@@ -149,9 +149,6 @@ class AdminDashboardScreen extends ConsumerWidget {
     final price = TextEditingController(text: '70');
     final opening = TextEditingController(text: '06:00');
     final closing = TextEditingController(text: '23:00');
-    final image = TextEditingController(
-      text: 'https://images.unsplash.com/photo-1604063165585-e17e9c3c3f0b',
-    );
     var selectedTypes = <VehicleType>{VehicleType.car, VehicleType.bike};
 
     showModalBottomSheet<void>(
@@ -254,10 +251,6 @@ class AdminDashboardScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
-                    TextField(
-                      controller: image,
-                      decoration: const InputDecoration(labelText: 'Image URL'),
-                    ),
                     const SizedBox(height: 12),
                     Wrap(
                       spacing: 8,
@@ -290,7 +283,6 @@ class AdminDashboardScreen extends ConsumerWidget {
                               vehicleTypes: selectedTypes.toList(),
                               openingTime: opening.text,
                               closingTime: closing.text,
-                              imageUrls: [image.text],
                             );
                         Navigator.pop(context);
                       },
@@ -435,7 +427,9 @@ class _LocationsPanel extends StatelessWidget {
               for (final location in state.locations)
                 ListTile(
                   selected: selected?.id == location.id,
-                  onTap: () => controller.selectLocation(location),
+                  onTap: () {
+                    controller.selectLocation(location);
+                  },
                   leading: const Icon(Icons.local_parking),
                   title: Text(location.name),
                   subtitle: Text(
@@ -448,10 +442,115 @@ class _LocationsPanel extends StatelessWidget {
             if (selected != null) ...[
               const Divider(height: 28),
               _AvailabilityEditor(location: selected, controller: controller),
+              const Divider(height: 28),
+              _ImageManager(state: state, controller: controller),
             ],
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ImageManager extends StatelessWidget {
+  const _ImageManager({required this.state, required this.controller});
+
+  final AdminAppState state;
+  final AdminAppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Optimized images',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 6),
+        Text(
+          state.imageStatusMessage,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        if (state.imageUploadProgress > 0 && state.imageUploadProgress < 1) ...[
+          const SizedBox(height: 8),
+          LinearProgressIndicator(value: state.imageUploadProgress),
+        ],
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final image in state.selectedImages)
+              SizedBox(
+                width: 154,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: const Color(0xFFDDE5E1)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(8),
+                        ),
+                        child: Image.memory(
+                          image.previewBytes,
+                          width: 154,
+                          height: 92,
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${(image.previewSizeBytes / 1024).toStringAsFixed(1)}KB preview',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            Row(
+                              children: [
+                                IconButton(
+                                  tooltip: 'Replace image',
+                                  onPressed: () =>
+                                      controller.replaceImage(image),
+                                  icon: const Icon(
+                                    Icons.change_circle_outlined,
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Remove image',
+                                  onPressed: () =>
+                                      controller.removeImage(image),
+                                  icon: const Icon(Icons.delete_outline),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            SizedBox(
+              width: 154,
+              height: 148,
+              child: OutlinedButton.icon(
+                key: const ValueKey('upload-optimized-image'),
+                onPressed: controller.uploadDemoImage,
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+                label: const Text('Upload optimized image'),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

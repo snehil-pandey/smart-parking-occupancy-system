@@ -9,6 +9,13 @@ void main() {
       for (final location in DemoSeed.parkingLocations)
         location.id: location.toJson(),
     },
+    'parking_area_images': {
+      for (final image in DemoSeed.parkingAreaImages())
+        image.imageId: {
+          ...image.toJson(),
+          'note': 'Demo payload is intentionally tiny; do not seed raw images.',
+        },
+    },
     'bookings': {for (final booking in bookings) booking.id: booking.toJson()},
   };
 

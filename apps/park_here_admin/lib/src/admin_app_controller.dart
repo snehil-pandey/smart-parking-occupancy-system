@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:park_here_shared/park_here_shared.dart';
 
@@ -7,6 +9,9 @@ final adminParkingRepositoryProvider = Provider<ParkingRepository>(
 );
 final adminBookingRepositoryProvider = Provider<BookingRepository>(
   (ref) => InMemoryBookingRepository(),
+);
+final adminImageRepositoryProvider = Provider<ImageRepository>(
+  (ref) => InMemoryImageRepository(),
 );
 final adminFirebaseReadinessProvider = Provider<FirebaseReadiness>(
   (ref) => const FirebaseReadinessService().check(),
@@ -18,6 +23,7 @@ final adminAppControllerProvider =
         auth: ref.watch(adminAuthProvider),
         parkingRepository: ref.watch(adminParkingRepositoryProvider),
         bookingRepository: ref.watch(adminBookingRepositoryProvider),
+        imageRepository: ref.watch(adminImageRepositoryProvider),
       )..load();
     });
 
@@ -26,8 +32,11 @@ class AdminAppState {
     required this.admin,
     required this.locations,
     required this.bookings,
+    required this.selectedImages,
     required this.selectedLocation,
     required this.isLoading,
+    required this.imageUploadProgress,
+    required this.imageStatusMessage,
     this.error,
   });
 
@@ -36,16 +45,22 @@ class AdminAppState {
       admin: admin,
       locations: const [],
       bookings: const [],
+      selectedImages: const [],
       selectedLocation: null,
       isLoading: true,
+      imageUploadProgress: 0,
+      imageStatusMessage: 'Images are optimized before Firestore upload.',
     );
   }
 
   final AdminProfile admin;
   final List<ParkingLocation> locations;
   final List<Booking> bookings;
+  final List<ParkingAreaImage> selectedImages;
   final ParkingLocation? selectedLocation;
   final bool isLoading;
+  final double imageUploadProgress;
+  final String imageStatusMessage;
   final String? error;
 
   int get totalSpaces =>
@@ -75,16 +90,22 @@ class AdminAppState {
     AdminProfile? admin,
     List<ParkingLocation>? locations,
     List<Booking>? bookings,
+    List<ParkingAreaImage>? selectedImages,
     ParkingLocation? selectedLocation,
     bool? isLoading,
+    double? imageUploadProgress,
+    String? imageStatusMessage,
     String? error,
   }) {
     return AdminAppState(
       admin: admin ?? this.admin,
       locations: locations ?? this.locations,
       bookings: bookings ?? this.bookings,
+      selectedImages: selectedImages ?? this.selectedImages,
       selectedLocation: selectedLocation ?? this.selectedLocation,
       isLoading: isLoading ?? this.isLoading,
+      imageUploadProgress: imageUploadProgress ?? this.imageUploadProgress,
+      imageStatusMessage: imageStatusMessage ?? this.imageStatusMessage,
       error: error,
     );
   }
@@ -95,14 +116,17 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     required AuthService auth,
     required ParkingRepository parkingRepository,
     required BookingRepository bookingRepository,
+    required ImageRepository imageRepository,
   }) : _auth = auth,
        _parkingRepository = parkingRepository,
        _bookingRepository = bookingRepository,
+       _imageRepository = imageRepository,
        super(AdminAppState.initial(auth.currentAdmin));
 
   final AuthService _auth;
   final ParkingRepository _parkingRepository;
   final BookingRepository _bookingRepository;
+  final ImageRepository _imageRepository;
 
   Future<void> load() async {
     final locations = await _parkingRepository.getByAdmin(
@@ -117,6 +141,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       selectedLocation: locations.firstOrNull,
       isLoading: false,
     );
+    await _loadSelectedImages();
   }
 
   Future<void> updateAdminProfile({
@@ -135,8 +160,9 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     await load();
   }
 
-  void selectLocation(ParkingLocation location) {
+  Future<void> selectLocation(ParkingLocation location) async {
     state = state.copyWith(selectedLocation: location);
+    await _loadSelectedImages();
   }
 
   Future<void> registerLocation({
@@ -150,7 +176,6 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     required List<VehicleType> vehicleTypes,
     required String openingTime,
     required String closingTime,
-    required List<String> imageUrls,
   }) async {
     final now = DateTime.now();
     final location = ParkingLocation(
@@ -164,7 +189,8 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       availableSpaces: availableSpaces.clamp(0, totalSpaces),
       pricePerHour: pricePerHour,
       vehicleTypes: vehicleTypes,
-      imageUrls: imageUrls,
+      thumbnailRefs: const [],
+      imagePreviewRefs: const [],
       isOpen: true,
       openingTime: openingTime,
       closingTime: closingTime,
@@ -174,6 +200,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     await _parkingRepository.upsert(location);
     await load();
     state = state.copyWith(selectedLocation: location);
+    await _loadSelectedImages();
   }
 
   Future<void> updateSelectedAvailability({
@@ -197,6 +224,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     final refreshed = await _parkingRepository.findById(location.id);
     if (refreshed != null) {
       state = state.copyWith(selectedLocation: refreshed);
+      await _loadSelectedImages();
     }
   }
 
@@ -206,5 +234,109 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       status: BookingStatus.completed,
     );
     await load();
+  }
+
+  Future<void> uploadDemoImage() async {
+    await uploadAreaImage(Uint8List.fromList(DemoSeed.demoUploadBytes()));
+  }
+
+  Future<void> uploadAreaImage(Uint8List bytes) async {
+    final location = state.selectedLocation;
+    if (location == null) {
+      state = state.copyWith(error: 'Select a parking area before uploading.');
+      return;
+    }
+
+    state = state.copyWith(
+      imageUploadProgress: 0.2,
+      imageStatusMessage: 'Compressing image and generating thumbnail...',
+    );
+
+    try {
+      final image = await _imageRepository.uploadOptimizedAreaImage(
+        areaId: location.id,
+        uploadedByAdminId: state.admin.id,
+        originalBytes: bytes,
+      );
+      state = state.copyWith(
+        imageUploadProgress: 0.72,
+        imageStatusMessage:
+            'Thumbnail ${image.thumbnailSizeBytes}B, preview ${image.previewSizeBytes}B ready.',
+      );
+      final updated = location.copyWith(
+        thumbnailRefs: [image.imageId, ...location.thumbnailRefs],
+        imagePreviewRefs: [image.imageId, ...location.imagePreviewRefs],
+        updatedAt: DateTime.now(),
+      );
+      await _parkingRepository.upsert(updated);
+      state = state.copyWith(
+        selectedLocation: updated,
+        imageUploadProgress: 1,
+        imageStatusMessage: 'Optimized image saved to Firestore image mode.',
+      );
+      await load();
+      state = state.copyWith(selectedLocation: updated);
+      await _loadSelectedImages();
+    } on ImageOptimizationException catch (error) {
+      state = state.copyWith(
+        imageUploadProgress: 0,
+        imageStatusMessage: error.message,
+      );
+    }
+  }
+
+  Future<void> removeImage(ParkingAreaImage image) async {
+    final location = state.selectedLocation;
+    if (location == null) {
+      return;
+    }
+    await _imageRepository.removeImage(image.imageId);
+    final updated = location.copyWith(
+      thumbnailRefs: location.thumbnailRefs
+          .where((id) => id != image.imageId)
+          .toList(),
+      imagePreviewRefs: location.imagePreviewRefs
+          .where((id) => id != image.imageId)
+          .toList(),
+      updatedAt: DateTime.now(),
+    );
+    await _parkingRepository.upsert(updated);
+    state = state.copyWith(
+      selectedLocation: updated,
+      imageStatusMessage: 'Image removed from parking area.',
+    );
+    await load();
+    state = state.copyWith(selectedLocation: updated);
+    await _loadSelectedImages();
+  }
+
+  Future<void> replaceImage(ParkingAreaImage image) async {
+    state = state.copyWith(
+      imageUploadProgress: 0.25,
+      imageStatusMessage: 'Replacing image with optimized version...',
+    );
+    final replacement = await _imageRepository.replaceImage(
+      imageId: image.imageId,
+      originalBytes: Uint8List.fromList(DemoSeed.demoUploadBytes()),
+    );
+    state = state.copyWith(
+      imageUploadProgress: 1,
+      imageStatusMessage:
+          'Replacement saved: preview ${replacement.previewSizeBytes}B.',
+    );
+    await _loadSelectedImages();
+  }
+
+  Future<void> _loadSelectedImages() async {
+    final location = state.selectedLocation;
+    if (location == null) {
+      state = state.copyWith(selectedImages: const []);
+      return;
+    }
+    final images = await _imageRepository.getPreviewsForArea(
+      areaId: location.id,
+      limit: 6,
+    );
+    state = state.copyWith(selectedImages: images);
   }
 }

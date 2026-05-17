@@ -11,6 +11,7 @@ flowchart LR
   Repos -. future .-> Firebase["Firebase Auth / Firestore / Storage"]
   Shared --> Routing["RouteProvider + Dijkstra Engine"]
   Shared --> QR["QR Payload Service"]
+  Shared --> Images["ImageRepository + ImageOptimizer"]
 ```
 
 ## User App Flow
@@ -52,6 +53,54 @@ flowchart LR
   Bookings --> UserHistory["User history"]
 ```
 
+## Hybrid Image Flow
+
+Firebase Storage can require a pay-as-you-go billing setup, so Park Here does not make Storage mandatory. The default image path stores only compressed, Firestore-safe image payloads in a separate collection. Parking area documents keep lightweight references, not large base64 blobs.
+
+```mermaid
+flowchart LR
+  Admin["Admin Upload"] --> Compress["Compression"]
+  Compress --> Thumb["Thumbnail Generation"]
+  Thumb --> Images["Firestore Image Collection"]
+  Images --> Lazy["Lazy User Fetch"]
+  Lazy --> Cache["Local Image Cache"]
+```
+
+The repository boundary stays extensible:
+
+```mermaid
+classDiagram
+  class ImageRepository {
+    getThumbnailsForArea()
+    getPreviewsForArea()
+    uploadOptimizedAreaImage()
+    replaceImage()
+    removeImage()
+  }
+  class FirestoreImageRepository
+  class FirebaseStorageImageRepository
+  class InMemoryImageRepository
+  ImageRepository <|.. FirestoreImageRepository
+  ImageRepository <|.. FirebaseStorageImageRepository
+  ImageRepository <|.. InMemoryImageRepository
+```
+
+Default mode:
+
+- `InMemoryImageRepository` locally
+- `FirestoreImageRepository` when Firebase is enabled
+- `FirebaseStorageImageRepository` only when Storage billing/config is acceptable
+
+Image performance rules:
+
+- Generate thumbnail and preview versions before upload.
+- Store image payloads in `/parking_area_images`, not in `/parking_locations`.
+- Keep thumbnails under 30KB and previews under 120KB.
+- Load one thumbnail per parking area in list views.
+- Lazy-load preview images only when the user opens area details.
+- Cache fetched image records locally.
+- Use query limits and pagination for large image sets.
+
 ## QR Verification Flow
 
 ```mermaid
@@ -86,4 +135,3 @@ sequenceDiagram
 /docs
 /scripts
 ```
-

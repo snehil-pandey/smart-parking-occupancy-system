@@ -1,5 +1,10 @@
+import 'dart:convert';
+
+import 'package:image/image.dart' as img;
+
 import '../models/app_user.dart';
 import '../models/booking.dart';
+import '../models/parking_area_image.dart';
 import '../models/parking_location.dart';
 import '../routing/dijkstra_route_engine.dart';
 import '../routing/route_provider.dart';
@@ -20,9 +25,8 @@ class DemoSeed {
       availableSpaces: 18,
       pricePerHour: 60,
       vehicleTypes: const [VehicleType.car, VehicleType.bike, VehicleType.ev],
-      imageUrls: const [
-        'https://images.unsplash.com/photo-1506521781263-d8422e82f27a',
-      ],
+      thumbnailRefs: const ['img_metro_001'],
+      imagePreviewRefs: const ['img_metro_001'],
       isOpen: true,
       openingTime: '06:00',
       closingTime: '23:00',
@@ -40,9 +44,8 @@ class DemoSeed {
       availableSpaces: 9,
       pricePerHour: 75,
       vehicleTypes: const [VehicleType.car, VehicleType.van],
-      imageUrls: const [
-        'https://images.unsplash.com/photo-1590674899484-d5640e854abe',
-      ],
+      thumbnailRefs: const ['img_cubbon_001'],
+      imagePreviewRefs: const ['img_cubbon_001'],
       isOpen: true,
       openingTime: '07:00',
       closingTime: '22:30',
@@ -60,9 +63,8 @@ class DemoSeed {
       availableSpaces: 14,
       pricePerHour: 90,
       vehicleTypes: const [VehicleType.car, VehicleType.ev],
-      imageUrls: const [
-        'https://images.unsplash.com/photo-1573348722427-f1d6819fdf98',
-      ],
+      thumbnailRefs: const ['img_lakeview_001'],
+      imagePreviewRefs: const ['img_lakeview_001'],
       isOpen: true,
       openingTime: '05:30',
       closingTime: '23:30',
@@ -70,6 +72,90 @@ class DemoSeed {
       updatedAt: now,
     ),
   ];
+
+  static List<ParkingAreaImage> parkingAreaImages() {
+    return [
+      _image(
+        imageId: 'img_metro_001',
+        areaId: 'loc_metro_park',
+        color: img.ColorRgb8(255, 201, 40),
+      ),
+      _image(
+        imageId: 'img_cubbon_001',
+        areaId: 'loc_cubbon_square',
+        color: img.ColorRgb8(49, 92, 114),
+      ),
+      _image(
+        imageId: 'img_lakeview_001',
+        areaId: 'loc_lakeview_ev',
+        color: img.ColorRgb8(138, 198, 164),
+      ),
+    ];
+  }
+
+  static ParkingAreaImage _image({
+    required String imageId,
+    required String areaId,
+    required img.Color color,
+  }) {
+    final thumbnail = _encodedPlaceholder(96, 64, color);
+    final preview = _encodedPlaceholder(360, 220, color);
+    return ParkingAreaImage(
+      imageId: imageId,
+      areaId: areaId,
+      uploadedByAdminId: 'admin_demo_001',
+      thumbnailBase64: thumbnail,
+      previewBase64: preview,
+      mimeType: 'image/jpeg',
+      uploadedAt: now.subtract(const Duration(days: 2)),
+    );
+  }
+
+  static String _encodedPlaceholder(int width, int height, img.Color color) {
+    final canvas = img.Image(width: width, height: height);
+    img.fill(canvas, color: img.ColorRgb8(246, 248, 247));
+    img.fillRect(
+      canvas,
+      x1: 8,
+      y1: 8,
+      x2: width - 8,
+      y2: height - 8,
+      color: color,
+    );
+    img.fillRect(
+      canvas,
+      x1: 16,
+      y1: height ~/ 2,
+      x2: width - 16,
+      y2: height ~/ 2 + 6,
+      color: img.ColorRgb8(20, 20, 20),
+    );
+    return base64Encode(img.encodeJpg(canvas, quality: 70));
+  }
+
+  static List<int> demoUploadBytes() {
+    final canvas = img.Image(width: 900, height: 560);
+    img.fill(canvas, color: img.ColorRgb8(238, 241, 235));
+    img.fillRect(
+      canvas,
+      x1: 40,
+      y1: 40,
+      x2: 860,
+      y2: 520,
+      color: img.ColorRgb8(255, 201, 40),
+    );
+    for (var y = 110; y < 500; y += 90) {
+      img.fillRect(
+        canvas,
+        x1: 70,
+        y1: y,
+        x2: 830,
+        y2: y + 8,
+        color: img.ColorRgb8(20, 20, 20),
+      );
+    }
+    return img.encodeJpg(canvas, quality: 88);
+  }
 
   static List<Booking> bookings() {
     final qr = const QrPayloadService();

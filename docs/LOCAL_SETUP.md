@@ -130,7 +130,67 @@ Firebase Storage:
 2. Click **Get started**.
 3. Choose the same general region as Firestore when possible.
 4. Start with authenticated-only rules for admin image upload.
-5. Note that new Firebase Storage projects may require the Blaze plan depending on current Firebase/Google Cloud policy.
+5. Treat this as optional. Firebase Storage may require the Blaze/pay-as-you-go plan depending on current Firebase/Google Cloud policy.
+
+### Firestore-only image mode is the default
+
+Park Here now uses hybrid image architecture:
+
+1. **Default**: Firestore-only optimized image documents.
+2. **Future optional**: Firebase Storage-backed image repository.
+
+Why: the project should remain useful on free-tier Firebase as much as possible. The app should not depend entirely on Firebase Storage just to show parking area photos.
+
+Default Firestore image collection:
+
+```text
+/parking_area_images/{imageId}
+  imageId
+  areaId
+  uploadedByAdminId
+  thumbnailBase64
+  previewBase64
+  mimeType
+  uploadedAt
+```
+
+Parking area documents store only refs:
+
+```text
+/parking_locations/{locationId}
+  thumbnailRefs: ["img_..."]
+  imagePreviewRefs: ["img_..."]
+```
+
+Limits enforced by the shared image optimizer:
+
+- Original upload accepted by local pipeline: <= 700KB
+- Thumbnail target: <= 30KB
+- Preview target: <= 120KB
+- Thumbnail max dimension: 160px
+- Preview max dimension: 720px
+- Output format: compressed JPEG
+
+Performance rules:
+
+- Do not store original heavy images in Firestore.
+- Do not place image base64 directly inside parking area documents.
+- Do not load every image in realtime parking area streams.
+- List screens fetch one thumbnail per area.
+- Details screens lazy-load previews only after the user opens an area.
+- Use `ImagePayloadCache` to avoid repeated decode/fetch work.
+- Use `limit(...)` and `startAfterDocument(...)` when galleries grow.
+
+Repository strategy:
+
+```text
+ImageRepository
+  FirestoreImageRepository          default Firebase mode
+  FirebaseStorageImageRepository    optional future mode
+  InMemoryImageRepository           local/demo mode
+```
+
+When Firebase is wired, implement `FirestoreImageRepository` first. Only implement `FirebaseStorageImageRepository` if the Firebase project can use Storage billing/config safely.
 
 ### 5. Add Flutter Firebase packages
 
@@ -140,7 +200,7 @@ User app:
 
 ```bash
 cd apps/park_here_user
-flutter pub add firebase_core firebase_auth cloud_firestore firebase_storage
+flutter pub add firebase_core firebase_auth cloud_firestore
 cd ../..
 ```
 
@@ -148,7 +208,7 @@ Admin app:
 
 ```bash
 cd apps/park_here_admin
-flutter pub add firebase_core firebase_auth cloud_firestore firebase_storage
+flutter pub add firebase_core firebase_auth cloud_firestore
 cd ../..
 ```
 
@@ -243,6 +303,22 @@ final parkingRepositoryProvider = Provider<ParkingRepository>(
 
 Do the same for booking and auth repositories when their Firebase implementations are ready.
 
+For images, keep Firestore mode as the default:
+
+```dart
+final imageRepositoryProvider = Provider<ImageRepository>(
+  (ref) => FirestoreImageRepository(),
+);
+```
+
+Switch to Storage only when the project is ready for Blaze/pay-as-you-go:
+
+```dart
+final imageRepositoryProvider = Provider<ImageRepository>(
+  (ref) => FirebaseStorageImageRepository(),
+);
+```
+
 ### 10. Platform notes
 
 Android:
@@ -251,12 +327,14 @@ Android:
 - The user app package is `com.parkhere.park_here_user`.
 - The admin app package is `com.parkhere.park_here_admin`.
 - If Firebase or a plugin adds Android Gradle plugin changes, run `flutterfire configure` again from that app folder.
+- Firestore-only image mode does not need `firebase_storage` or Storage Gradle setup.
 
 Web:
 
 - FlutterFire stores web config in `lib/firebase_options.dart`.
 - Do not paste Firebase JS SDK snippets into `web/index.html` when using FlutterFire configuration.
 - Add local dev domains in Firebase Auth authorized domains if needed.
+- Firestore-only image mode stores optimized payloads as Firestore document fields; watch document size and read counts.
 
 iOS:
 
@@ -264,6 +342,7 @@ iOS:
 - The user app bundle id is `com.parkhere.parkHereUser`.
 - The admin app bundle id is `com.parkhere.parkHereAdmin`.
 - Build and final iOS signing must be done on macOS with Xcode.
+- Firestore-only image mode does not require Storage bucket configuration.
 
 ### 11. Secrets and commits
 
@@ -329,3 +408,19 @@ Storage upload denied:
 - Check Storage rules and bucket creation.
 - Confirm the admin is authenticated.
 - Confirm the file path convention, for example `parking_locations/{locationId}/images/{fileName}`.
+- If you are using default Firestore-only image mode, this error usually means Storage code was enabled too early. Use `FirestoreImageRepository` instead.
+
+Image document too large:
+
+- Lower preview dimensions or JPEG quality.
+- Keep decoded thumbnail <= 30KB and decoded preview <= 120KB.
+- Reject original images above the configured upload limit.
+- Store additional images as separate `/parking_area_images` documents, not as fields on `/parking_locations`.
+
+Image-heavy screens feel slow:
+
+- Confirm list views fetch thumbnails only.
+- Confirm preview queries use `limit`.
+- Confirm images are cached with `ImagePayloadCache`.
+- Avoid realtime listeners on image payload collections unless there is a real live-edit requirement.
+Add `firebase_storage` later only if you switch to `FirebaseStorageImageRepository`.

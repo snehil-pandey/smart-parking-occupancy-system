@@ -42,3 +42,8 @@
 
 ### docs: add Firebase local setup guide
 - Expanded local setup documentation with Firebase project creation, CLI installation, FlutterFire configuration, platform file locations, product enablement, security notes, and troubleshooting.
+
+### feat(images): add Firestore-first hybrid image architecture
+- Added Firestore-first image model, repository abstraction, local image repository, optimizer, and cache.
+- Updated admin and user image flows to use optimized thumbnail/preview payloads instead of raw URLs.
+- Documented Firebase Storage as an optional future repository rather than a required dependency.

@@ -8,6 +8,12 @@ final parkingRepositoryProvider = Provider<ParkingRepository>(
 final bookingRepositoryProvider = Provider<BookingRepository>(
   (ref) => InMemoryBookingRepository(),
 );
+final imageRepositoryProvider = Provider<ImageRepository>(
+  (ref) => InMemoryImageRepository(),
+);
+final imagePayloadCacheProvider = Provider<ImagePayloadCache>(
+  (ref) => ImagePayloadCache(),
+);
 final routeProvider = Provider<RouteProvider>((ref) => DemoSeed.routeEngine());
 final firebaseReadinessProvider = Provider<FirebaseReadiness>(
   (ref) => const FirebaseReadinessService().check(),
@@ -22,6 +28,8 @@ final userAppControllerProvider =
         auth: ref.watch(authServiceProvider),
         parkingRepository: ref.watch(parkingRepositoryProvider),
         bookingRepository: ref.watch(bookingRepositoryProvider),
+        imageRepository: ref.watch(imageRepositoryProvider),
+        imageCache: ref.watch(imagePayloadCacheProvider),
         routeProvider: ref.watch(routeProvider),
         qrPayloadService: ref.watch(qrPayloadProvider),
       )..load();
@@ -33,6 +41,8 @@ class UserAppState {
     required this.locations,
     required this.bookings,
     required this.routes,
+    required this.thumbnailByArea,
+    required this.previewImages,
     required this.selectedLocation,
     required this.durationHours,
     required this.isLoading,
@@ -45,6 +55,8 @@ class UserAppState {
       locations: const [],
       bookings: const [],
       routes: const [],
+      thumbnailByArea: const {},
+      previewImages: const [],
       selectedLocation: null,
       durationHours: 2,
       isLoading: true,
@@ -55,6 +67,8 @@ class UserAppState {
   final List<ParkingLocation> locations;
   final List<Booking> bookings;
   final List<RouteOption> routes;
+  final Map<String, ParkingAreaImage> thumbnailByArea;
+  final List<ParkingAreaImage> previewImages;
   final ParkingLocation? selectedLocation;
   final int durationHours;
   final bool isLoading;
@@ -69,6 +83,8 @@ class UserAppState {
     List<ParkingLocation>? locations,
     List<Booking>? bookings,
     List<RouteOption>? routes,
+    Map<String, ParkingAreaImage>? thumbnailByArea,
+    List<ParkingAreaImage>? previewImages,
     ParkingLocation? selectedLocation,
     bool clearSelectedLocation = false,
     int? durationHours,
@@ -80,6 +96,8 @@ class UserAppState {
       locations: locations ?? this.locations,
       bookings: bookings ?? this.bookings,
       routes: routes ?? this.routes,
+      thumbnailByArea: thumbnailByArea ?? this.thumbnailByArea,
+      previewImages: previewImages ?? this.previewImages,
       selectedLocation: clearSelectedLocation
           ? null
           : selectedLocation ?? this.selectedLocation,
@@ -95,11 +113,15 @@ class UserAppController extends StateNotifier<UserAppState> {
     required AuthService auth,
     required ParkingRepository parkingRepository,
     required BookingRepository bookingRepository,
+    required ImageRepository imageRepository,
+    required ImagePayloadCache imageCache,
     required RouteProvider routeProvider,
     required QrPayloadService qrPayloadService,
   }) : _auth = auth,
        _parkingRepository = parkingRepository,
        _bookingRepository = bookingRepository,
+       _imageRepository = imageRepository,
+       _imageCache = imageCache,
        _routeProvider = routeProvider,
        _qrPayloadService = qrPayloadService,
        super(UserAppState.initial(auth.currentUser));
@@ -107,6 +129,8 @@ class UserAppController extends StateNotifier<UserAppState> {
   final AuthService _auth;
   final ParkingRepository _parkingRepository;
   final BookingRepository _bookingRepository;
+  final ImageRepository _imageRepository;
+  final ImagePayloadCache _imageCache;
   final RouteProvider _routeProvider;
   final QrPayloadService _qrPayloadService;
 
@@ -130,6 +154,7 @@ class UserAppController extends StateNotifier<UserAppState> {
       selectedLocation: locations.firstOrNull,
       isLoading: false,
     );
+    await _loadThumbnails(locations);
     if (locations.isNotEmpty) {
       await selectLocation(locations.first);
     }
@@ -162,6 +187,7 @@ class UserAppController extends StateNotifier<UserAppState> {
       destination: destination,
     );
     state = state.copyWith(selectedLocation: location, routes: routes);
+    await _loadPreviewImages(location);
   }
 
   void changeDuration(int hours) {
@@ -220,5 +246,42 @@ class UserAppController extends StateNotifier<UserAppState> {
     if (refreshed != null) {
       await selectLocation(refreshed);
     }
+  }
+
+  Future<void> _loadThumbnails(List<ParkingLocation> locations) async {
+    final thumbnails = <String, ParkingAreaImage>{};
+    for (final location in locations) {
+      final cached = _imageCache.getMany(location.thumbnailRefs).firstOrNull;
+      if (cached != null) {
+        thumbnails[location.id] = cached;
+        continue;
+      }
+      final images = await _imageRepository.getThumbnailsForArea(
+        areaId: location.id,
+        limit: 1,
+      );
+      if (images.isNotEmpty) {
+        _imageCache.put(images.first);
+        thumbnails[location.id] = images.first;
+      }
+    }
+    state = state.copyWith(thumbnailByArea: thumbnails);
+  }
+
+  Future<void> _loadPreviewImages(ParkingLocation location) async {
+    final cached = _imageCache.getMany(location.imagePreviewRefs);
+    if (cached.isNotEmpty &&
+        cached.length == location.imagePreviewRefs.length) {
+      state = state.copyWith(previewImages: cached);
+      return;
+    }
+    final images = await _imageRepository.getPreviewsForArea(
+      areaId: location.id,
+      limit: 6,
+    );
+    for (final image in images) {
+      _imageCache.put(image);
+    }
+    state = state.copyWith(previewImages: images);
   }
 }

@@ -12,7 +12,8 @@ class ParkingLocation {
     required this.availableSpaces,
     required this.pricePerHour,
     required this.vehicleTypes,
-    required this.imageUrls,
+    required this.thumbnailRefs,
+    required this.imagePreviewRefs,
     required this.isOpen,
     required this.openingTime,
     required this.closingTime,
@@ -30,7 +31,8 @@ class ParkingLocation {
   final int availableSpaces;
   final double pricePerHour;
   final List<VehicleType> vehicleTypes;
-  final List<String> imageUrls;
+  final List<String> thumbnailRefs;
+  final List<String> imagePreviewRefs;
   final bool isOpen;
   final String openingTime;
   final String closingTime;
@@ -50,7 +52,8 @@ class ParkingLocation {
     int? availableSpaces,
     double? pricePerHour,
     List<VehicleType>? vehicleTypes,
-    List<String>? imageUrls,
+    List<String>? thumbnailRefs,
+    List<String>? imagePreviewRefs,
     bool? isOpen,
     String? openingTime,
     String? closingTime,
@@ -68,7 +71,8 @@ class ParkingLocation {
       availableSpaces: availableSpaces ?? this.availableSpaces,
       pricePerHour: pricePerHour ?? this.pricePerHour,
       vehicleTypes: vehicleTypes ?? this.vehicleTypes,
-      imageUrls: imageUrls ?? this.imageUrls,
+      thumbnailRefs: thumbnailRefs ?? this.thumbnailRefs,
+      imagePreviewRefs: imagePreviewRefs ?? this.imagePreviewRefs,
       isOpen: isOpen ?? this.isOpen,
       openingTime: openingTime ?? this.openingTime,
       closingTime: closingTime ?? this.closingTime,
@@ -88,7 +92,8 @@ class ParkingLocation {
     'availableSpaces': availableSpaces,
     'pricePerHour': pricePerHour,
     'vehicleTypes': vehicleTypes.map((type) => type.name).toList(),
-    'imageUrls': imageUrls,
+    'thumbnailRefs': thumbnailRefs,
+    'imagePreviewRefs': imagePreviewRefs,
     'isOpen': isOpen,
     'openingTime': openingTime,
     'closingTime': closingTime,
@@ -111,7 +116,10 @@ class ParkingLocation {
           .cast<String>()
           .map(VehicleType.values.byName)
           .toList(),
-      imageUrls: (json['imageUrls'] as List<Object?>).cast<String>(),
+      thumbnailRefs: (json['thumbnailRefs'] as List<Object?>? ?? const [])
+          .cast<String>(),
+      imagePreviewRefs: (json['imagePreviewRefs'] as List<Object?>? ?? const [])
+          .cast<String>(),
       isOpen: json['isOpen'] as bool,
       openingTime: json['openingTime'] as String,
       closingTime: json['closingTime'] as String,
