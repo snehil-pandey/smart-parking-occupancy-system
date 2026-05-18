@@ -38,8 +38,15 @@ final firebaseReadinessProvider = Provider<FirebaseReadiness>(
 final qrPayloadProvider = Provider<QrPayloadService>(
   (ref) => const QrPayloadService(),
 );
+final placeSearchServiceProvider = Provider<PlaceSearchService>(
+  (ref) => const LocalSitTumkurPlaceSearchService(),
+);
 
 enum UserAuthStatus { checking, signedOut, signedIn }
+
+enum UserTab { home, bookings, explore, notifications, profile }
+
+enum ParkingFilter { all, openNow, free, nearest, topRated }
 
 const Object _unset = Object();
 
@@ -154,6 +161,7 @@ final userAppControllerProvider =
         locationService: ref.watch(userLocationServiceProvider),
         routeProvider: ref.watch(routeProvider),
         qrPayloadService: ref.watch(qrPayloadProvider),
+        placeSearchService: ref.watch(placeSearchServiceProvider),
       )..load();
     });
 
@@ -170,6 +178,11 @@ class UserAppState {
     required this.activeQrTicket,
     required this.position,
     required this.selectedLocation,
+    required this.selectedPlace,
+    required this.searchQuery,
+    required this.searchResults,
+    required this.parkingFilter,
+    required this.currentTab,
     required this.durationHours,
     required this.isLoading,
     this.actionMessage,
@@ -189,6 +202,11 @@ class UserAppState {
       activeQrTicket: null,
       position: null,
       selectedLocation: null,
+      selectedPlace: null,
+      searchQuery: '',
+      searchResults: const [],
+      parkingFilter: ParkingFilter.all,
+      currentTab: UserTab.home,
       durationHours: 2,
       isLoading: true,
     );
@@ -207,6 +225,11 @@ class UserAppState {
       activeQrTicket: null,
       position: null,
       selectedLocation: null,
+      selectedPlace: null,
+      searchQuery: '',
+      searchResults: const [],
+      parkingFilter: ParkingFilter.all,
+      currentTab: UserTab.home,
       durationHours: 2,
       isLoading: false,
     );
@@ -223,6 +246,11 @@ class UserAppState {
   final ActiveQrTicket? activeQrTicket;
   final UserPosition? position;
   final ParkingLocation? selectedLocation;
+  final PlaceSearchResult? selectedPlace;
+  final String searchQuery;
+  final List<PlaceSearchResult> searchResults;
+  final ParkingFilter parkingFilter;
+  final UserTab currentTab;
   final int durationHours;
   final bool isLoading;
   final String? actionMessage;
@@ -234,6 +262,39 @@ class UserAppState {
 
   double? distanceKmFor(ParkingLocation location) =>
       position?.distanceKmTo(location);
+
+  List<ParkingLocation> get visibleLocations {
+    final filtered = switch (parkingFilter) {
+      ParkingFilter.all => locations,
+      ParkingFilter.openNow =>
+        locations.where((location) => location.isBookable).toList(),
+      ParkingFilter.free =>
+        locations.where((location) => location.pricePerHour == 0).toList(),
+      ParkingFilter.nearest =>
+        [...locations]..sort(
+          (a, b) => (distanceKmFor(a) ?? double.infinity).compareTo(
+            distanceKmFor(b) ?? double.infinity,
+          ),
+        ),
+      ParkingFilter.topRated => [
+        ...locations,
+      ]..sort((a, b) => b.ratingAverage.compareTo(a.ratingAverage)),
+    };
+    return filtered;
+  }
+
+  List<ParkingLocation> get topRatedLocations =>
+      [...locations]
+        ..sort((a, b) => b.ratingAverage.compareTo(a.ratingAverage));
+
+  List<ParkingLocation> get cheapestLocations =>
+      [...locations]..sort((a, b) => a.pricePerHour.compareTo(b.pricePerHour));
+
+  List<ParkingLocation> get freeLocations =>
+      locations.where((location) => location.pricePerHour == 0).toList();
+
+  List<Booking> get bookingHistory =>
+      [...bookings]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   UserAppState copyWith({
     AppUser? user,
@@ -249,6 +310,12 @@ class UserAppState {
     UserPosition? position,
     ParkingLocation? selectedLocation,
     bool clearSelectedLocation = false,
+    PlaceSearchResult? selectedPlace,
+    bool clearSelectedPlace = false,
+    String? searchQuery,
+    List<PlaceSearchResult>? searchResults,
+    ParkingFilter? parkingFilter,
+    UserTab? currentTab,
     int? durationHours,
     bool? isLoading,
     String? actionMessage,
@@ -270,6 +337,13 @@ class UserAppState {
       selectedLocation: clearSelectedLocation
           ? null
           : selectedLocation ?? this.selectedLocation,
+      selectedPlace: clearSelectedPlace
+          ? null
+          : selectedPlace ?? this.selectedPlace,
+      searchQuery: searchQuery ?? this.searchQuery,
+      searchResults: searchResults ?? this.searchResults,
+      parkingFilter: parkingFilter ?? this.parkingFilter,
+      currentTab: currentTab ?? this.currentTab,
       durationHours: durationHours ?? this.durationHours,
       isLoading: isLoading ?? this.isLoading,
       actionMessage: actionMessage,
@@ -290,6 +364,7 @@ class UserAppController extends StateNotifier<UserAppState> {
     required UserLocationService locationService,
     required RouteProvider routeProvider,
     required QrPayloadService qrPayloadService,
+    required PlaceSearchService placeSearchService,
   }) : _auth = auth,
        _parkingRepository = parkingRepository,
        _bookingRepository = bookingRepository,
@@ -300,6 +375,7 @@ class UserAppController extends StateNotifier<UserAppState> {
        _locationService = locationService,
        _routeProvider = routeProvider,
        _qrPayloadService = qrPayloadService,
+       _placeSearchService = placeSearchService,
        super(UserAppState.signedOut());
 
   final AuthService _auth;
@@ -312,11 +388,13 @@ class UserAppController extends StateNotifier<UserAppState> {
   final UserLocationService _locationService;
   final RouteProvider _routeProvider;
   final QrPayloadService _qrPayloadService;
+  final PlaceSearchService _placeSearchService;
   StreamSubscription<UserPosition>? _positionSubscription;
   StreamSubscription<List<ParkingLocation>>? _parkingSubscription;
   StreamSubscription<List<Booking>>? _bookingSubscription;
   StreamSubscription<ActiveQrTicket?>? _activeQrSubscription;
   StreamSubscription<List<ParkingReview>>? _reviewSubscription;
+  Timer? _searchDebounce;
 
   Future<void> load() async {
     state = state.copyWith(isLoading: true, error: null);
@@ -448,10 +526,94 @@ class UserAppController extends StateNotifier<UserAppState> {
           ).toRoutePoint(),
       destination: destination,
     );
-    state = state.copyWith(selectedLocation: location, routes: routes);
+    state = state.copyWith(
+      selectedLocation: location,
+      clearSelectedPlace: true,
+      routes: routes,
+      currentTab: UserTab.home,
+    );
     await _loadPreviewImages(location);
     await _loadReviews(location.id);
     _startReviewUpdates(location.id);
+  }
+
+  void changeTab(UserTab tab) {
+    state = state.copyWith(currentTab: tab);
+  }
+
+  void changeFilter(ParkingFilter filter) {
+    state = state.copyWith(parkingFilter: filter);
+  }
+
+  void updateSearchQuery(String query) {
+    state = state.copyWith(searchQuery: query);
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 260), () async {
+      final trimmed = query.trim();
+      if (trimmed.isEmpty) {
+        state = state.copyWith(searchResults: const []);
+        return;
+      }
+      final areaResults = await _placeSearchService.searchParkingAreas(
+        query: trimmed,
+        parkingAreas: state.locations,
+      );
+      final placeResults = await _placeSearchService.searchPlaces(trimmed);
+      state = state.copyWith(
+        searchResults: [...areaResults, ...placeResults].take(10).toList(),
+      );
+    });
+  }
+
+  Future<void> selectSearchResult(PlaceSearchResult result) async {
+    if (result.isCurrentLocation) {
+      final position = await _locationService.currentPosition();
+      state = state.copyWith(
+        position: position,
+        selectedPlace: PlaceSearchResult(
+          id: result.id,
+          title: result.title,
+          subtitle: position.message,
+          latitude: position.latitude,
+          longitude: position.longitude,
+          isCurrentLocation: true,
+        ),
+        searchResults: const [],
+        searchQuery: result.title,
+        currentTab: UserTab.home,
+      );
+      return;
+    }
+    final areaId = result.parkingAreaId;
+    if (areaId != null) {
+      final match = state.locations
+          .where((location) => location.id == areaId)
+          .firstOrNull;
+      if (match != null) {
+        state = state.copyWith(
+          searchResults: const [],
+          searchQuery: result.title,
+        );
+        await selectLocation(match);
+        return;
+      }
+    }
+    state = state.copyWith(
+      selectedPlace: result,
+      searchResults: const [],
+      searchQuery: result.title,
+      currentTab: UserTab.home,
+      clearSelectedLocation: true,
+    );
+  }
+
+  void clearSearch() {
+    _searchDebounce?.cancel();
+    state = state.copyWith(
+      searchQuery: '',
+      searchResults: const [],
+      clearSelectedPlace: true,
+    );
   }
 
   void changeDuration(int hours) {
@@ -785,6 +947,7 @@ class UserAppController extends StateNotifier<UserAppState> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _positionSubscription?.cancel();
     _parkingSubscription?.cancel();
     _bookingSubscription?.cancel();

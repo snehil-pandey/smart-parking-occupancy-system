@@ -43,6 +43,7 @@ export 'services/firebase_readiness_service.dart';
 export 'services/image_optimizer.dart';
 export 'services/image_payload_cache.dart';
 export 'services/local_auth_service.dart';
+export 'services/place_search_service.dart';
 export 'services/qr_payload_service.dart';
 export 'theme/park_here_theme.dart';
 export 'utils/demo_seed.dart';
