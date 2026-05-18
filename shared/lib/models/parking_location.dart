@@ -1,4 +1,5 @@
 import 'app_user.dart';
+import 'gate_point.dart';
 import 'geo_point.dart';
 
 class ParkingLocation {
@@ -10,6 +11,7 @@ class ParkingLocation {
     this.description = '',
     required this.address,
     this.boundaryPoints = const [],
+    this.gatePoints = const [],
     required this.latitude,
     required this.longitude,
     required this.totalSpaces,
@@ -25,7 +27,7 @@ class ParkingLocation {
     required this.updatedAt,
     this.ratingAverage = 0,
     this.ratingCount = 0,
-  });
+  }) : assert(pricePerHour >= 0 && pricePerHour <= 100);
 
   final String id;
   final String regionId;
@@ -34,6 +36,7 @@ class ParkingLocation {
   final String description;
   final String address;
   final List<GeoPointValue> boundaryPoints;
+  final List<GatePoint> gatePoints;
   final double latitude;
   final double longitude;
   final int totalSpaces;
@@ -58,6 +61,31 @@ class ParkingLocation {
 
   bool supports(VehicleType type) => vehicleTypes.contains(type);
 
+  bool get isBookable => isOpen && availableSpaces > 0;
+
+  String get availabilityLabel {
+    if (!isOpen) {
+      return 'Closed';
+    }
+    if (availableSpaces <= 0) {
+      return 'Full';
+    }
+    return '$availableSpaces available';
+  }
+
+  static bool isValidPrice(double pricePerHour) =>
+      pricePerHour >= 0 && pricePerHour <= 100;
+
+  static void validatePrice(double pricePerHour) {
+    if (!isValidPrice(pricePerHour)) {
+      throw ArgumentError.value(
+        pricePerHour,
+        'pricePerHour',
+        'Parking price must be between Rs. 0 and Rs. 100 per hour.',
+      );
+    }
+  }
+
   ParkingLocation copyWith({
     String? id,
     String? regionId,
@@ -66,6 +94,7 @@ class ParkingLocation {
     String? description,
     String? address,
     List<GeoPointValue>? boundaryPoints,
+    List<GatePoint>? gatePoints,
     double? latitude,
     double? longitude,
     int? totalSpaces,
@@ -90,6 +119,7 @@ class ParkingLocation {
       description: description ?? this.description,
       address: address ?? this.address,
       boundaryPoints: boundaryPoints ?? this.boundaryPoints,
+      gatePoints: gatePoints ?? this.gatePoints,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       totalSpaces: totalSpaces ?? this.totalSpaces,
@@ -117,6 +147,7 @@ class ParkingLocation {
     'description': description,
     'address': address,
     'boundaryPoints': boundaryPoints.map((point) => point.toJson()).toList(),
+    'gatePoints': gatePoints.map((point) => point.toJson()).toList(),
     'latitude': latitude,
     'longitude': longitude,
     'centerLat': latitude,
@@ -147,6 +178,10 @@ class ParkingLocation {
       boundaryPoints: (json['boundaryPoints'] as List<Object?>? ?? const [])
           .cast<Map<String, Object?>>()
           .map(GeoPointValue.fromJson)
+          .toList(),
+      gatePoints: (json['gatePoints'] as List<Object?>? ?? const [])
+          .cast<Map<String, Object?>>()
+          .map(GatePoint.fromJson)
           .toList(),
       latitude: ((json['centerLat'] ?? json['latitude']) as num).toDouble(),
       longitude: ((json['centerLng'] ?? json['longitude']) as num).toDouble(),

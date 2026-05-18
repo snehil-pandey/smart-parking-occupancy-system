@@ -40,6 +40,9 @@ void main() {
               message: 'Test Firebase readiness.',
             ),
           ),
+          adminLocationServiceProvider.overrideWithValue(
+            const _TestAdminLocationService(),
+          ),
         ],
         child: const ParkHereAdminApp(),
       ),
@@ -58,6 +61,7 @@ void main() {
       imageRepository: InMemoryImageRepository(seed: const []),
       regionRepository: InMemoryRegionRepository(),
       issueRepository: InMemoryIssueRepository(),
+      locationService: const _TestAdminLocationService(),
     );
 
     await controller.load();
@@ -79,4 +83,39 @@ void main() {
       contains('Optimized image saved'),
     );
   });
+
+  test('admin controller can mark GPS corners and gates', () async {
+    final controller = AdminAppController(
+      auth: LocalAuthService(),
+      parkingRepository: InMemoryParkingRepository(),
+      bookingRepository: InMemoryBookingRepository(),
+      imageRepository: InMemoryImageRepository(seed: const []),
+      regionRepository: InMemoryRegionRepository(),
+      issueRepository: InMemoryIssueRepository(),
+      locationService: const _TestAdminLocationService(),
+    );
+
+    await controller.load();
+    await controller.markCurrentPositionAsCorner();
+    await controller.markCurrentPositionAsGate(name: 'Main Gate');
+
+    expect(controller.state.draftBoundaryPoints, hasLength(1));
+    expect(controller.state.draftGatePoints, hasLength(1));
+    expect(controller.state.draftGatePoints.first.name, 'Main Gate');
+  });
+}
+
+class _TestAdminLocationService implements AdminLocationService {
+  const _TestAdminLocationService();
+
+  @override
+  Future<AdminGpsPosition> currentPosition() async {
+    return const AdminGpsPosition(
+      latitude: 13.3281211,
+      longitude: 77.1256930,
+      accuracyMeters: 8,
+      isFallback: false,
+      message: 'Test GPS accuracy 8 m.',
+    );
+  }
 }

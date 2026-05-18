@@ -174,11 +174,11 @@ class AdminDashboardScreen extends ConsumerWidget {
   void _showRegisterLocationSheet(BuildContext context, WidgetRef ref) {
     final name = TextEditingController(text: 'New SIT Parking Area');
     final address = TextEditingController(text: 'SIT Tumkur Campus');
-    final lat = TextEditingController(text: '13.3500');
-    final lon = TextEditingController(text: '77.1020');
+    final lat = TextEditingController(text: '13.3281');
+    final lon = TextEditingController(text: '77.1257');
     final total = TextEditingController(text: '36');
     final available = TextEditingController(text: '20');
-    final price = TextEditingController(text: '70');
+    final price = TextEditingController(text: '20');
     final opening = TextEditingController(text: '06:00');
     final closing = TextEditingController(text: '23:00');
     var selectedTypes = <VehicleType>{VehicleType.car, VehicleType.bike};
@@ -606,6 +606,7 @@ class _RegionManagementPanel extends StatelessWidget {
               title: 'SIT Tumkur region boundary',
               regionPoints: region.boundaryPoints,
               areaPoints: const [],
+              gatePoints: const [],
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -640,11 +641,13 @@ class _MiniBoundaryMap extends StatelessWidget {
     required this.title,
     required this.regionPoints,
     required this.areaPoints,
+    required this.gatePoints,
   });
 
   final String title;
   final List<GeoPointValue> regionPoints;
   final List<GeoPointValue> areaPoints;
+  final List<GatePoint> gatePoints;
 
   @override
   Widget build(BuildContext context) {
@@ -663,6 +666,7 @@ class _MiniBoundaryMap extends StatelessWidget {
                 painter: _BoundaryPainter(
                   regionPoints: regionPoints,
                   areaPoints: areaPoints,
+                  gatePoints: gatePoints,
                 ),
               ),
             ),
@@ -694,10 +698,12 @@ class _BoundaryPainter extends CustomPainter {
   const _BoundaryPainter({
     required this.regionPoints,
     required this.areaPoints,
+    required this.gatePoints,
   });
 
   final List<GeoPointValue> regionPoints;
   final List<GeoPointValue> areaPoints;
+  final List<GatePoint> gatePoints;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -714,6 +720,7 @@ class _BoundaryPainter extends CustomPainter {
       canvas,
       size,
       regionPoints,
+      _projector(size),
       Paint()
         ..color = ParkHereTheme.adminBlue.withAlpha(42)
         ..style = PaintingStyle.fill,
@@ -726,6 +733,7 @@ class _BoundaryPainter extends CustomPainter {
       canvas,
       size,
       areaPoints,
+      _projector(size),
       Paint()
         ..color = ParkHereTheme.yellow.withAlpha(90)
         ..style = PaintingStyle.fill,
@@ -734,35 +742,50 @@ class _BoundaryPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2,
     );
+    _drawPoints(canvas, size, areaPoints, gatePoints);
+  }
+
+  Offset Function(GeoPointValue point) _projector(Size size) {
+    final gateGeoPoints = gatePoints
+        .map(
+          (gate) =>
+              GeoPointValue(latitude: gate.latitude, longitude: gate.longitude),
+        )
+        .toList();
+    final allPoints = [...regionPoints, ...areaPoints, ...gateGeoPoints];
+    if (allPoints.isEmpty) {
+      return (_) => Offset(size.width / 2, size.height / 2);
+    }
+    final minLat = allPoints
+        .map((point) => point.latitude)
+        .reduce((a, b) => a < b ? a : b);
+    final maxLat = allPoints
+        .map((point) => point.latitude)
+        .reduce((a, b) => a > b ? a : b);
+    final minLng = allPoints
+        .map((point) => point.longitude)
+        .reduce((a, b) => a < b ? a : b);
+    final maxLng = allPoints
+        .map((point) => point.longitude)
+        .reduce((a, b) => a > b ? a : b);
+    return (point) {
+      final x =
+          (point.longitude - minLng) / ((maxLng - minLng).abs() + 0.00001);
+      final y = (maxLat - point.latitude) / ((maxLat - minLat).abs() + 0.00001);
+      return Offset(24 + x * (size.width - 48), 24 + y * (size.height - 48));
+    };
   }
 
   void _drawPolygon(
     Canvas canvas,
     Size size,
     List<GeoPointValue> points,
+    Offset Function(GeoPointValue point) project,
     Paint fill,
     Paint stroke,
   ) {
-    if (points.length < 3) {
+    if (points.length < 2) {
       return;
-    }
-    final minLat = points
-        .map((point) => point.latitude)
-        .reduce((a, b) => a < b ? a : b);
-    final maxLat = points
-        .map((point) => point.latitude)
-        .reduce((a, b) => a > b ? a : b);
-    final minLng = points
-        .map((point) => point.longitude)
-        .reduce((a, b) => a < b ? a : b);
-    final maxLng = points
-        .map((point) => point.longitude)
-        .reduce((a, b) => a > b ? a : b);
-    Offset project(GeoPointValue point) {
-      final x =
-          (point.longitude - minLng) / ((maxLng - minLng).abs() + 0.00001);
-      final y = (maxLat - point.latitude) / ((maxLat - minLat).abs() + 0.00001);
-      return Offset(24 + x * (size.width - 48), 24 + y * (size.height - 48));
     }
 
     final path = Path()
@@ -770,15 +793,50 @@ class _BoundaryPainter extends CustomPainter {
     for (final point in points.skip(1)) {
       path.lineTo(project(point).dx, project(point).dy);
     }
-    path.close();
-    canvas.drawPath(path, fill);
+    if (points.length >= 3) {
+      path.close();
+      canvas.drawPath(path, fill);
+    }
     canvas.drawPath(path, stroke);
+  }
+
+  void _drawPoints(
+    Canvas canvas,
+    Size size,
+    List<GeoPointValue> corners,
+    List<GatePoint> gates,
+  ) {
+    final project = _projector(size);
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+    for (var index = 0; index < corners.length; index++) {
+      final offset = project(corners[index]);
+      canvas.drawCircle(offset, 8, Paint()..color = ParkHereTheme.black);
+      textPainter.text = TextSpan(
+        text: '${index + 1}',
+        style: const TextStyle(color: Colors.white, fontSize: 10),
+      );
+      textPainter.layout();
+      textPainter.paint(canvas, offset - const Offset(3, 6));
+    }
+    for (final gate in gates) {
+      final offset = project(
+        GeoPointValue(latitude: gate.latitude, longitude: gate.longitude),
+      );
+      canvas.drawCircle(offset, 9, Paint()..color = Colors.green.shade700);
+      textPainter.text = const TextSpan(
+        text: 'G',
+        style: TextStyle(color: Colors.white, fontSize: 11),
+      );
+      textPainter.layout();
+      textPainter.paint(canvas, offset - const Offset(4, 7));
+    }
   }
 
   @override
   bool shouldRepaint(covariant _BoundaryPainter oldDelegate) =>
       oldDelegate.regionPoints != regionPoints ||
-      oldDelegate.areaPoints != areaPoints;
+      oldDelegate.areaPoints != areaPoints ||
+      oldDelegate.gatePoints != gatePoints;
 }
 
 class _StatsGrid extends StatelessWidget {
@@ -879,7 +937,7 @@ class _LocationsPanel extends StatelessWidget {
                   leading: const Icon(Icons.local_parking),
                   title: Text(location.name),
                   subtitle: Text(
-                    '${location.availableSpaces}/${location.totalSpaces} spaces - ${formatInr(location.pricePerHour)}/hr - ${location.ratingAverage.toStringAsFixed(1)} rating',
+                    '${location.availableSpaces}/${location.totalSpaces} spaces - ${formatParkingRate(location.pricePerHour)} - ${location.ratingAverage.toStringAsFixed(1)} rating',
                   ),
                   trailing: Icon(
                     location.isOpen ? Icons.lock_open : Icons.lock_outline,
@@ -887,11 +945,7 @@ class _LocationsPanel extends StatelessWidget {
                 ),
             if (selected != null) ...[
               const Divider(height: 28),
-              _AreaBoundaryEditor(
-                region: state.region,
-                location: selected,
-                controller: controller,
-              ),
+              _AreaBoundaryEditor(state: state, controller: controller),
               const Divider(height: 28),
               _AvailabilityEditor(location: selected, controller: controller),
               const Divider(height: 28),
@@ -905,18 +959,15 @@ class _LocationsPanel extends StatelessWidget {
 }
 
 class _AreaBoundaryEditor extends StatelessWidget {
-  const _AreaBoundaryEditor({
-    required this.region,
-    required this.location,
-    required this.controller,
-  });
+  const _AreaBoundaryEditor({required this.state, required this.controller});
 
-  final ParkingRegion region;
-  final ParkingLocation location;
+  final AdminAppState state;
   final AdminAppController controller;
 
   @override
   Widget build(BuildContext context) {
+    final location = state.selectedLocation!;
+    final gps = state.lastGpsPosition;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -924,8 +975,9 @@ class _AreaBoundaryEditor extends StatelessWidget {
         const SizedBox(height: 8),
         _MiniBoundaryMap(
           title: location.name,
-          regionPoints: region.boundaryPoints,
-          areaPoints: location.boundaryPoints,
+          regionPoints: state.region.boundaryPoints,
+          areaPoints: state.draftBoundaryPoints,
+          gatePoints: state.draftGatePoints,
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -934,21 +986,183 @@ class _AreaBoundaryEditor extends StatelessWidget {
           children: [
             Chip(
               avatar: const Icon(Icons.polyline_outlined, size: 18),
-              label: Text('${location.boundaryPoints.length} area points'),
+              label: Text('${state.draftBoundaryPoints.length} corners'),
+            ),
+            Chip(
+              avatar: const Icon(Icons.login_outlined, size: 18),
+              label: Text('${state.draftGatePoints.length} gates'),
             ),
             Chip(
               avatar: const Icon(Icons.pin_drop_outlined, size: 18),
               label: Text('${location.centerLat}, ${location.centerLng}'),
             ),
+            if (gps != null)
+              Chip(
+                avatar: Icon(
+                  gps.accuracyMeters > 25
+                      ? Icons.gps_not_fixed
+                      : Icons.gps_fixed,
+                  size: 18,
+                ),
+                label: Text('GPS ${gps.accuracyMeters.toStringAsFixed(0)} m'),
+              ),
           ],
         ),
         const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: controller.nudgeSelectedAreaBoundary,
-          icon: const Icon(Icons.edit_location_outlined),
-          label: const Text('Draw/mark area boundary'),
+        Text(
+          state.geometryStatusMessage,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        if (gps != null && gps.accuracyMeters > 25) ...[
+          const SizedBox(height: 6),
+          const Text(
+            'GPS accuracy is poor. Stand outdoors and wait before saving final geometry.',
+            style: TextStyle(color: Colors.deepOrange),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilledButton.icon(
+              onPressed: controller.markCurrentPositionAsCorner,
+              icon: const Icon(Icons.add_location_alt_outlined),
+              label: const Text('Mark Current Position as Corner'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => _showGateSheet(context),
+              icon: const Icon(Icons.door_front_door_outlined),
+              label: const Text('Mark Current Position as Gate'),
+            ),
+            IconButton.filledTonal(
+              tooltip: 'Undo Corner',
+              onPressed: controller.undoLastCorner,
+              icon: const Icon(Icons.undo),
+            ),
+            IconButton.filledTonal(
+              tooltip: 'Undo Gate',
+              onPressed: controller.undoLastGate,
+              icon: const Icon(Icons.undo_outlined),
+            ),
+            OutlinedButton.icon(
+              onPressed: controller.clearCorners,
+              icon: const Icon(Icons.clear_all),
+              label: const Text('Clear Corners'),
+            ),
+            OutlinedButton.icon(
+              onPressed: controller.clearGates,
+              icon: const Icon(Icons.clear),
+              label: const Text('Clear Gates'),
+            ),
+            FilledButton.icon(
+              onPressed: controller.saveAreaGeometry,
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Save Area Geometry'),
+            ),
+          ],
         ),
       ],
+    );
+  }
+
+  void _showGateSheet(BuildContext context) {
+    final name = TextEditingController(text: 'Main Gate');
+    var type = GatePointType.both;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                20,
+                20,
+                MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Name gate point',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: name.text,
+                    decoration: const InputDecoration(
+                      labelText: 'Common gate name',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'Main Gate',
+                        child: Text('Main Gate'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Exit Gate',
+                        child: Text('Exit Gate'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Staff Gate',
+                        child: Text('Staff Gate'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Student Gate',
+                        child: Text('Student Gate'),
+                      ),
+                    ],
+                    onChanged: (value) => name.text = value ?? name.text,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: name,
+                    decoration: const InputDecoration(
+                      labelText: 'Gate label',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SegmentedButton<GatePointType>(
+                    segments: const [
+                      ButtonSegment(
+                        value: GatePointType.entry,
+                        label: Text('Entry'),
+                      ),
+                      ButtonSegment(
+                        value: GatePointType.exit,
+                        label: Text('Exit'),
+                      ),
+                      ButtonSegment(
+                        value: GatePointType.both,
+                        label: Text('Both'),
+                      ),
+                    ],
+                    selected: {type},
+                    onSelectionChanged: (value) =>
+                        setSheetState(() => type = value.first),
+                  ),
+                  const SizedBox(height: 14),
+                  FilledButton.icon(
+                    onPressed: () {
+                      controller.markCurrentPositionAsGate(
+                        name: name.text,
+                        type: type,
+                      );
+                      Navigator.pop(context);
+                    },
+                    icon: const Icon(Icons.my_location),
+                    label: const Text('Use current GPS for gate'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -1196,8 +1410,8 @@ class _AvailabilityEditorState extends State<_AvailabilityEditor> {
         _LabeledSlider(
           label: 'Price per hour',
           value: price,
-          min: 10,
-          max: 250,
+          min: 0,
+          max: 100,
           onChanged: (value) => setState(() => price = value),
         ),
         const SizedBox(height: 8),

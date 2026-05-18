@@ -4,6 +4,7 @@ export 'models/admin_profile.dart';
 export 'models/active_qr_ticket.dart';
 export 'models/app_user.dart';
 export 'models/booking.dart';
+export 'models/gate_point.dart';
 export 'models/geo_point.dart';
 export 'models/issue_report.dart';
 export 'models/parking_area_image.dart';

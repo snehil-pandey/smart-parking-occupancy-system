@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:park_here_shared/park_here_shared.dart';
 
 final adminAuthProvider = Provider<AuthService>((ref) => FirebaseAuthService());
@@ -23,6 +24,9 @@ final adminIssueRepositoryProvider = Provider<IssueRepository>(
 final adminFirebaseReadinessProvider = Provider<FirebaseReadiness>(
   (ref) => const FirebaseReadinessService().check(),
 );
+final adminLocationServiceProvider = Provider<AdminLocationService>(
+  (ref) => GeolocatorAdminLocationService(),
+);
 
 final adminAppControllerProvider =
     StateNotifierProvider<AdminAppController, AdminAppState>((ref) {
@@ -33,12 +37,76 @@ final adminAppControllerProvider =
         imageRepository: ref.watch(adminImageRepositoryProvider),
         regionRepository: ref.watch(adminRegionRepositoryProvider),
         issueRepository: ref.watch(adminIssueRepositoryProvider),
+        locationService: ref.watch(adminLocationServiceProvider),
       )..load();
     });
 
 enum AdminSection { region, parkingAreas, issues }
 
 enum AdminAuthStatus { checking, signedOut, signedIn }
+
+class AdminGpsPosition {
+  const AdminGpsPosition({
+    required this.latitude,
+    required this.longitude,
+    required this.accuracyMeters,
+    required this.isFallback,
+    required this.message,
+  });
+
+  final double latitude;
+  final double longitude;
+  final double accuracyMeters;
+  final bool isFallback;
+  final String message;
+
+  GeoPointValue toGeoPoint() =>
+      GeoPointValue(latitude: latitude, longitude: longitude);
+}
+
+abstract interface class AdminLocationService {
+  Future<AdminGpsPosition> currentPosition();
+}
+
+class GeolocatorAdminLocationService implements AdminLocationService {
+  static const _fallback = AdminGpsPosition(
+    latitude: 13.3281211,
+    longitude: 77.1256930,
+    accuracyMeters: 999,
+    isFallback: true,
+    message:
+        'GPS unavailable. Fallback SIT center is shown; do not save geometry until live GPS works.',
+  );
+
+  @override
+  Future<AdminGpsPosition> currentPosition() async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      return _fallback;
+    }
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return _fallback;
+    }
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+      ),
+    );
+    return AdminGpsPosition(
+      latitude: position.latitude,
+      longitude: position.longitude,
+      accuracyMeters: position.accuracy,
+      isFallback: false,
+      message: position.accuracy > 25
+          ? 'GPS accuracy is poor (${position.accuracy.toStringAsFixed(0)} m). Wait outdoors before saving.'
+          : 'GPS accuracy ${position.accuracy.toStringAsFixed(0)} m.',
+    );
+  }
+}
 
 class AdminAppState {
   const AdminAppState({
@@ -51,9 +119,13 @@ class AdminAppState {
     required this.issues,
     required this.selectedImages,
     required this.selectedLocation,
+    required this.draftBoundaryPoints,
+    required this.draftGatePoints,
+    required this.lastGpsPosition,
     required this.isLoading,
     required this.imageUploadProgress,
     required this.imageStatusMessage,
+    required this.geometryStatusMessage,
     this.error,
   });
 
@@ -68,9 +140,14 @@ class AdminAppState {
       issues: const [],
       selectedImages: const [],
       selectedLocation: null,
+      draftBoundaryPoints: const [],
+      draftGatePoints: const [],
+      lastGpsPosition: null,
       isLoading: true,
       imageUploadProgress: 0,
       imageStatusMessage: 'Images are optimized before Firestore upload.',
+      geometryStatusMessage:
+          'Stand at the real corner or gate, then mark current GPS.',
     );
   }
 
@@ -85,9 +162,13 @@ class AdminAppState {
       issues: const [],
       selectedImages: const [],
       selectedLocation: null,
+      draftBoundaryPoints: const [],
+      draftGatePoints: const [],
+      lastGpsPosition: null,
       isLoading: false,
       imageUploadProgress: 0,
       imageStatusMessage: 'Sign in to manage Firebase image records.',
+      geometryStatusMessage: 'Sign in to mark parking area geometry.',
     );
   }
 
@@ -100,9 +181,13 @@ class AdminAppState {
   final List<IssueReport> issues;
   final List<ParkingAreaImage> selectedImages;
   final ParkingLocation? selectedLocation;
+  final List<GeoPointValue> draftBoundaryPoints;
+  final List<GatePoint> draftGatePoints;
+  final AdminGpsPosition? lastGpsPosition;
   final bool isLoading;
   final double imageUploadProgress;
   final String imageStatusMessage;
+  final String geometryStatusMessage;
   final String? error;
 
   static final _emptySitRegion = ParkingRegion(
@@ -150,9 +235,13 @@ class AdminAppState {
     List<IssueReport>? issues,
     List<ParkingAreaImage>? selectedImages,
     ParkingLocation? selectedLocation,
+    List<GeoPointValue>? draftBoundaryPoints,
+    List<GatePoint>? draftGatePoints,
+    AdminGpsPosition? lastGpsPosition,
     bool? isLoading,
     double? imageUploadProgress,
     String? imageStatusMessage,
+    String? geometryStatusMessage,
     String? error,
   }) {
     return AdminAppState(
@@ -165,9 +254,14 @@ class AdminAppState {
       issues: issues ?? this.issues,
       selectedImages: selectedImages ?? this.selectedImages,
       selectedLocation: selectedLocation ?? this.selectedLocation,
+      draftBoundaryPoints: draftBoundaryPoints ?? this.draftBoundaryPoints,
+      draftGatePoints: draftGatePoints ?? this.draftGatePoints,
+      lastGpsPosition: lastGpsPosition ?? this.lastGpsPosition,
       isLoading: isLoading ?? this.isLoading,
       imageUploadProgress: imageUploadProgress ?? this.imageUploadProgress,
       imageStatusMessage: imageStatusMessage ?? this.imageStatusMessage,
+      geometryStatusMessage:
+          geometryStatusMessage ?? this.geometryStatusMessage,
       error: error,
     );
   }
@@ -181,12 +275,14 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     required ImageRepository imageRepository,
     required RegionRepository regionRepository,
     required IssueRepository issueRepository,
+    required AdminLocationService locationService,
   }) : _auth = auth,
        _parkingRepository = parkingRepository,
        _bookingRepository = bookingRepository,
        _imageRepository = imageRepository,
        _regionRepository = regionRepository,
        _issueRepository = issueRepository,
+       _locationService = locationService,
        super(AdminAppState.signedOut());
 
   final AuthService _auth;
@@ -195,6 +291,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
   final ImageRepository _imageRepository;
   final RegionRepository _regionRepository;
   final IssueRepository _issueRepository;
+  final AdminLocationService _locationService;
   StreamSubscription<List<ParkingLocation>>? _parkingSubscription;
   StreamSubscription<List<Booking>>? _bookingSubscription;
   StreamSubscription<List<IssueReport>>? _issueSubscription;
@@ -211,6 +308,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     final bookings = await _bookingRepository.getForAdmin(admin.id);
     final issues = await _issueRepository.getForAdmin(admin.id);
     _startRealtimeListeners(admin.id);
+    final selectedLocation = locations.firstOrNull;
     state = state.copyWith(
       admin: admin,
       authStatus: AdminAuthStatus.signedIn,
@@ -218,7 +316,9 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       locations: locations,
       bookings: bookings,
       issues: issues,
-      selectedLocation: locations.firstOrNull,
+      selectedLocation: selectedLocation,
+      draftBoundaryPoints: selectedLocation?.boundaryPoints ?? const [],
+      draftGatePoints: selectedLocation?.gatePoints ?? const [],
       isLoading: false,
     );
     await _loadSelectedImages();
@@ -290,7 +390,13 @@ class AdminAppController extends StateNotifier<AdminAppState> {
   }
 
   Future<void> selectLocation(ParkingLocation location) async {
-    state = state.copyWith(selectedLocation: location);
+    state = state.copyWith(
+      selectedLocation: location,
+      draftBoundaryPoints: location.boundaryPoints,
+      draftGatePoints: location.gatePoints,
+      geometryStatusMessage:
+          'Loaded ${location.boundaryPoints.length} corners and ${location.gatePoints.length} gates.',
+    );
     await _loadSelectedImages();
   }
 
@@ -348,6 +454,132 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     await updateSelectedAreaBoundary(updated);
   }
 
+  Future<void> markCurrentPositionAsCorner() async {
+    final location = state.selectedLocation;
+    if (location == null) {
+      state = state.copyWith(error: 'Select a parking area first.');
+      return;
+    }
+    final position = await _locationService.currentPosition();
+    final updated = [...state.draftBoundaryPoints, position.toGeoPoint()];
+    state = state.copyWith(
+      draftBoundaryPoints: updated,
+      lastGpsPosition: position,
+      geometryStatusMessage:
+          'Added corner ${updated.length}. ${position.message}',
+      error: position.isFallback
+          ? 'GPS fallback cannot mark real geometry. Enable location first.'
+          : null,
+    );
+  }
+
+  Future<void> markCurrentPositionAsGate({
+    String name = 'Gate',
+    GatePointType type = GatePointType.both,
+  }) async {
+    final location = state.selectedLocation;
+    if (location == null) {
+      state = state.copyWith(error: 'Select a parking area first.');
+      return;
+    }
+    final position = await _locationService.currentPosition();
+    final gateIndex = state.draftGatePoints.length + 1;
+    final gate = GatePoint(
+      gateId: 'gate_${location.id}_${DateTime.now().millisecondsSinceEpoch}',
+      name: name.trim().isEmpty ? 'Gate $gateIndex' : name.trim(),
+      latitude: position.latitude,
+      longitude: position.longitude,
+      type: type,
+      createdAt: DateTime.now(),
+    );
+    final updated = [...state.draftGatePoints, gate];
+    state = state.copyWith(
+      draftGatePoints: updated,
+      lastGpsPosition: position,
+      geometryStatusMessage: 'Added ${gate.name}. ${position.message}',
+      error: position.isFallback
+          ? 'GPS fallback cannot mark real gates. Enable location first.'
+          : null,
+    );
+  }
+
+  void undoLastCorner() {
+    if (state.draftBoundaryPoints.isEmpty) {
+      return;
+    }
+    final updated = state.draftBoundaryPoints
+        .take(state.draftBoundaryPoints.length - 1)
+        .toList();
+    state = state.copyWith(
+      draftBoundaryPoints: updated,
+      geometryStatusMessage: 'Removed last corner.',
+    );
+  }
+
+  void undoLastGate() {
+    if (state.draftGatePoints.isEmpty) {
+      return;
+    }
+    final updated = state.draftGatePoints
+        .take(state.draftGatePoints.length - 1)
+        .toList();
+    state = state.copyWith(
+      draftGatePoints: updated,
+      geometryStatusMessage: 'Removed last gate.',
+    );
+  }
+
+  void clearCorners() {
+    state = state.copyWith(
+      draftBoundaryPoints: const [],
+      geometryStatusMessage: 'Cleared draft corner points.',
+    );
+  }
+
+  void clearGates() {
+    state = state.copyWith(
+      draftGatePoints: const [],
+      geometryStatusMessage: 'Cleared draft gate points.',
+    );
+  }
+
+  Future<void> saveAreaGeometry() async {
+    final location = state.selectedLocation;
+    if (location == null) {
+      state = state.copyWith(error: 'Select a parking area first.');
+      return;
+    }
+    if (state.draftBoundaryPoints.length < 3) {
+      state = state.copyWith(
+        error: 'Mark at least 3 corner points before saving geometry.',
+      );
+      return;
+    }
+    final updated = location.copyWith(
+      boundaryPoints: state.draftBoundaryPoints,
+      gatePoints: state.draftGatePoints,
+      latitude:
+          state.draftBoundaryPoints
+              .map((point) => point.latitude)
+              .reduce((a, b) => a + b) /
+          state.draftBoundaryPoints.length,
+      longitude:
+          state.draftBoundaryPoints
+              .map((point) => point.longitude)
+              .reduce((a, b) => a + b) /
+          state.draftBoundaryPoints.length,
+      updatedAt: DateTime.now(),
+    );
+    await _parkingRepository.upsert(updated);
+    state = state.copyWith(
+      selectedLocation: updated,
+      geometryStatusMessage:
+          'Saved ${updated.boundaryPoints.length} corners and ${updated.gatePoints.length} gates.',
+      error: null,
+    );
+    await load();
+  }
+
   Future<void> registerLocation({
     required String name,
     required String address,
@@ -360,6 +592,12 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     required String openingTime,
     required String closingTime,
   }) async {
+    if (!ParkingLocation.isValidPrice(pricePerHour)) {
+      state = state.copyWith(
+        error: 'Price must be between Rs. 0 and Rs. 100 per hour.',
+      );
+      return;
+    }
     final now = DateTime.now();
     final location = ParkingLocation(
       id: 'loc_${now.millisecondsSinceEpoch}',
@@ -369,11 +607,12 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       description: 'New parking area inside ${state.region.name}.',
       address: address,
       boundaryPoints: const [
-        GeoPointValue(latitude: 13.3500, longitude: 77.1020),
-        GeoPointValue(latitude: 13.3502, longitude: 77.1026),
-        GeoPointValue(latitude: 13.3496, longitude: 77.1028),
-        GeoPointValue(latitude: 13.3494, longitude: 77.1021),
+        GeoPointValue(latitude: 13.3287, longitude: 77.1232),
+        GeoPointValue(latitude: 13.3287, longitude: 77.1239),
+        GeoPointValue(latitude: 13.3280, longitude: 77.1239),
+        GeoPointValue(latitude: 13.3280, longitude: 77.1232),
       ],
+      gatePoints: const [],
       latitude: latitude,
       longitude: longitude,
       totalSpaces: totalSpaces,
@@ -402,6 +641,12 @@ class AdminAppController extends StateNotifier<AdminAppState> {
   }) async {
     final location = state.selectedLocation;
     if (location == null) {
+      return;
+    }
+    if (!ParkingLocation.isValidPrice(pricePerHour)) {
+      state = state.copyWith(
+        error: 'Price must be between Rs. 0 and Rs. 100 per hour.',
+      );
       return;
     }
     await _parkingRepository.updateAvailability(

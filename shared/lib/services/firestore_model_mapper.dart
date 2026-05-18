@@ -20,6 +20,7 @@ class FirestoreModelMapper {
     'endTime',
     'expiresAt',
     'qrUsedAt',
+    'cancelledAt',
   };
 
   static Map<String, Object?> toFirestore(Map<String, Object?> json) {
@@ -39,21 +40,7 @@ class FirestoreModelMapper {
     String? documentId,
   }) {
     final mapped = json.map((key, value) {
-      if (value is Timestamp) {
-        return MapEntry(key, value.toDate().toIso8601String());
-      }
-      if (value is List) {
-        return MapEntry(
-          key,
-          value.map((item) {
-            if (item is Map) {
-              return item.cast<String, Object?>();
-            }
-            return item;
-          }).toList(),
-        );
-      }
-      return MapEntry(key, value);
+      return MapEntry(key, _fromFirestoreValue(value));
     });
     if (documentId != null) {
       mapped.putIfAbsent('id', () => documentId);
@@ -66,6 +53,24 @@ class FirestoreModelMapper {
       mapped.putIfAbsent('qrId', () => documentId);
     }
     return mapped;
+  }
+
+  static Object? _fromFirestoreValue(Object? value) {
+    if (value is Timestamp) {
+      return value.toDate().toIso8601String();
+    }
+    if (value is List) {
+      return value.map(_fromFirestoreValue).toList();
+    }
+    if (value is Map) {
+      return value.map(
+        (key, nestedValue) => MapEntry(
+          key.toString(),
+          _fromFirestoreValue(nestedValue as Object?),
+        ),
+      );
+    }
+    return value;
   }
 
   static ParkingLocation parkingAreaFromDoc(
@@ -113,6 +118,10 @@ class FirestoreModelMapper {
       qrPayload: json['qrPayload'] as String,
       createdAt: _requiredDate(json['createdAt']),
       updatedAt: _requiredDate(json['updatedAt']),
+      cancellationFine: (json['cancellationFine'] as num? ?? 0).toDouble(),
+      cancelledAt: _nullableDate(json['cancelledAt']),
+      cancellationReason: json['cancellationReason'] as String?,
+      refundAmount: (json['refundAmount'] as num?)?.toDouble(),
     );
   }
 
