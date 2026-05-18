@@ -18,6 +18,8 @@ from firebase_admin import credentials, firestore
 
 REGION_ID = "region_sit_tumkur"
 ADMIN_ID = "admin_sit_parking_office"
+ADMIN_EMAIL = "admin@parkhere.demo"
+DEMO_PASSWORD = "ParkHere@123"
 NOW = datetime.now(timezone.utc)
 
 
@@ -103,7 +105,10 @@ def seed_admin(db: firestore.Client) -> None:
         {
             "adminId": ADMIN_ID,
             "id": ADMIN_ID,
+            "authUid": ADMIN_ID,
+            "email": ADMIN_EMAIL,
             "businessName": "SIT Tumkur Parking Office",
+            "displayName": "SIT Tumkur Parking Office",
             "ownerName": "Campus Parking Administrator",
             "phone": "+91 90000 10001",
             "upiId": "sitparking@upi",
@@ -307,19 +312,22 @@ def seed_parking_areas(db: firestore.Client) -> None:
 
 def seed_users(db: firestore.Client) -> None:
     names = [
-        ("user_demo_001", "Ananya R", "KA 06 AB 1201", "car"),
-        ("user_demo_002", "Karthik S", "KA 06 HS 4421", "bike"),
-        ("user_demo_003", "Meera N", "KA 05 EV 8872", "ev"),
-        ("user_demo_004", "Rahul M", "KA 06 CM 7634", "bike"),
-        ("user_demo_005", "Sneha P", "KA 06 AR 5510", "car"),
-        ("user_demo_006", "Vikram G", "KA 01 VN 2290", "van"),
+        ("user_demo_001", "ananya@parkhere.demo", "Ananya R", "KA 06 AB 1201", "car"),
+        ("user_demo_002", "karthik@parkhere.demo", "Karthik S", "KA 06 HS 4421", "bike"),
+        ("user_demo_003", "meera@parkhere.demo", "Meera N", "KA 05 EV 8872", "ev"),
+        ("user_demo_004", "rahul@parkhere.demo", "Rahul M", "KA 06 CM 7634", "bike"),
+        ("user_demo_005", "sneha@parkhere.demo", "Sneha P", "KA 06 AR 5510", "car"),
+        ("user_demo_006", "vikram@parkhere.demo", "Vikram G", "KA 01 VN 2290", "van"),
     ]
-    for index, (user_id, name, vehicle_number, vehicle_type) in enumerate(names, start=1):
+    for index, (user_id, email, name, vehicle_number, vehicle_type) in enumerate(names, start=1):
         db.collection("users").document(user_id).set(
             {
                 "userId": user_id,
                 "id": user_id,
+                "authUid": user_id,
+                "email": email,
                 "name": name,
+                "displayName": name,
                 "phone": f"+91 90000 20{index:03d}",
                 "vehicleNumber": vehicle_number,
                 "defaultVehicleType": vehicle_type,
