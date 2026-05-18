@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:park_here_shared/park_here_shared.dart';
 
+import 'services/qr_expiry_notification_service.dart';
+
 final authServiceProvider = Provider<AuthService>(
   (ref) => FirebaseAuthService(),
 );
@@ -29,6 +31,9 @@ final reviewRepositoryProvider = Provider<ReviewRepository>(
 final issueRepositoryProvider = Provider<IssueRepository>(
   (ref) => FirebaseIssueRepository(),
 );
+final notificationRepositoryProvider = Provider<NotificationRepository>(
+  (ref) => FirebaseNotificationRepository(),
+);
 final routeProvider = Provider<RouteProvider>(
   (ref) => const StraightLineRouteProvider(),
 );
@@ -41,6 +46,10 @@ final qrPayloadProvider = Provider<QrPayloadService>(
 final placeSearchServiceProvider = Provider<PlaceSearchService>(
   (ref) => const LocalSitTumkurPlaceSearchService(),
 );
+final qrExpiryNotificationServiceProvider =
+    Provider<QrExpiryNotificationService>(
+      (ref) => QrExpiryNotificationService(),
+    );
 
 enum UserAuthStatus { checking, signedOut, signedIn }
 
@@ -157,11 +166,15 @@ final userAppControllerProvider =
         imageRepository: ref.watch(imageRepositoryProvider),
         reviewRepository: ref.watch(reviewRepositoryProvider),
         issueRepository: ref.watch(issueRepositoryProvider),
+        notificationRepository: ref.watch(notificationRepositoryProvider),
         imageCache: ref.watch(imagePayloadCacheProvider),
         locationService: ref.watch(userLocationServiceProvider),
         routeProvider: ref.watch(routeProvider),
         qrPayloadService: ref.watch(qrPayloadProvider),
         placeSearchService: ref.watch(placeSearchServiceProvider),
+        qrExpiryNotificationService: ref.watch(
+          qrExpiryNotificationServiceProvider,
+        ),
       )..load();
     });
 
@@ -175,6 +188,7 @@ class UserAppState {
     required this.thumbnailByArea,
     required this.previewImages,
     required this.selectedReviews,
+    required this.notifications,
     required this.activeQrTicket,
     required this.position,
     required this.selectedLocation,
@@ -199,6 +213,7 @@ class UserAppState {
       thumbnailByArea: const {},
       previewImages: const [],
       selectedReviews: const [],
+      notifications: const [],
       activeQrTicket: null,
       position: null,
       selectedLocation: null,
@@ -222,6 +237,7 @@ class UserAppState {
       thumbnailByArea: const {},
       previewImages: const [],
       selectedReviews: const [],
+      notifications: const [],
       activeQrTicket: null,
       position: null,
       selectedLocation: null,
@@ -243,6 +259,7 @@ class UserAppState {
   final Map<String, ParkingAreaImage> thumbnailByArea;
   final List<ParkingAreaImage> previewImages;
   final List<ParkingReview> selectedReviews;
+  final List<AppNotification> notifications;
   final ActiveQrTicket? activeQrTicket;
   final UserPosition? position;
   final ParkingLocation? selectedLocation;
@@ -293,6 +310,30 @@ class UserAppState {
   List<ParkingLocation> get freeLocations =>
       locations.where((location) => location.pricePerHour == 0).toList();
 
+  List<ParkingLocation> get nearbyAvailableLocations =>
+      locations.where((location) => location.isBookable).toList()..sort(
+        (a, b) => (distanceKmFor(a) ?? double.infinity).compareTo(
+          distanceKmFor(b) ?? double.infinity,
+        ),
+      );
+
+  List<ParkingLocation> get recentlyUsedLocations {
+    final seen = <String>{};
+    final results = <ParkingLocation>[];
+    for (final booking in bookingHistory) {
+      if (!seen.add(booking.parkingLocationId)) {
+        continue;
+      }
+      final location = locations
+          .where((area) => area.id == booking.parkingLocationId)
+          .firstOrNull;
+      if (location != null) {
+        results.add(location);
+      }
+    }
+    return results;
+  }
+
   List<Booking> get bookingHistory =>
       [...bookings]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
@@ -305,6 +346,7 @@ class UserAppState {
     Map<String, ParkingAreaImage>? thumbnailByArea,
     List<ParkingAreaImage>? previewImages,
     List<ParkingReview>? selectedReviews,
+    List<AppNotification>? notifications,
     ActiveQrTicket? activeQrTicket,
     bool clearActiveQrTicket = false,
     UserPosition? position,
@@ -330,6 +372,7 @@ class UserAppState {
       thumbnailByArea: thumbnailByArea ?? this.thumbnailByArea,
       previewImages: previewImages ?? this.previewImages,
       selectedReviews: selectedReviews ?? this.selectedReviews,
+      notifications: notifications ?? this.notifications,
       activeQrTicket: clearActiveQrTicket
           ? null
           : activeQrTicket ?? this.activeQrTicket,
@@ -360,22 +403,26 @@ class UserAppController extends StateNotifier<UserAppState> {
     required ImageRepository imageRepository,
     required ReviewRepository reviewRepository,
     required IssueRepository issueRepository,
+    required NotificationRepository notificationRepository,
     required ImagePayloadCache imageCache,
     required UserLocationService locationService,
     required RouteProvider routeProvider,
     required QrPayloadService qrPayloadService,
     required PlaceSearchService placeSearchService,
+    required QrExpiryNotificationService qrExpiryNotificationService,
   }) : _auth = auth,
        _parkingRepository = parkingRepository,
        _bookingRepository = bookingRepository,
        _imageRepository = imageRepository,
        _reviewRepository = reviewRepository,
        _issueRepository = issueRepository,
+       _notificationRepository = notificationRepository,
        _imageCache = imageCache,
        _locationService = locationService,
        _routeProvider = routeProvider,
        _qrPayloadService = qrPayloadService,
        _placeSearchService = placeSearchService,
+       _qrExpiryNotificationService = qrExpiryNotificationService,
        super(UserAppState.signedOut());
 
   final AuthService _auth;
@@ -384,17 +431,22 @@ class UserAppController extends StateNotifier<UserAppState> {
   final ImageRepository _imageRepository;
   final ReviewRepository _reviewRepository;
   final IssueRepository _issueRepository;
+  final NotificationRepository _notificationRepository;
   final ImagePayloadCache _imageCache;
   final UserLocationService _locationService;
   final RouteProvider _routeProvider;
   final QrPayloadService _qrPayloadService;
   final PlaceSearchService _placeSearchService;
+  final QrExpiryNotificationService _qrExpiryNotificationService;
   StreamSubscription<UserPosition>? _positionSubscription;
   StreamSubscription<List<ParkingLocation>>? _parkingSubscription;
   StreamSubscription<List<Booking>>? _bookingSubscription;
   StreamSubscription<ActiveQrTicket?>? _activeQrSubscription;
   StreamSubscription<List<ParkingReview>>? _reviewSubscription;
+  StreamSubscription<List<AppNotification>>? _notificationSubscription;
   Timer? _searchDebounce;
+  Timer? _qrCountdownTimer;
+  final Set<String> _notifiedQrThresholds = {};
 
   Future<void> load() async {
     state = state.copyWith(isLoading: true, error: null);
@@ -408,6 +460,7 @@ class UserAppController extends StateNotifier<UserAppState> {
     _startLocationUpdates();
     _startParkingUpdates();
     _startBookingUpdates(user.id);
+    _startNotificationUpdates(user.id);
     var locations = state.locations;
     var bookings = state.bookings;
     try {
@@ -645,18 +698,10 @@ class UserAppController extends StateNotifier<UserAppState> {
       return;
     }
     final bookingId = 'book_${now.millisecondsSinceEpoch}';
-    final qrId = 'qr_$bookingId';
+    final qrId = _qrPayloadService.generateQrId();
     final end = now.add(Duration(hours: state.durationHours));
     final price = state.durationHours * reservedLocation.pricePerHour;
-    final payload = _qrPayloadService.buildPayload(
-      bookingId: bookingId,
-      qrId: qrId,
-      userId: user.id,
-      parkingLocationId: reservedLocation.id,
-      vehicleNumber: user.vehicleNumber,
-      startTime: now,
-      endTime: end,
-    );
+    final payload = _qrPayloadService.buildPayload(qrId: qrId);
     final booking = Booking(
       id: bookingId,
       userId: user.id,
@@ -674,6 +719,19 @@ class UserAppController extends StateNotifier<UserAppState> {
     );
     await _bookingRepository.createBooking(booking);
     await _bookingRepository.createActiveQrTicket(booking);
+    await _notificationRepository.upsert(
+      AppNotification(
+        notificationId: 'notif_booking_$bookingId',
+        userId: user.id,
+        type: AppNotificationType.bookingConfirmed,
+        title: 'Booking confirmed',
+        message: '${reservedLocation.name} is reserved until ${_clock(end)}.',
+        relatedBookingId: bookingId,
+        relatedAreaId: reservedLocation.id,
+        read: false,
+        createdAt: now,
+      ),
+    );
     await load();
     final refreshed = await _parkingRepository.findById(reservedLocation.id);
     if (refreshed != null) {
@@ -697,6 +755,22 @@ class UserAppController extends StateNotifier<UserAppState> {
             ? 'Booking cancelled. Fine: ${formatInr(cancelled.cancellationFine)}.'
             : 'Booking cancelled with no fine.',
       );
+      await _notificationRepository.upsert(
+        AppNotification(
+          notificationId: 'notif_cancel_${booking.id}',
+          userId: booking.userId,
+          type: AppNotificationType.bookingCancelled,
+          title: 'Booking cancelled',
+          message: cancelled.cancellationFine > 0
+              ? 'Cancellation fine recorded: ${formatInr(cancelled.cancellationFine)}.'
+              : 'Booking cancelled with no fine.',
+          relatedBookingId: booking.id,
+          relatedAreaId: booking.parkingLocationId,
+          read: false,
+          createdAt: DateTime.now(),
+        ),
+      );
+      await _qrExpiryNotificationService.cancelScheduled();
       await load();
     } on Object catch (error) {
       state = state.copyWith(error: error.toString());
@@ -888,10 +962,29 @@ class UserAppController extends StateNotifier<UserAppState> {
                 .firstOrNull;
             state = state.copyWith(bookings: bookings);
             _startActiveQrUpdates(activeBooking?.id);
+            if (activeBooking == null) {
+              _qrExpiryNotificationService.cancelScheduled();
+              _qrCountdownTimer?.cancel();
+              _notifiedQrThresholds.clear();
+            }
           },
           onError: (Object error) {
             state = state.copyWith(
               isLoading: false,
+              error: FirebaseErrorMessages.friendlyMessage(error),
+            );
+          },
+        );
+  }
+
+  void _startNotificationUpdates(String userId) {
+    _notificationSubscription ??= _notificationRepository
+        .watchForUser(userId, limit: 30)
+        .listen(
+          (notifications) =>
+              state = state.copyWith(notifications: notifications),
+          onError: (Object error) {
+            state = state.copyWith(
               error: FirebaseErrorMessages.friendlyMessage(error),
             );
           },
@@ -908,16 +1001,113 @@ class UserAppController extends StateNotifier<UserAppState> {
     _activeQrSubscription = _bookingRepository
         .watchActiveQrForBooking(bookingId)
         .listen(
-          (ticket) => state = state.copyWith(
-            activeQrTicket: ticket,
-            clearActiveQrTicket: ticket == null,
-          ),
+          (ticket) {
+            state = state.copyWith(
+              activeQrTicket: ticket,
+              clearActiveQrTicket: ticket == null,
+            );
+            _syncQrExpiryNotifications(ticket);
+          },
           onError: (Object error) {
             state = state.copyWith(
               error: FirebaseErrorMessages.friendlyMessage(error),
             );
           },
         );
+  }
+
+  void _syncQrExpiryNotifications(ActiveQrTicket? ticket) {
+    final booking = state.activeBooking;
+    final location = booking == null
+        ? null
+        : state.locations
+              .where((area) => area.id == booking.parkingLocationId)
+              .firstOrNull;
+    _qrExpiryNotificationService.scheduleForTicket(
+      ticket: ticket,
+      parkingName: location?.name ?? 'your parking area',
+    );
+    _qrCountdownTimer?.cancel();
+    if (ticket == null || booking == null) {
+      _notifiedQrThresholds.clear();
+      return;
+    }
+    _qrCountdownTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _checkQrExpiryThresholds(ticket, booking, location);
+    });
+    _checkQrExpiryThresholds(ticket, booking, location);
+  }
+
+  Future<void> _checkQrExpiryThresholds(
+    ActiveQrTicket ticket,
+    Booking booking,
+    ParkingLocation? location,
+  ) async {
+    final remaining = ticket.expiresAt.difference(DateTime.now());
+    final user = state.user;
+    if (user == null) {
+      return;
+    }
+    if (remaining.isNegative) {
+      await _writeQrNotification(
+        id: '${ticket.qrId}_expired',
+        userId: user.id,
+        type: AppNotificationType.qrExpired,
+        title: 'QR expired',
+        message:
+            'Your QR for ${location?.name ?? booking.parkingLocationId} has expired.',
+        booking: booking,
+      );
+      return;
+    }
+    if (remaining <= const Duration(minutes: 2)) {
+      await _writeQrNotification(
+        id: '${ticket.qrId}_2',
+        userId: user.id,
+        type: AppNotificationType.qrExpiringSoon,
+        title: 'QR expires in 2 minutes',
+        message:
+            'Keep your QR ready for ${location?.name ?? 'gate verification'}.',
+        booking: booking,
+      );
+    } else if (remaining <= const Duration(minutes: 10)) {
+      await _writeQrNotification(
+        id: '${ticket.qrId}_10',
+        userId: user.id,
+        type: AppNotificationType.qrExpiringSoon,
+        title: 'QR expires in 10 minutes',
+        message:
+            'Your Park Here ticket for ${location?.name ?? booking.parkingLocationId} is expiring soon.',
+        booking: booking,
+      );
+    }
+  }
+
+  Future<void> _writeQrNotification({
+    required String id,
+    required String userId,
+    required AppNotificationType type,
+    required String title,
+    required String message,
+    required Booking booking,
+  }) async {
+    if (!_notifiedQrThresholds.add(id)) {
+      return;
+    }
+    state = state.copyWith(actionMessage: message);
+    await _notificationRepository.upsert(
+      AppNotification(
+        notificationId: 'notif_$id',
+        userId: userId,
+        type: type,
+        title: title,
+        message: message,
+        relatedBookingId: booking.id,
+        relatedAreaId: booking.parkingLocationId,
+        read: false,
+        createdAt: DateTime.now(),
+      ),
+    );
   }
 
   void _startReviewUpdates(String areaId) {
@@ -939,10 +1129,14 @@ class UserAppController extends StateNotifier<UserAppState> {
     await _bookingSubscription?.cancel();
     await _activeQrSubscription?.cancel();
     await _reviewSubscription?.cancel();
+    await _notificationSubscription?.cancel();
+    _qrCountdownTimer?.cancel();
+    await _qrExpiryNotificationService.cancelScheduled();
     _parkingSubscription = null;
     _bookingSubscription = null;
     _activeQrSubscription = null;
     _reviewSubscription = null;
+    _notificationSubscription = null;
   }
 
   @override
@@ -953,6 +1147,11 @@ class UserAppController extends StateNotifier<UserAppState> {
     _bookingSubscription?.cancel();
     _activeQrSubscription?.cancel();
     _reviewSubscription?.cancel();
+    _notificationSubscription?.cancel();
+    _qrCountdownTimer?.cancel();
     super.dispose();
   }
+
+  String _clock(DateTime value) =>
+      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
 }

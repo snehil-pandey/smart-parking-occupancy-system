@@ -11,6 +11,7 @@ class FirebaseCollectionPaths {
   static const activeQrTickets = 'active_qr_tickets';
   static const reviews = 'reviews';
   static const issueReports = 'issue_reports';
+  static const notifications = 'notifications';
   static const payments = 'payments';
 
   static String user(String userId) => '$users/$userId';
@@ -25,5 +26,7 @@ class FirebaseCollectionPaths {
   static String activeQrTicket(String qrId) => '$activeQrTickets/$qrId';
   static String review(String reviewId) => '$reviews/$reviewId';
   static String issueReport(String issueId) => '$issueReports/$issueId';
+  static String notification(String notificationId) =>
+      '$notifications/$notificationId';
   static String payment(String paymentId) => '$payments/$paymentId';
 }

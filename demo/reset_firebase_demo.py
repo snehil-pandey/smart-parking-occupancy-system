@@ -18,6 +18,7 @@ COLLECTIONS = [
     "parking_area_images",
     "bookings",
     "active_qr_tickets",
+    "notifications",
     "issue_reports",
     "reviews",
     "payments",

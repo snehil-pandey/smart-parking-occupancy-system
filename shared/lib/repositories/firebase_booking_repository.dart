@@ -4,6 +4,7 @@ import '../models/active_qr_ticket.dart';
 import '../models/booking.dart';
 import '../services/firebase_collection_paths.dart';
 import '../services/firestore_model_mapper.dart';
+import '../services/qr_payload_service.dart';
 import 'booking_repository.dart';
 
 class FirebaseBookingRepository implements BookingRepository {
@@ -112,7 +113,7 @@ class FirebaseBookingRepository implements BookingRepository {
 
   @override
   Future<ActiveQrTicket> createActiveQrTicket(Booking booking) async {
-    final qrId = booking.qrId ?? 'qr_${booking.id}';
+    final qrId = booking.qrId ?? const QrPayloadService().generateQrId();
     final ticketRef = _activeQrTickets.doc(qrId);
     final bookingRef = _bookings.doc(booking.id);
     return _firestore.runTransaction((transaction) async {

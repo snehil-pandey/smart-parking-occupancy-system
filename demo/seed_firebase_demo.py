@@ -501,7 +501,7 @@ def seed_booking_and_qr(
     admin_uid: str,
 ) -> None:
     booking_id = "book_sit_demo_001"
-    qr_id = "qr_book_sit_demo_001"
+    qr_id = "qr_live_demoBookSitTumkur001A1B2C3D4E5"
     user_id = user_uids["user_demo_001"]
     db.collection("bookings").document(booking_id).set(
         {
@@ -516,7 +516,7 @@ def seed_booking_and_qr(
             "price": 60.0,
             "status": "active",
             "qrId": qr_id,
-            "qrPayload": '{"issuer":"park_here","bookingId":"book_sit_demo_001","qrId":"qr_book_sit_demo_001","version":1}',
+            "qrPayload": qr_id,
             "cancellationFine": 0.0,
             "cancelledAt": None,
             "cancellationReason": None,

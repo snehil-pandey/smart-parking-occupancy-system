@@ -1,7 +1,7 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:park_here_shared/park_here_shared.dart';
 
 import '../user_app_controller.dart';
@@ -239,23 +239,25 @@ class InteractiveParkingMap extends StatefulWidget {
 
 class _InteractiveParkingMapState extends State<InteractiveParkingMap>
     with SingleTickerProviderStateMixin {
-  static const _worldSize = Size(1120, 840);
-  late final TransformationController _mapController;
+  late final MapController _mapController;
   late final AnimationController _animationController;
-  Animation<Matrix4>? _cameraAnimation;
+  Animation<LatLng>? _centerAnimation;
+  Animation<double>? _zoomAnimation;
+  bool _tileError = false;
 
   @override
   void initState() {
     super.initState();
-    _mapController = TransformationController();
+    _mapController = MapController();
     _animationController =
         AnimationController(
           vsync: this,
           duration: const Duration(milliseconds: 420),
         )..addListener(() {
-          final animation = _cameraAnimation;
-          if (animation != null) {
-            _mapController.value = animation.value;
+          final center = _centerAnimation?.value;
+          final zoom = _zoomAnimation?.value;
+          if (center != null && zoom != null) {
+            _mapController.move(center, zoom);
           }
         });
   }
@@ -272,114 +274,55 @@ class _InteractiveParkingMapState extends State<InteractiveParkingMap>
   @override
   void dispose() {
     _animationController.dispose();
-    _mapController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final projection = _MapProjection.forLocations(
-      locations: widget.locations,
-      position: widget.position,
-      selectedPlace: widget.selectedPlace,
-      worldSize: _worldSize,
-    );
-    final map = SizedBox(
-      width: _worldSize.width,
-      height: _worldSize.height,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: CustomPaint(
-              painter: _CampusMapPainter(
-                locations: widget.locations,
-                selectedLocation: widget.selectedLocation,
-                routes: widget.routes,
-                projection: projection,
-              ),
-            ),
-          ),
-          if (widget.position != null)
-            Positioned(
-              left:
-                  projection
-                      .fromLatLng(
-                        widget.position!.latitude,
-                        widget.position!.longitude,
-                      )
-                      .dx -
-                  18,
-              top:
-                  projection
-                      .fromLatLng(
-                        widget.position!.latitude,
-                        widget.position!.longitude,
-                      )
-                      .dy -
-                  18,
-              child: const _CurrentLocationMarker(),
-            ),
-          for (final location in widget.locations)
-            Positioned(
-              left: projection.fromLocation(location).dx - 20,
-              top: projection.fromLocation(location).dy - 20,
-              child: _ParkingMapMarker(
-                location: location,
-                selected: location.id == widget.selectedLocation?.id,
-                onTap: () => widget.onSelect(location),
-              ),
-            ),
-          for (final location in widget.locations)
-            for (final gate in location.gatePoints)
-              Positioned(
-                left: projection.fromLatLng(gate.latitude, gate.longitude).dx,
-                top: projection.fromLatLng(gate.latitude, gate.longitude).dy,
-                child: Tooltip(
-                  message: gate.name,
-                  child: const Icon(
-                    Icons.login,
-                    size: 16,
-                    color: Color(0xFF3949AB),
-                  ),
-                ),
-              ),
-          if (widget.selectedPlace != null)
-            Positioned(
-              left:
-                  projection
-                      .fromLatLng(
-                        widget.selectedPlace!.latitude,
-                        widget.selectedPlace!.longitude,
-                      )
-                      .dx -
-                  16,
-              top:
-                  projection
-                      .fromLatLng(
-                        widget.selectedPlace!.latitude,
-                        widget.selectedPlace!.longitude,
-                      )
-                      .dy -
-                  34,
-              child: const Icon(
-                Icons.location_pin,
-                color: Color(0xFFD32F2F),
-                size: 34,
-              ),
-            ),
-        ],
-      ),
-    );
-
     return Stack(
       children: [
-        InteractiveViewer(
-          transformationController: _mapController,
-          minScale: 0.72,
-          maxScale: 3.2,
-          boundaryMargin: const EdgeInsets.all(220),
-          child: map,
+        FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(
+            initialCenter: _selectedLatLng() ?? _currentLatLng(),
+            initialZoom: 17,
+            minZoom: 13,
+            maxZoom: 20,
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+            ),
+          ),
+          children: [
+            // Tile layer: real OpenStreetMap raster tiles. No Google Maps API
+            // key or billing account is required for local development.
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.parkhere.user',
+              errorTileCallback: (_, _, _) {
+                if (mounted && !_tileError) {
+                  setState(() => _tileError = true);
+                }
+              },
+            ),
+            // Polygon layer: Firebase parking area `boundaryPoints` overlays.
+            PolygonLayer(polygons: _parkingPolygons()),
+            // Route layer: current RouteProvider polyline options.
+            PolylineLayer(polylines: _routePolylines()),
+            // Marker layer: GPS, parking centers, gate points, and search pins.
+            MarkerLayer(markers: _markers()),
+          ],
         ),
+        if (_tileError)
+          Positioned(
+            left: 16,
+            right: 16,
+            top: 132,
+            child: StatusStrip(
+              message:
+                  'Map tiles are unavailable. Check internet access and retry.',
+              isError: true,
+            ),
+          ),
         Positioned(
           right: 14,
           bottom: 170,
@@ -388,13 +331,13 @@ class _InteractiveParkingMapState extends State<InteractiveParkingMap>
               _MapRoundButton(
                 icon: Icons.add,
                 tooltip: 'Zoom in',
-                onPressed: () => _zoomBy(1.18),
+                onPressed: () => _zoomBy(1),
               ),
               const SizedBox(height: 8),
               _MapRoundButton(
                 icon: Icons.remove,
                 tooltip: 'Zoom out',
-                onPressed: () => _zoomBy(0.84),
+                onPressed: () => _zoomBy(-1),
               ),
               const SizedBox(height: 8),
               _MapRoundButton(
@@ -425,7 +368,7 @@ class _InteractiveParkingMapState extends State<InteractiveParkingMap>
                   const SizedBox(width: 6),
                   Text(
                     widget.routes.isEmpty
-                        ? 'Fallback map mode'
+                        ? 'OSM map - fallback routing'
                         : '${widget.routes.length} route options',
                   ),
                 ],
@@ -437,65 +380,160 @@ class _InteractiveParkingMapState extends State<InteractiveParkingMap>
     );
   }
 
-  void _zoomBy(double factor) {
-    final current = _mapController.value.clone();
-    current.setEntry(0, 0, current.entry(0, 0) * factor);
-    current.setEntry(1, 1, current.entry(1, 1) * factor);
-    _mapController.value = current;
+  List<Polygon> _parkingPolygons() => [
+    for (final location in widget.locations)
+      if (location.boundaryPoints.length >= 3)
+        Polygon(
+          points: location.boundaryPoints
+              .map((point) => LatLng(point.latitude, point.longitude))
+              .toList(),
+          color: location.id == widget.selectedLocation?.id
+              ? ParkHereTheme.yellow.withAlpha(110)
+              : location.isBookable
+              ? const Color(0xFF2E7D32).withAlpha(74)
+              : Colors.grey.withAlpha(88),
+          borderColor: location.id == widget.selectedLocation?.id
+              ? ParkHereTheme.black
+              : location.isBookable
+              ? const Color(0xFF2E7D32)
+              : Colors.grey,
+          borderStrokeWidth: location.id == widget.selectedLocation?.id ? 3 : 2,
+        ),
+  ];
+
+  List<Polyline> _routePolylines() => [
+    for (final route in widget.routes)
+      Polyline(
+        points: route.points
+            .map((point) => LatLng(point.latitude, point.longitude))
+            .toList(),
+        color: route.isBest ? ParkHereTheme.black : const Color(0xFF5C6BC0),
+        strokeWidth: route.isBest ? 5 : 3,
+      ),
+  ];
+
+  List<Marker> _markers() => [
+    if (widget.position != null)
+      Marker(
+        point: _currentLatLng(),
+        width: 44,
+        height: 44,
+        child: const _CurrentLocationMarker(),
+      ),
+    for (final location in widget.locations)
+      Marker(
+        point: _latLngForLocation(location),
+        width: 54,
+        height: 54,
+        child: _ParkingMapMarker(
+          location: location,
+          selected: location.id == widget.selectedLocation?.id,
+          onTap: () => widget.onSelect(location),
+        ),
+      ),
+    for (final location in widget.locations)
+      for (final gate in location.gatePoints)
+        Marker(
+          point: LatLng(gate.latitude, gate.longitude),
+          width: 28,
+          height: 28,
+          child: Tooltip(
+            message: gate.name,
+            child: const DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.login, size: 18, color: Color(0xFF3949AB)),
+            ),
+          ),
+        ),
+    if (widget.selectedPlace != null)
+      Marker(
+        point: LatLng(
+          widget.selectedPlace!.latitude,
+          widget.selectedPlace!.longitude,
+        ),
+        width: 42,
+        height: 42,
+        child: const Icon(
+          Icons.location_pin,
+          color: Color(0xFFD32F2F),
+          size: 40,
+        ),
+      ),
+  ];
+
+  void _zoomBy(double delta) {
+    _mapController.move(
+      _mapController.camera.center,
+      (_mapController.camera.zoom + delta).clamp(13, 20),
+    );
   }
 
   void _focusCurrentLocation() {
-    final position = widget.position;
-    if (position == null) {
+    if (widget.position == null) {
       return;
     }
-    final projection = _MapProjection.forLocations(
-      locations: widget.locations,
-      position: widget.position,
-      selectedPlace: widget.selectedPlace,
-      worldSize: _worldSize,
-    );
-    _animateTo(projection.fromLatLng(position.latitude, position.longitude));
+    _animateTo(_currentLatLng(), zoom: 18);
   }
 
   void _focusSelected() {
-    final projection = _MapProjection.forLocations(
-      locations: widget.locations,
-      position: widget.position,
-      selectedPlace: widget.selectedPlace,
-      worldSize: _worldSize,
-    );
     final selected = widget.selectedLocation;
     if (selected != null) {
-      _animateTo(projection.fromLocation(selected));
+      _animateTo(_latLngForLocation(selected), zoom: 18);
       return;
     }
     final place = widget.selectedPlace;
     if (place != null) {
-      _animateTo(projection.fromLatLng(place.latitude, place.longitude));
+      _animateTo(LatLng(place.latitude, place.longitude), zoom: 18);
     }
   }
 
-  void _animateTo(Offset target) {
+  void _animateTo(LatLng target, {double zoom = 17.5}) {
     if (!mounted) {
       return;
     }
-    final viewport = context.size ?? const Size(390, 700);
-    const scale = 1.55;
-    final destination = Matrix4.identity()
-      ..setEntry(0, 0, scale)
-      ..setEntry(1, 1, scale)
-      ..setEntry(0, 3, viewport.width / 2 - target.dx * scale)
-      ..setEntry(1, 3, viewport.height / 2 - target.dy * scale);
-    _cameraAnimation =
-        Matrix4Tween(begin: _mapController.value, end: destination).animate(
-          CurvedAnimation(
-            parent: _animationController,
-            curve: Curves.easeOutCubic,
-          ),
+    _centerAnimation =
+        _LatLngTween(begin: _mapController.camera.center, end: target).animate(
+          CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+        );
+    _zoomAnimation = Tween<double>(begin: _mapController.camera.zoom, end: zoom)
+        .animate(
+          CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
         );
     _animationController.forward(from: 0);
   }
+
+  LatLng _latLngForLocation(ParkingLocation location) =>
+      LatLng(location.latitude, location.longitude);
+
+  LatLng _currentLatLng() => LatLng(
+    widget.position?.latitude ?? 13.3281211,
+    widget.position?.longitude ?? 77.1256930,
+  );
+
+  LatLng? _selectedLatLng() {
+    final selected = widget.selectedLocation;
+    if (selected != null) {
+      return _latLngForLocation(selected);
+    }
+    final place = widget.selectedPlace;
+    if (place != null) {
+      return LatLng(place.latitude, place.longitude);
+    }
+    return null;
+  }
+}
+
+class _LatLngTween extends Tween<LatLng> {
+  _LatLngTween({required super.begin, required super.end});
+
+  @override
+  LatLng lerp(double t) => LatLng(
+    begin!.latitude + (end!.latitude - begin!.latitude) * t,
+    begin!.longitude + (end!.longitude - begin!.longitude) * t,
+  );
 }
 
 class _ParkingDiscoverySheet extends StatelessWidget {
@@ -1146,189 +1184,6 @@ class _DetailImageCarousel extends StatelessWidget {
           );
         },
       ),
-    );
-  }
-}
-
-class _CampusMapPainter extends CustomPainter {
-  const _CampusMapPainter({
-    required this.locations,
-    required this.selectedLocation,
-    required this.routes,
-    required this.projection,
-  });
-
-  final List<ParkingLocation> locations;
-  final ParkingLocation? selectedLocation;
-  final List<RouteOption> routes;
-  final _MapProjection projection;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()..color = const Color(0xFFE9E4D5),
-    );
-    final road = Paint()
-      ..color = Colors.white.withAlpha(210)
-      ..strokeWidth = 28
-      ..strokeCap = StrokeCap.round;
-    for (var i = 0; i < 7; i++) {
-      final y = size.height * (0.14 + i * 0.12);
-      canvas.drawLine(
-        Offset(-60, y),
-        Offset(size.width + 60, y + sin(i) * 38),
-        road,
-      );
-    }
-    for (var i = 0; i < 5; i++) {
-      final x = size.width * (0.14 + i * 0.18);
-      canvas.drawLine(
-        Offset(x, -40),
-        Offset(x + cos(i) * 58, size.height + 40),
-        road,
-      );
-    }
-
-    for (final location in locations) {
-      final points = location.boundaryPoints
-          .map(
-            (point) => projection.fromLatLng(point.latitude, point.longitude),
-          )
-          .toList();
-      if (points.length < 3) {
-        continue;
-      }
-      final path = Path()..addPolygon(points, true);
-      final selected = location.id == selectedLocation?.id;
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = location.isBookable
-              ? (selected
-                    ? ParkHereTheme.yellow.withAlpha(150)
-                    : const Color(0x6634A853))
-              : const Color(0x77808080),
-      );
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = selected ? ParkHereTheme.black : const Color(0xFF557A5B)
-          ..strokeWidth = selected ? 4 : 2
-          ..style = PaintingStyle.stroke,
-      );
-    }
-
-    for (final route in routes.reversed) {
-      if (route.points.length < 2) {
-        continue;
-      }
-      final path = Path()
-        ..moveTo(
-          projection
-              .fromLatLng(
-                route.points.first.latitude,
-                route.points.first.longitude,
-              )
-              .dx,
-          projection
-              .fromLatLng(
-                route.points.first.latitude,
-                route.points.first.longitude,
-              )
-              .dy,
-        );
-      for (final point in route.points.skip(1)) {
-        final offset = projection.fromLatLng(point.latitude, point.longitude);
-        path.lineTo(offset.dx, offset.dy);
-      }
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = route.isBest ? ParkHereTheme.black : const Color(0xFF4E7FA8)
-          ..strokeWidth = route.isBest ? 7 : 4
-          ..strokeCap = StrokeCap.round
-          ..style = PaintingStyle.stroke,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _CampusMapPainter oldDelegate) =>
-      oldDelegate.locations != locations ||
-      oldDelegate.selectedLocation != selectedLocation ||
-      oldDelegate.routes != routes;
-}
-
-class _MapProjection {
-  const _MapProjection({
-    required this.minLat,
-    required this.maxLat,
-    required this.minLng,
-    required this.maxLng,
-    required this.worldSize,
-  });
-
-  final double minLat;
-  final double maxLat;
-  final double minLng;
-  final double maxLng;
-  final Size worldSize;
-
-  factory _MapProjection.forLocations({
-    required List<ParkingLocation> locations,
-    required UserPosition? position,
-    required PlaceSearchResult? selectedPlace,
-    required Size worldSize,
-  }) {
-    final lats = <double>[13.3281211];
-    final lngs = <double>[77.1256930];
-    for (final location in locations) {
-      lats.add(location.latitude);
-      lngs.add(location.longitude);
-      for (final point in location.boundaryPoints) {
-        lats.add(point.latitude);
-        lngs.add(point.longitude);
-      }
-      for (final gate in location.gatePoints) {
-        lats.add(gate.latitude);
-        lngs.add(gate.longitude);
-      }
-    }
-    if (position != null) {
-      lats.add(position.latitude);
-      lngs.add(position.longitude);
-    }
-    if (selectedPlace != null) {
-      lats.add(selectedPlace.latitude);
-      lngs.add(selectedPlace.longitude);
-    }
-    final minLat = lats.reduce(min) - 0.0012;
-    final maxLat = lats.reduce(max) + 0.0012;
-    final minLng = lngs.reduce(min) - 0.0012;
-    final maxLng = lngs.reduce(max) + 0.0012;
-    return _MapProjection(
-      minLat: minLat,
-      maxLat: maxLat,
-      minLng: minLng,
-      maxLng: maxLng,
-      worldSize: worldSize,
-    );
-  }
-
-  Offset fromLocation(ParkingLocation location) =>
-      fromLatLng(location.latitude, location.longitude);
-
-  Offset fromLatLng(double latitude, double longitude) {
-    final x =
-        ((longitude - minLng) / max(0.000001, maxLng - minLng)) *
-        worldSize.width;
-    final y =
-        (1 - ((latitude - minLat) / max(0.000001, maxLat - minLat))) *
-        worldSize.height;
-    return Offset(
-      x.clamp(28, worldSize.width - 28),
-      y.clamp(28, worldSize.height - 28),
     );
   }
 }

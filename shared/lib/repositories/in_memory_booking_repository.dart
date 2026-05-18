@@ -1,5 +1,6 @@
 import '../models/active_qr_ticket.dart';
 import '../models/booking.dart';
+import '../services/qr_payload_service.dart';
 import '../utils/demo_seed.dart';
 import 'booking_repository.dart';
 import 'parking_repository.dart';
@@ -18,7 +19,7 @@ class InMemoryBookingRepository implements BookingRepository {
     )) {
       _activeQrTickets.add(
         ActiveQrTicket(
-          qrId: booking.qrId ?? 'qr_${booking.id}',
+          qrId: booking.qrId ?? const QrPayloadService().generateQrId(),
           bookingId: booking.id,
           userId: booking.userId,
           adminId: booking.adminId,
@@ -54,7 +55,7 @@ class InMemoryBookingRepository implements BookingRepository {
 
   @override
   Future<ActiveQrTicket> createActiveQrTicket(Booking booking) async {
-    final qrId = booking.qrId ?? 'qr_${booking.id}';
+    final qrId = booking.qrId ?? const QrPayloadService().generateQrId();
     final existing = _activeQrTickets.where((ticket) => ticket.qrId == qrId);
     if (existing.isNotEmpty) {
       final ticket = existing.first;

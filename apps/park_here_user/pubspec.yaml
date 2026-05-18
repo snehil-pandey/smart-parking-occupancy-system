@@ -43,6 +43,11 @@ dependencies:
   firebase_auth: ^6.5.1
   cloud_firestore: ^6.4.1
   firebase_storage: ^13.4.1
+  flutter_map: ^8.2.2
+  latlong2: ^0.9.1
+  flutter_local_notifications: ^19.5.0
+  screen_brightness: ^2.1.6
+  timezone: ^0.10.1
 
 dev_dependencies:
   flutter_test:

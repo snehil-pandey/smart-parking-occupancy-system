@@ -1,12 +1,7 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+import 'dart:async';
 
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:park_here_user/main.dart';
 import 'package:park_here_user/src/user_app_controller.dart';
 import 'package:park_here_shared/park_here_shared.dart';
@@ -31,6 +26,9 @@ void main() {
             InMemoryReviewRepository(),
           ),
           issueRepositoryProvider.overrideWithValue(InMemoryIssueRepository()),
+          notificationRepositoryProvider.overrideWithValue(
+            _TestNotificationRepository(),
+          ),
           firebaseReadinessProvider.overrideWithValue(
             const FirebaseReadiness(
               isConfigured: true,
@@ -44,6 +42,33 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Nearby parking'), findsOneWidget);
+  });
+
+  test('Explore nearby available filters out full and closed areas', () {
+    final state = UserAppState.signedOut().copyWith(
+      position: const UserPosition(
+        latitude: 13.3281211,
+        longitude: 77.1256930,
+        isFallback: false,
+        message: 'Test GPS location.',
+      ),
+      locations: [
+        _area(id: 'available_near', availableSpaces: 3, latitude: 13.3282),
+        _area(id: 'full', availableSpaces: 0, latitude: 13.3280),
+        _area(
+          id: 'closed',
+          availableSpaces: 4,
+          isOpen: false,
+          latitude: 13.3279,
+        ),
+        _area(id: 'available_far', availableSpaces: 5, latitude: 13.3320),
+      ],
+    );
+
+    expect(state.nearbyAvailableLocations.map((area) => area.id), [
+      'available_near',
+      'available_far',
+    ]);
   });
 }
 
@@ -62,4 +87,51 @@ class _TestLocationService implements UserLocationService {
 
   @override
   Stream<UserPosition> positionStream() => Stream.value(_position);
+}
+
+class _TestNotificationRepository implements NotificationRepository {
+  final _controller = StreamController<List<AppNotification>>.broadcast();
+
+  @override
+  Future<void> markRead(String notificationId) async {}
+
+  @override
+  Future<void> upsert(AppNotification notification) async {
+    _controller.add([notification]);
+  }
+
+  @override
+  Stream<List<AppNotification>> watchForUser(String userId, {int limit = 30}) {
+    return _controller.stream;
+  }
+}
+
+ParkingLocation _area({
+  required String id,
+  required int availableSpaces,
+  required double latitude,
+  bool isOpen = true,
+}) {
+  final now = DateTime.now();
+  return ParkingLocation(
+    id: id,
+    adminId: 'admin_test',
+    name: id,
+    address: 'SIT Tumkur',
+    boundaryPoints: const [],
+    gatePoints: const [],
+    latitude: latitude,
+    longitude: 77.1257,
+    totalSpaces: 5,
+    availableSpaces: availableSpaces,
+    pricePerHour: 20,
+    vehicleTypes: const [VehicleType.car],
+    thumbnailRefs: const [],
+    imagePreviewRefs: const [],
+    isOpen: isOpen,
+    openingTime: '06:00',
+    closingTime: '22:00',
+    createdAt: now,
+    updatedAt: now,
+  );
 }

@@ -17,6 +17,13 @@ class UserNotificationsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final active = state.activeBooking;
     final updates = <_UpdateItem>[
+      for (final notification in state.notifications)
+        _UpdateItem(
+          icon: _iconFor(notification.type),
+          title: notification.title,
+          body: notification.message,
+          isRead: notification.read,
+        ),
       if (active != null)
         _UpdateItem(
           icon: Icons.qr_code_2,
@@ -28,8 +35,7 @@ class UserNotificationsTab extends StatelessWidget {
         _UpdateItem(
           icon: Icons.verified_outlined,
           title: 'QR status: ${state.activeQrTicket!.status.name}',
-          body:
-              'Expires at ${state.activeQrTicket!.expiresAt.hour.toString().padLeft(2, '0')}:${state.activeQrTicket!.expiresAt.minute.toString().padLeft(2, '0')}.',
+          body: 'Expires in ${_remaining(state.activeQrTicket!.expiresAt)}.',
         ),
       if (state.error != null)
         _UpdateItem(
@@ -53,9 +59,32 @@ class UserNotificationsTab extends StatelessWidget {
         const SizedBox(height: 6),
         const Text('Booking, QR, issue, and availability alerts.'),
         const SizedBox(height: 18),
-        for (final update in updates) _UpdateTile(update: update),
+        if (updates.isEmpty)
+          const Text('No notifications yet.')
+        else
+          for (final update in updates) _UpdateTile(update: update),
       ],
     );
+  }
+
+  IconData _iconFor(AppNotificationType type) => switch (type) {
+    AppNotificationType.qrExpiringSoon => Icons.timer_outlined,
+    AppNotificationType.qrExpired => Icons.timer_off_outlined,
+    AppNotificationType.bookingConfirmed => Icons.check_circle_outline,
+    AppNotificationType.bookingCancelled => Icons.cancel_outlined,
+    AppNotificationType.issueResponse => Icons.report_gmailerrorred_outlined,
+    AppNotificationType.parkingStatus => Icons.local_parking_outlined,
+  };
+
+  String _remaining(DateTime expiresAt) {
+    final remaining = expiresAt.difference(DateTime.now());
+    if (remaining.isNegative) {
+      return 'expired';
+    }
+    if (remaining.inHours > 0) {
+      return '${remaining.inHours}h ${remaining.inMinutes.remainder(60)}m';
+    }
+    return '${remaining.inMinutes}m ${remaining.inSeconds.remainder(60)}s';
   }
 
   String _locationName(Booking booking) =>
@@ -72,12 +101,14 @@ class _UpdateItem {
     required this.title,
     required this.body,
     this.isError = false,
+    this.isRead = false,
   });
 
   final IconData icon;
   final String title;
   final String body;
   final bool isError;
+  final bool isRead;
 }
 
 class _UpdateTile extends StatelessWidget {
@@ -95,6 +126,9 @@ class _UpdateTile extends StatelessWidget {
       ),
       title: Text(update.title),
       subtitle: Text(update.body),
+      trailing: update.isRead
+          ? null
+          : const Icon(Icons.circle, size: 10, color: ParkHereTheme.yellow),
     );
   }
 }

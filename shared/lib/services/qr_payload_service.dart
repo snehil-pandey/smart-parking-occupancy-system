@@ -1,31 +1,13 @@
 import 'dart:convert';
+import 'dart:math';
 
 import '../models/booking.dart';
 
 class QrPayload {
-  const QrPayload({
-    required this.issuer,
-    required this.bookingId,
-    required this.qrId,
-    required this.userId,
-    required this.parkingLocationId,
-    required this.vehicleNumber,
-    required this.startTime,
-    required this.endTime,
-    required this.version,
-    required this.signature,
-  });
+  const QrPayload({required this.qrId, required this.isLegacyJson});
 
-  final String issuer;
-  final String bookingId;
   final String qrId;
-  final String userId;
-  final String parkingLocationId;
-  final String vehicleNumber;
-  final DateTime startTime;
-  final DateTime endTime;
-  final int version;
-  final String signature;
+  final bool isLegacyJson;
 }
 
 class QrPayloadService {
@@ -33,58 +15,38 @@ class QrPayloadService {
 
   final String issuer;
 
-  String buildPayload({
-    required String bookingId,
-    required String qrId,
-    required String userId,
-    required String parkingLocationId,
-    required String vehicleNumber,
-    required DateTime startTime,
-    required DateTime endTime,
-  }) {
-    final base = <String, Object?>{
-      'issuer': issuer,
-      'bookingId': bookingId,
-      'qrId': qrId,
-      'userId': userId,
-      'parkingLocationId': parkingLocationId,
-      'vehicleNumber': vehicleNumber,
-      'startTime': startTime.toIso8601String(),
-      'endTime': endTime.toIso8601String(),
-      'version': 1,
-    };
-    final signature = _checksum(jsonEncode(base));
-    return jsonEncode({...base, 'signature': signature});
+  String generateQrId() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(24, (_) => random.nextInt(256));
+    return 'qr_live_${base64UrlEncode(bytes).replaceAll('=', '')}';
   }
 
+  /// New QR privacy model: the rendered QR contains only the opaque live QR id.
+  /// All sensitive booking/user/area fields stay in Firestore
+  /// `/active_qr_tickets/{qrId}` and `/bookings/{bookingId}`.
+  String buildPayload({required String qrId}) => qrId;
+
+  bool isOpaqueQrId(String payload) =>
+      RegExp(r'^qr_live_[A-Za-z0-9_-]{24,}$').hasMatch(payload);
+
   bool canVerifyLocally(Booking booking) {
-    final decoded = jsonDecode(booking.qrPayload) as Map<String, Object?>;
-    final signature = decoded.remove('signature');
-    return signature == _checksum(jsonEncode(decoded));
+    final parsed = parse(booking.qrPayload);
+    return parsed.qrId.isNotEmpty;
   }
 
   QrPayload parse(String payload) {
-    final decoded = jsonDecode(payload) as Map<String, Object?>;
-    return QrPayload(
-      issuer: decoded['issuer'] as String,
-      bookingId: decoded['bookingId'] as String,
-      qrId: decoded['qrId'] as String,
-      userId: decoded['userId'] as String,
-      parkingLocationId: decoded['parkingLocationId'] as String,
-      vehicleNumber: decoded['vehicleNumber'] as String,
-      startTime: DateTime.parse(decoded['startTime'] as String),
-      endTime: DateTime.parse(decoded['endTime'] as String),
-      version: decoded['version'] as int,
-      signature: decoded['signature'] as String,
-    );
-  }
-
-  String _checksum(String input) {
-    var hash = 17;
-    for (final codeUnit in input.codeUnits) {
-      hash = 37 * hash + codeUnit;
-      hash = hash & 0x7fffffff;
+    final trimmed = payload.trim();
+    if (!trimmed.startsWith('{')) {
+      return QrPayload(qrId: trimmed, isLegacyJson: false);
     }
-    return hash.toRadixString(16).padLeft(8, '0');
+    try {
+      final decoded = jsonDecode(trimmed) as Map<String, Object?>;
+      return QrPayload(
+        qrId: decoded['qrId'] as String? ?? '',
+        isLegacyJson: true,
+      );
+    } on Object {
+      return const QrPayload(qrId: '', isLegacyJson: true);
+    }
   }
 }

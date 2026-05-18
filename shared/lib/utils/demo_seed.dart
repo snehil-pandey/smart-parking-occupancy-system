@@ -297,22 +297,15 @@ class DemoSeed {
     final qr = const QrPayloadService();
     final start = now.subtract(const Duration(hours: 1));
     final end = start.add(const Duration(hours: 3));
-    final payload = qr.buildPayload(
-      bookingId: 'book_demo_001',
-      qrId: 'qr_book_demo_001',
-      userId: 'user_demo_001',
-      parkingLocationId: 'area_sit_main_gate',
-      vehicleNumber: 'KA 05 MN 4242',
-      startTime: start,
-      endTime: end,
-    );
+    const qrId = 'qr_live_demoSeedBooking001A1B2C3D4';
+    final payload = qr.buildPayload(qrId: qrId);
     return [
       Booking(
         id: 'book_demo_001',
         userId: 'user_demo_001',
         adminId: 'admin_demo_001',
         parkingLocationId: 'area_sit_main_gate',
-        qrId: 'qr_book_demo_001',
+        qrId: qrId,
         vehicleNumber: 'KA 05 MN 4242',
         startTime: start,
         endTime: end,

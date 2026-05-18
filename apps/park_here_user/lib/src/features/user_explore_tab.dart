@@ -21,26 +21,49 @@ class UserExploreTab extends StatelessWidget {
       children: [
         Text('Explore', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 6),
-        const Text('Compare parking by rating, price, and distance.'),
+        const Text('Realtime parking picks from Firebase, sorted around you.'),
         const SizedBox(height: 18),
         _Section(
-          title: 'Top rated',
-          locations: state.topRatedLocations.take(4).toList(),
+          title: 'Nearby available',
+          locations: state.nearbyAvailableLocations.take(6).toList(),
           state: state,
           controller: controller,
+          emptyText: 'No open parking areas with free slots right now.',
         ),
         _Section(
-          title: 'Cheapest',
-          locations: state.cheapestLocations.take(4).toList(),
+          title: 'Recently used',
+          locations: state.recentlyUsedLocations.take(4).toList(),
           state: state,
           controller: controller,
+          emptyText: 'Your recent parking areas will appear here.',
         ),
         _Section(
           title: 'Free parking',
-          locations: state.freeLocations.take(4).toList(),
+          locations: state.freeLocations
+              .where((location) => location.isBookable)
+              .take(4)
+              .toList(),
           state: state,
           controller: controller,
           emptyText: 'No free parking areas are available right now.',
+        ),
+        _Section(
+          title: 'Cheapest parking',
+          locations: state.cheapestLocations
+              .where((location) => location.isBookable)
+              .take(4)
+              .toList(),
+          state: state,
+          controller: controller,
+        ),
+        _Section(
+          title: 'Top rated',
+          locations: state.topRatedLocations
+              .where((location) => location.isBookable)
+              .take(4)
+              .toList(),
+          state: state,
+          controller: controller,
         ),
       ],
     );
