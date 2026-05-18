@@ -96,12 +96,14 @@ void main() {
     );
 
     await controller.load();
+    final initialCorners = controller.state.draftBoundaryPoints.length;
+    final initialGates = controller.state.draftGatePoints.length;
     await controller.markCurrentPositionAsCorner();
     await controller.markCurrentPositionAsGate(name: 'Main Gate');
 
-    expect(controller.state.draftBoundaryPoints, hasLength(1));
-    expect(controller.state.draftGatePoints, hasLength(1));
-    expect(controller.state.draftGatePoints.first.name, 'Main Gate');
+    expect(controller.state.draftBoundaryPoints, hasLength(initialCorners + 1));
+    expect(controller.state.draftGatePoints, hasLength(initialGates + 1));
+    expect(controller.state.draftGatePoints.last.name, 'Main Gate');
   });
 }
 
