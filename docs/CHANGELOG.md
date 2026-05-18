@@ -136,3 +136,15 @@
 
 ### docs(auth): add demo login credential setup
 - Documented demo credentials, Auth seeding behavior, password reset behavior, and Email/Password provider requirements.
+
+### feat(demo): add Firebase demo reset script
+- Added `demo/reset_firebase_demo.py` to delete Park Here demo Firestore collections safely, with optional `@parkhere.demo` Auth user deletion.
+
+### fix(firebase): align seeded profiles with app auth schema
+- Added canonical vehicle type checks to the demo seed and kept Firebase Auth UID as the user/admin profile document id.
+
+### fix(models): make vehicle type parsing backward compatible
+- Added safe vehicle type parsing for legacy `twoWheeler`, `fourWheeler`, `motorcycle`, and `scooter` values with fallback instead of crashing.
+
+### docs(firebase): document reset and clean seed workflow
+- Documented reset/reseed commands, canonical vehicle enum values, and Firebase Auth UID profile mapping.

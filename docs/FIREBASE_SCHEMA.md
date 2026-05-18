@@ -16,6 +16,22 @@ The apps use Firebase-backed repositories in normal runtime. In-memory repositor
 | `defaultVehicleType` | string | `car`, `bike`, `van`, or `ev` |
 | `role` | string | Always `user` |
 
+Canonical vehicle type values:
+
+- `bike`
+- `car`
+- `ev`
+- `van`
+
+Legacy values accepted defensively by the app parser:
+
+- `twoWheeler` -> `bike`
+- `motorcycle` -> `bike`
+- `scooter` -> `bike`
+- `fourWheeler` -> `car`
+
+Unknown values fall back to `car` and print a debug warning instead of crashing.
+
 ## `/admins/{adminId}`
 
 | Field | Type | Notes |
@@ -229,6 +245,7 @@ The app should continue using `ImageRepository`, swapping `FirestoreImageReposit
 - Sign-up writes the matching `/users/{uid}` or `/admins/{uid}` profile.
 - Sign-in creates a minimal profile if Auth exists but the role-specific Firestore profile is missing.
 - The Firebase demo seed creates/reuses Auth users first, then writes profiles under the actual Auth UID.
+- The Firebase Auth UID is the primary profile document id for both users and admins.
 - User discovery reads parking areas by region and displays full/closed areas as disabled.
 - Admin area management reads by `adminId` so closed areas remain manageable.
 - Images are not stored on parking area documents; parking areas store image ids only.

@@ -282,6 +282,23 @@ Never commit:
 
 See `demo/setup_demo.md` for service account creation and verification steps.
 
+Clean reset and reseed:
+
+```bash
+cd demo
+python reset_firebase_demo.py --yes
+python seed_firebase_demo.py
+```
+
+To also remove and recreate only demo Auth users:
+
+```bash
+python reset_firebase_demo.py --yes --delete-auth-demo-users
+python seed_firebase_demo.py
+```
+
+Firebase Auth UID is the profile document id for `/users/{uid}` and `/admins/{uid}`. Demo profiles also store `authUid`, `userId` or `adminId`, and `email`.
+
 ## Troubleshooting
 
 `DefaultFirebaseOptions` is missing:

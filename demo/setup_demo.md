@@ -60,6 +60,30 @@ From `demo`:
 python seed_firebase_demo.py
 ```
 
+## Reset And Reseed
+
+When old Firestore demo data contains stale enum values such as `twoWheeler`, reset the demo collections before reseeding.
+
+Delete Firestore demo data only:
+
+```bash
+python reset_firebase_demo.py --yes
+```
+
+Delete Firestore demo data and demo Firebase Auth users whose emails end with `@parkhere.demo`:
+
+```bash
+python reset_firebase_demo.py --yes --delete-auth-demo-users
+```
+
+Then seed a clean dataset:
+
+```bash
+python seed_firebase_demo.py
+```
+
+The reset script deletes only Park Here demo collections. It does not delete unrelated Firebase Auth users unless `--delete-auth-demo-users` is passed, and even then it only deletes users with `@parkhere.demo` emails.
+
 ## Demo Login Credentials
 
 These accounts are for development only. The seed script creates or refreshes them through Firebase Admin SDK Auth and resets their password to the demo password on each run.
@@ -98,6 +122,8 @@ For each demo account:
 5. Parking areas, reviews, issues, bookings, and active QR records use those same Auth UIDs.
 
 This keeps Firebase Auth login aligned with profile loading in the Flutter apps.
+
+Canonical vehicle values are `bike`, `car`, `ev`, and `van`. The seed script rejects unsupported values before writing Firestore data.
 
 ## Reset Demo Users
 
