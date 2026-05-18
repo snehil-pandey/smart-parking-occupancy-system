@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import auth, credentials, firestore
 
 
 REGION_ID = "region_sit_tumkur"
@@ -21,6 +21,57 @@ ADMIN_ID = "admin_sit_parking_office"
 ADMIN_EMAIL = "admin@parkhere.demo"
 DEMO_PASSWORD = "ParkHere@123"
 NOW = datetime.now(timezone.utc)
+
+USER_ACCOUNTS = [
+    {
+        "preferredUid": "user_demo_001",
+        "email": "ananya@parkhere.demo",
+        "name": "Ananya R",
+        "phone": "+91 90000 20001",
+        "vehicleNumber": "KA 06 AB 1201",
+        "defaultVehicleType": "car",
+    },
+    {
+        "preferredUid": "user_demo_002",
+        "email": "karthik@parkhere.demo",
+        "name": "Karthik S",
+        "phone": "+91 90000 20002",
+        "vehicleNumber": "KA 06 HS 4421",
+        "defaultVehicleType": "bike",
+    },
+    {
+        "preferredUid": "user_demo_003",
+        "email": "meera@parkhere.demo",
+        "name": "Meera N",
+        "phone": "+91 90000 20003",
+        "vehicleNumber": "KA 05 EV 8872",
+        "defaultVehicleType": "ev",
+    },
+    {
+        "preferredUid": "user_demo_004",
+        "email": "rahul@parkhere.demo",
+        "name": "Rahul M",
+        "phone": "+91 90000 20004",
+        "vehicleNumber": "KA 06 CM 7634",
+        "defaultVehicleType": "bike",
+    },
+    {
+        "preferredUid": "user_demo_005",
+        "email": "sneha@parkhere.demo",
+        "name": "Sneha P",
+        "phone": "+91 90000 20005",
+        "vehicleNumber": "KA 06 AR 5510",
+        "defaultVehicleType": "car",
+    },
+    {
+        "preferredUid": "user_demo_006",
+        "email": "vikram@parkhere.demo",
+        "name": "Vikram G",
+        "phone": "+91 90000 20006",
+        "vehicleNumber": "KA 01 VN 2290",
+        "defaultVehicleType": "van",
+    },
+]
 
 
 def read_env_file(path: Path) -> None:
@@ -75,7 +126,48 @@ def ts(hours: int = 0) -> datetime:
     return NOW + timedelta(hours=hours)
 
 
-def seed_region(db: firestore.Client) -> None:
+def ensure_auth_user(preferred_uid: str, email: str, display_name: str) -> str:
+    """Create or refresh a demo Auth user and return the uid Firestore must use."""
+    try:
+        user = auth.get_user_by_email(email)
+        auth.update_user(
+            user.uid,
+            password=DEMO_PASSWORD,
+            display_name=display_name,
+            email_verified=True,
+            disabled=False,
+        )
+        print(f"Reused Firebase Auth user: {email} ({user.uid})")
+        return user.uid
+    except auth.UserNotFoundError:
+        pass
+
+    try:
+        user = auth.create_user(
+            uid=preferred_uid,
+            email=email,
+            password=DEMO_PASSWORD,
+            display_name=display_name,
+            email_verified=True,
+            disabled=False,
+        )
+        print(f"Created Firebase Auth user: {email} ({user.uid})")
+        return user.uid
+    except auth.UidAlreadyExistsError:
+        user = auth.get_user(preferred_uid)
+        auth.update_user(
+            user.uid,
+            email=email,
+            password=DEMO_PASSWORD,
+            display_name=display_name,
+            email_verified=True,
+            disabled=False,
+        )
+        print(f"Updated Firebase Auth user by uid: {email} ({user.uid})")
+        return user.uid
+
+
+def seed_region(db: firestore.Client, admin_uid: str) -> None:
     # Approximate campus envelope around public SIT Tumkur center coordinates.
     boundary = [
         gp(13.33025, 77.12265),
@@ -91,7 +183,7 @@ def seed_region(db: firestore.Client) -> None:
             "boundaryPoints": boundary,
             "centerLat": 13.3281211,
             "centerLng": 77.1256930,
-            "createdByAdminId": ADMIN_ID,
+            "createdByAdminId": admin_uid,
             "createdAt": ts(-72),
             "updatedAt": ts(),
         },
@@ -100,12 +192,17 @@ def seed_region(db: firestore.Client) -> None:
     print("Seeded region: SIT Tumkur")
 
 
-def seed_admin(db: firestore.Client) -> None:
-    db.collection("admins").document(ADMIN_ID).set(
+def seed_admin(db: firestore.Client) -> str:
+    admin_uid = ensure_auth_user(
+        preferred_uid=ADMIN_ID,
+        email=ADMIN_EMAIL,
+        display_name="SIT Tumkur Parking Office",
+    )
+    db.collection("admins").document(admin_uid).set(
         {
-            "adminId": ADMIN_ID,
-            "id": ADMIN_ID,
-            "authUid": ADMIN_ID,
+            "adminId": admin_uid,
+            "id": admin_uid,
+            "authUid": admin_uid,
             "email": ADMIN_EMAIL,
             "businessName": "SIT Tumkur Parking Office",
             "displayName": "SIT Tumkur Parking Office",
@@ -119,6 +216,7 @@ def seed_admin(db: firestore.Client) -> None:
         merge=True,
     )
     print("Seeded demo admin profile")
+    return admin_uid
 
 
 def parking_areas() -> list[dict[str, Any]]:
@@ -282,7 +380,7 @@ def parking_areas() -> list[dict[str, Any]]:
     ]
 
 
-def seed_parking_areas(db: firestore.Client) -> None:
+def seed_parking_areas(db: firestore.Client, admin_uid: str) -> None:
     for area in parking_areas():
         area_id = str(area["areaId"])
         vehicle_types = list(area["supportedVehicleTypes"])
@@ -291,7 +389,7 @@ def seed_parking_areas(db: firestore.Client) -> None:
                 **area,
                 "id": area_id,
                 "regionId": REGION_ID,
-                "adminId": ADMIN_ID,
+                "adminId": admin_uid,
                 "address": "SIT Tumkur Campus, Tumakuru, Karnataka",
                 "latitude": area["centerLat"],
                 "longitude": area["centerLng"],
@@ -310,27 +408,29 @@ def seed_parking_areas(db: firestore.Client) -> None:
     print(f"Seeded {len(parking_areas())} SIT Tumkur parking areas")
 
 
-def seed_users(db: firestore.Client) -> None:
-    names = [
-        ("user_demo_001", "ananya@parkhere.demo", "Ananya R", "KA 06 AB 1201", "car"),
-        ("user_demo_002", "karthik@parkhere.demo", "Karthik S", "KA 06 HS 4421", "bike"),
-        ("user_demo_003", "meera@parkhere.demo", "Meera N", "KA 05 EV 8872", "ev"),
-        ("user_demo_004", "rahul@parkhere.demo", "Rahul M", "KA 06 CM 7634", "bike"),
-        ("user_demo_005", "sneha@parkhere.demo", "Sneha P", "KA 06 AR 5510", "car"),
-        ("user_demo_006", "vikram@parkhere.demo", "Vikram G", "KA 01 VN 2290", "van"),
-    ]
-    for index, (user_id, email, name, vehicle_number, vehicle_type) in enumerate(names, start=1):
-        db.collection("users").document(user_id).set(
+def seed_users(db: firestore.Client) -> dict[str, str]:
+    user_uids: dict[str, str] = {}
+    for account in USER_ACCOUNTS:
+        preferred_uid = str(account["preferredUid"])
+        email = str(account["email"])
+        name = str(account["name"])
+        uid = ensure_auth_user(
+            preferred_uid=preferred_uid,
+            email=email,
+            display_name=name,
+        )
+        user_uids[preferred_uid] = uid
+        db.collection("users").document(uid).set(
             {
-                "userId": user_id,
-                "id": user_id,
-                "authUid": user_id,
+                "userId": uid,
+                "id": uid,
+                "authUid": uid,
                 "email": email,
                 "name": name,
                 "displayName": name,
-                "phone": f"+91 90000 20{index:03d}",
-                "vehicleNumber": vehicle_number,
-                "defaultVehicleType": vehicle_type,
+                "phone": account["phone"],
+                "vehicleNumber": account["vehicleNumber"],
+                "defaultVehicleType": account["defaultVehicleType"],
                 "role": "user",
                 "createdAt": ts(-36),
                 "updatedAt": ts(),
@@ -338,14 +438,19 @@ def seed_users(db: firestore.Client) -> None:
             merge=True,
         )
     print("Seeded 6 demo users")
+    return user_uids
 
 
-def seed_reviews_and_issues(db: firestore.Client) -> None:
+def seed_reviews_and_issues(
+    db: firestore.Client,
+    user_uids: dict[str, str],
+    admin_uid: str,
+) -> None:
     reviews = [
-        ("rev_sit_001", "user_demo_001", "area_sit_main_gate_parking", 5, "Easy to find from the main road."),
-        ("rev_sit_002", "user_demo_002", "area_sit_cse_academic_block_parking", 4, "Useful during morning classes."),
-        ("rev_sit_003", "user_demo_003", "area_sit_hostel_side_parking", 5, "Free parking helps students."),
-        ("rev_sit_004", "user_demo_004", "area_sit_auditorium_parking", 4, "Good during events, but entry needs markings."),
+        ("rev_sit_001", user_uids["user_demo_001"], "area_sit_main_gate_parking", 5, "Easy to find from the main road."),
+        ("rev_sit_002", user_uids["user_demo_002"], "area_sit_cse_academic_block_parking", 4, "Useful during morning classes."),
+        ("rev_sit_003", user_uids["user_demo_003"], "area_sit_hostel_side_parking", 5, "Free parking helps students."),
+        ("rev_sit_004", user_uids["user_demo_004"], "area_sit_auditorium_parking", 4, "Good during events, but entry needs markings."),
     ]
     for review_id, user_id, area_id, rating, comment in reviews:
         db.collection("reviews").document(review_id).set(
@@ -362,8 +467,8 @@ def seed_reviews_and_issues(db: firestore.Client) -> None:
         )
 
     issues = [
-        ("issue_sit_001", "user_demo_005", "area_sit_library_parking", "availability", "Library parking is marked full; please verify the count.", "open"),
-        ("issue_sit_002", "user_demo_006", "area_sit_auditorium_parking", "access", "Event traffic needs clearer entry and exit gate labels.", "in_progress"),
+        ("issue_sit_001", user_uids["user_demo_005"], "area_sit_library_parking", "availability", "Library parking is marked full; please verify the count.", "open"),
+        ("issue_sit_002", user_uids["user_demo_006"], "area_sit_auditorium_parking", "access", "Event traffic needs clearer entry and exit gate labels.", "in_progress"),
     ]
     for issue_id, user_id, area_id, issue_type, message, status in issues:
         db.collection("issue_reports").document(issue_id).set(
@@ -371,7 +476,7 @@ def seed_reviews_and_issues(db: firestore.Client) -> None:
                 "issueId": issue_id,
                 "userId": user_id,
                 "areaId": area_id,
-                "adminId": ADMIN_ID,
+                "adminId": admin_uid,
                 "type": issue_type,
                 "message": message,
                 "status": status,
@@ -383,14 +488,19 @@ def seed_reviews_and_issues(db: firestore.Client) -> None:
     print("Seeded SIT reviews and issues")
 
 
-def seed_booking_and_qr(db: firestore.Client) -> None:
+def seed_booking_and_qr(
+    db: firestore.Client,
+    user_uids: dict[str, str],
+    admin_uid: str,
+) -> None:
     booking_id = "book_sit_demo_001"
     qr_id = "qr_book_sit_demo_001"
+    user_id = user_uids["user_demo_001"]
     db.collection("bookings").document(booking_id).set(
         {
             "bookingId": booking_id,
-            "userId": "user_demo_001",
-            "adminId": ADMIN_ID,
+            "userId": user_id,
+            "adminId": admin_uid,
             "parkingLocationId": "area_sit_main_gate_parking",
             "areaId": "area_sit_main_gate_parking",
             "vehicleNumber": "KA 06 AB 1201",
@@ -413,8 +523,8 @@ def seed_booking_and_qr(db: firestore.Client) -> None:
         {
             "qrId": qr_id,
             "bookingId": booking_id,
-            "userId": "user_demo_001",
-            "adminId": ADMIN_ID,
+            "userId": user_id,
+            "adminId": admin_uid,
             "areaId": "area_sit_main_gate_parking",
             "status": "active",
             "createdAt": ts(-1),
@@ -428,12 +538,12 @@ def seed_booking_and_qr(db: firestore.Client) -> None:
 def main() -> None:
     db = initialize_firestore()
     print("Starting Park Here SIT Tumkur demo seed...")
-    seed_region(db)
-    seed_admin(db)
-    seed_users(db)
-    seed_parking_areas(db)
-    seed_reviews_and_issues(db)
-    seed_booking_and_qr(db)
+    admin_uid = seed_admin(db)
+    user_uids = seed_users(db)
+    seed_region(db, admin_uid)
+    seed_parking_areas(db, admin_uid)
+    seed_reviews_and_issues(db, user_uids, admin_uid)
+    seed_booking_and_qr(db, user_uids, admin_uid)
     print("Demo seed complete. Re-run anytime; fixed document IDs are merged.")
 
 
