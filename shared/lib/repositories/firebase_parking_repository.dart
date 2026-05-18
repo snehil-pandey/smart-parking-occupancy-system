@@ -57,7 +57,6 @@ class FirebaseParkingRepository implements ParkingRepository {
   }) async {
     final snapshot = await _areas
         .where('regionId', isEqualTo: regionId)
-        .where('isOpen', isEqualTo: true)
         .orderBy('availableSpaces', descending: true)
         .limit(limit)
         .get();
@@ -71,7 +70,6 @@ class FirebaseParkingRepository implements ParkingRepository {
   }) {
     return _areas
         .where('regionId', isEqualTo: regionId)
-        .where('isOpen', isEqualTo: true)
         .orderBy('availableSpaces', descending: true)
         .limit(limit)
         .snapshots()
@@ -93,7 +91,6 @@ class FirebaseParkingRepository implements ParkingRepository {
     required double longitude,
   }) async {
     final snapshot = await _areas
-        .where('isOpen', isEqualTo: true)
         .orderBy('availableSpaces', descending: true)
         .limit(30)
         .get();
@@ -125,6 +122,27 @@ class FirebaseParkingRepository implements ParkingRepository {
   }
 
   @override
+  Future<ParkingLocation> releaseSlot(String areaId) async {
+    final areaRef = _areas.doc(areaId);
+    return _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(areaRef);
+      if (!snapshot.exists || snapshot.data() == null) {
+        throw StateError('Parking area $areaId was not found.');
+      }
+      final area = FirestoreModelMapper.parkingAreaFromDoc(snapshot);
+      final updated = area.copyWith(
+        availableSpaces: (area.availableSpaces + 1).clamp(0, area.totalSpaces),
+        updatedAt: DateTime.now(),
+      );
+      transaction.update(areaRef, {
+        'availableSpaces': updated.availableSpaces,
+        'updatedAt': Timestamp.fromDate(updated.updatedAt),
+      });
+      return updated;
+    });
+  }
+
+  @override
   Future<void> updateAvailability({
     required String locationId,
     required int totalSpaces,
@@ -132,6 +150,7 @@ class FirebaseParkingRepository implements ParkingRepository {
     required bool isOpen,
     required double pricePerHour,
   }) async {
+    ParkingLocation.validatePrice(pricePerHour);
     await _areas.doc(locationId).update({
       'totalSpaces': totalSpaces,
       'availableSpaces': availableSpaces.clamp(0, totalSpaces),
@@ -143,6 +162,7 @@ class FirebaseParkingRepository implements ParkingRepository {
 
   @override
   Future<void> upsert(ParkingLocation location) async {
+    ParkingLocation.validatePrice(location.pricePerHour);
     await _areas
         .doc(location.id)
         .set(

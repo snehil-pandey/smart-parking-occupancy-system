@@ -85,8 +85,8 @@ abstract interface class UserLocationService {
 
 class GeolocatorUserLocationService implements UserLocationService {
   static const _fallback = UserPosition(
-    latitude: 13.0007,
-    longitude: 77.0941,
+    latitude: 13.3281211,
+    longitude: 77.1256930,
     isFallback: true,
     message:
         'Location permission is unavailable. Showing parking near SIT Tumkur.',
@@ -430,8 +430,8 @@ class UserAppController extends StateNotifier<UserAppState> {
       origin:
           state.position?.toRoutePoint() ??
           const UserPosition(
-            latitude: 13.0007,
-            longitude: 77.0941,
+            latitude: 13.3281211,
+            longitude: 77.1256930,
             isFallback: true,
             message: 'Using SIT Tumkur fallback location.',
           ).toRoutePoint(),
@@ -505,6 +505,28 @@ class UserAppController extends StateNotifier<UserAppState> {
     final refreshed = await _parkingRepository.findById(reservedLocation.id);
     if (refreshed != null) {
       await selectLocation(refreshed);
+    }
+  }
+
+  Future<void> cancelActiveBooking({String? reason}) async {
+    final booking = state.activeBooking;
+    if (booking == null) {
+      state = state.copyWith(error: 'No active booking to cancel.');
+      return;
+    }
+    try {
+      final cancelled = await _bookingRepository.cancelBooking(
+        bookingId: booking.id,
+        reason: reason,
+      );
+      state = state.copyWith(
+        actionMessage: cancelled.cancellationFine > 0
+            ? 'Booking cancelled. Fine: ${formatInr(cancelled.cancellationFine)}.'
+            : 'Booking cancelled with no fine.',
+      );
+      await load();
+    } on Object catch (error) {
+      state = state.copyWith(error: error.toString());
     }
   }
 

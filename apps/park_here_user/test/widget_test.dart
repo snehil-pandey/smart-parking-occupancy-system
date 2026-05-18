@@ -51,8 +51,8 @@ class _TestLocationService implements UserLocationService {
   const _TestLocationService();
 
   static const _position = UserPosition(
-    latitude: 13.0007,
-    longitude: 77.0941,
+    latitude: 13.3281211,
+    longitude: 77.1256930,
     isFallback: false,
     message: 'Test GPS location.',
   );

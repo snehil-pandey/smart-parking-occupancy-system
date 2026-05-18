@@ -450,9 +450,13 @@ class RouteMapCanvas extends StatelessWidget {
           child: const SizedBox.expand(),
         ),
         ...locations.map((location) {
-          final left = ((location.longitude - 77.585) / 0.04).clamp(0.06, 0.86);
-          final top = ((12.99 - location.latitude) / 0.035).clamp(0.16, 0.68);
+          final left = ((location.longitude - 77.1215) / 0.009).clamp(
+            0.06,
+            0.86,
+          );
+          final top = ((13.331 - location.latitude) / 0.008).clamp(0.16, 0.68);
           final selected = location.id == selectedLocation?.id;
+          final disabled = !location.isBookable;
           return Positioned(
             left: MediaQuery.sizeOf(context).width * left,
             top: MediaQuery.sizeOf(context).height * top,
@@ -465,7 +469,11 @@ class RouteMapCanvas extends StatelessWidget {
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: selected ? ParkHereTheme.yellow : Colors.white,
+                  color: disabled
+                      ? const Color(0xFFD5D5D5)
+                      : selected
+                      ? ParkHereTheme.yellow
+                      : Colors.white,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: ParkHereTheme.black,
@@ -482,9 +490,16 @@ class RouteMapCanvas extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.local_parking, size: 18),
+                    Icon(
+                      disabled ? Icons.block : Icons.local_parking,
+                      size: 18,
+                    ),
                     const SizedBox(width: 4),
-                    Text('${location.availableSpaces}'),
+                    Text(
+                      disabled
+                          ? location.availabilityLabel
+                          : '${location.availableSpaces}',
+                    ),
                   ],
                 ),
               ),
@@ -618,6 +633,13 @@ class _ParkingBottomSheet extends StatelessWidget {
             _ActiveBookingCard(
               booking: state.activeBooking!,
               activeQrTicket: state.activeQrTicket,
+              location: state.locations
+                  .where(
+                    (location) =>
+                        location.id == state.activeBooking!.parkingLocationId,
+                  )
+                  .firstOrNull,
+              onCancel: controller.cancelActiveBooking,
             ),
           if (state.actionMessage != null) ...[
             _StatusStrip(message: state.actionMessage!),
@@ -701,10 +723,14 @@ class _ActiveBookingCard extends StatelessWidget {
   const _ActiveBookingCard({
     required this.booking,
     required this.activeQrTicket,
+    required this.location,
+    required this.onCancel,
   });
 
   final Booking booking;
   final ActiveQrTicket? activeQrTicket;
+  final ParkingLocation? location;
+  final Future<void> Function({String? reason}) onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -737,11 +763,60 @@ class _ActiveBookingCard extends StatelessWidget {
                         ? 'QR waiting for active ticket sync'
                         : 'QR ${activeQrTicket!.status.name} until ${activeQrTicket!.expiresAt.hour.toString().padLeft(2, '0')}:${activeQrTicket!.expiresAt.minute.toString().padLeft(2, '0')}',
                   ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => _confirmCancel(context),
+                    icon: const Icon(Icons.cancel_outlined),
+                    label: const Text('Cancel booking'),
+                  ),
                 ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _confirmCancel(BuildContext context) {
+    final fine = (location?.pricePerHour ?? 0) > 10 ? 10.0 : 0.0;
+    final reason = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel booking?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              fine > 0
+                  ? 'A ${formatInr(fine)} cancellation fine will be recorded.'
+                  : 'No cancellation fine applies for this parking area.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reason,
+              decoration: const InputDecoration(
+                labelText: 'Reason optional',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Keep booking'),
+          ),
+          FilledButton(
+            onPressed: () {
+              onCancel(reason: reason.text);
+              Navigator.pop(context);
+            },
+            child: const Text('Cancel booking'),
+          ),
+        ],
       ),
     );
   }
@@ -764,13 +839,16 @@ class _LocationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final disabled = !location.isBookable;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         onTap: onTap,
         selected: selected,
-        selectedTileColor: const Color(0xFFFFF4BC),
-        tileColor: const Color(0xFFF8F8F8),
+        selectedTileColor: disabled
+            ? const Color(0xFFE2E2E2)
+            : const Color(0xFFFFF4BC),
+        tileColor: disabled ? const Color(0xFFEAEAEA) : const Color(0xFFF8F8F8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         leading: ClipRRect(
           borderRadius: BorderRadius.circular(8),
@@ -781,8 +859,10 @@ class _LocationTile extends StatelessWidget {
                 ? ColoredBox(
                     color: selected
                         ? ParkHereTheme.yellow
+                        : disabled
+                        ? const Color(0xFFD2D2D2)
                         : const Color(0xFFEDEDED),
-                    child: const Icon(Icons.local_parking),
+                    child: Icon(disabled ? Icons.block : Icons.local_parking),
                   )
                 : Image.memory(
                     thumbnail!.thumbnailBytes,
@@ -797,17 +877,21 @@ class _LocationTile extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
-          '${location.availableSpaces}/${location.totalSpaces} slots - ${location.ratingAverage.toStringAsFixed(1)} star - ${distanceKm == null ? 'distance pending' : '${distanceKm!.toStringAsFixed(1)} km'}',
+          '${location.availabilityLabel} - ${location.ratingAverage.toStringAsFixed(1)} star - ${distanceKm == null ? 'distance pending' : '${distanceKm!.toStringAsFixed(1)} km'}',
         ),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              formatInr(location.pricePerHour),
+              formatParkingRate(location.pricePerHour),
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
-            const Text('/hr'),
+            if (disabled)
+              Text(
+                location.isOpen ? 'Full' : 'Closed',
+                style: const TextStyle(color: Colors.black54),
+              ),
           ],
         ),
       ),
@@ -868,9 +952,10 @@ class _BookingPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = location.pricePerHour * durationHours;
+    final disabled = !location.isBookable;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: ParkHereTheme.black,
+        color: disabled ? const Color(0xFF565656) : ParkHereTheme.black,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
@@ -903,8 +988,11 @@ class _BookingPanel extends StatelessWidget {
                 ),
                 _DarkChip(
                   icon: Icons.local_parking,
-                  label:
-                      '${location.availableSpaces}/${location.totalSpaces} slots',
+                  label: location.availabilityLabel,
+                ),
+                _DarkChip(
+                  icon: Icons.payments_outlined,
+                  label: formatParkingRate(location.pricePerHour),
                 ),
                 _DarkChip(
                   icon: Icons.two_wheeler,
@@ -988,9 +1076,13 @@ class _BookingPanel extends StatelessWidget {
                     backgroundColor: ParkHereTheme.yellow,
                     foregroundColor: ParkHereTheme.black,
                   ),
-                  onPressed: onBook,
+                  onPressed: disabled ? null : onBook,
                   icon: const Icon(Icons.qr_code_2),
-                  label: Text('Book slot - ${formatInr(total)}'),
+                  label: Text(
+                    disabled
+                        ? location.availabilityLabel
+                        : 'Book slot - ${formatInr(total)}',
+                  ),
                 ),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
