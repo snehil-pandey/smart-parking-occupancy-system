@@ -46,6 +46,7 @@ class UserHomeScreen extends ConsumerWidget {
                     child: _SearchPanel(
                       user: state.user!,
                       firebase: firebase,
+                      onRefresh: controller.load,
                       onProfileTap: () => _showProfileSheet(context, ref),
                       onSignOut: controller.signOut,
                     ),
@@ -160,12 +161,14 @@ class _SearchPanel extends StatelessWidget {
   const _SearchPanel({
     required this.user,
     required this.firebase,
+    required this.onRefresh,
     required this.onProfileTap,
     required this.onSignOut,
   });
 
   final AppUser user;
   final FirebaseReadiness firebase;
+  final Future<void> Function() onRefresh;
   final VoidCallback onProfileTap;
   final Future<void> Function() onSignOut;
 
@@ -192,6 +195,13 @@ class _SearchPanel extends StatelessWidget {
                       isDense: true,
                     ),
                   ),
+                ),
+                IconButton(
+                  tooltip: 'Refresh Firebase data',
+                  onPressed: () {
+                    onRefresh();
+                  },
+                  icon: const Icon(Icons.refresh),
                 ),
                 IconButton(
                   tooltip: 'Profile',
@@ -647,6 +657,16 @@ class _ParkingBottomSheet extends StatelessWidget {
           ],
           if (state.error != null) ...[
             _StatusStrip(message: state.error!, isError: true),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () {
+                  controller.load();
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Refresh'),
+              ),
+            ),
             const SizedBox(height: 10),
           ],
           if (state.position != null) ...[

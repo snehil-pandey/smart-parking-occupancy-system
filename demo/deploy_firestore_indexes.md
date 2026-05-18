@@ -56,4 +56,5 @@ firebase deploy --only firestore:indexes
 - Run these commands from the project root.
 - The Python seed script cannot create Firestore composite indexes.
 - Index creation can take a few minutes in Firebase after deployment.
+- During that window, the apps show `Firebase index is still building. Please wait a few minutes and refresh.` instead of crashing the signed-in session.
 - If a query still fails, open the Firebase error link or compare the query fields with `firestore.indexes.json`.

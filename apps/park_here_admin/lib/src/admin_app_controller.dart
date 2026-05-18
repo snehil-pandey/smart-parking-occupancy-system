@@ -45,6 +45,8 @@ enum AdminSection { region, parkingAreas, issues }
 
 enum AdminAuthStatus { checking, signedOut, signedIn }
 
+const Object _unset = Object();
+
 class AdminGpsPosition {
   const AdminGpsPosition({
     required this.latitude,
@@ -242,7 +244,7 @@ class AdminAppState {
     double? imageUploadProgress,
     String? imageStatusMessage,
     String? geometryStatusMessage,
-    String? error,
+    Object? error = _unset,
   }) {
     return AdminAppState(
       admin: admin ?? this.admin,
@@ -262,7 +264,7 @@ class AdminAppState {
       imageStatusMessage: imageStatusMessage ?? this.imageStatusMessage,
       geometryStatusMessage:
           geometryStatusMessage ?? this.geometryStatusMessage,
-      error: error,
+      error: identical(error, _unset) ? this.error : error?.toString(),
     );
   }
 }
@@ -297,31 +299,50 @@ class AdminAppController extends StateNotifier<AdminAppState> {
   StreamSubscription<List<IssueReport>>? _issueSubscription;
 
   Future<void> load() async {
-    state = state.copyWith(isLoading: true);
+    state = state.copyWith(isLoading: true, error: null);
     final admin = await _auth.loadCurrentAdmin();
     if (admin == null) {
       state = AdminAppState.signedOut();
       return;
     }
-    final region = await _regionRepository.getMainRegion();
-    final locations = await _parkingRepository.getByAdmin(admin.id);
-    final bookings = await _bookingRepository.getForAdmin(admin.id);
-    final issues = await _issueRepository.getForAdmin(admin.id);
+    await _resetRealtimeListeners();
     _startRealtimeListeners(admin.id);
-    final selectedLocation = locations.firstOrNull;
-    state = state.copyWith(
-      admin: admin,
-      authStatus: AdminAuthStatus.signedIn,
-      region: region,
-      locations: locations,
-      bookings: bookings,
-      issues: issues,
-      selectedLocation: selectedLocation,
-      draftBoundaryPoints: selectedLocation?.boundaryPoints ?? const [],
-      draftGatePoints: selectedLocation?.gatePoints ?? const [],
-      isLoading: false,
-    );
-    await _loadSelectedImages();
+    var region = state.region;
+    var locations = state.locations;
+    var bookings = state.bookings;
+    var issues = state.issues;
+    try {
+      region = await _regionRepository.getMainRegion();
+      locations = await _parkingRepository.getByAdmin(admin.id);
+      bookings = await _bookingRepository.getForAdmin(admin.id);
+      issues = await _issueRepository.getForAdmin(admin.id);
+      final selectedLocation = locations.firstOrNull;
+      state = state.copyWith(
+        admin: admin,
+        authStatus: AdminAuthStatus.signedIn,
+        region: region,
+        locations: locations,
+        bookings: bookings,
+        issues: issues,
+        selectedLocation: selectedLocation,
+        draftBoundaryPoints: selectedLocation?.boundaryPoints ?? const [],
+        draftGatePoints: selectedLocation?.gatePoints ?? const [],
+        isLoading: false,
+        error: null,
+      );
+      await _loadSelectedImages();
+    } on Object catch (error) {
+      state = state.copyWith(
+        admin: admin,
+        authStatus: AdminAuthStatus.signedIn,
+        region: region,
+        locations: locations,
+        bookings: bookings,
+        issues: issues,
+        isLoading: false,
+        error: FirebaseErrorMessages.friendlyMessage(error),
+      );
+    }
   }
 
   Future<void> signIn({required String email, required String password}) async {
@@ -359,12 +380,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
   }
 
   Future<void> signOut() async {
-    await _parkingSubscription?.cancel();
-    await _bookingSubscription?.cancel();
-    await _issueSubscription?.cancel();
-    _parkingSubscription = null;
-    _bookingSubscription = null;
-    _issueSubscription = null;
+    await _resetRealtimeListeners();
     await _auth.signOut();
     state = AdminAppState.signedOut();
   }
@@ -782,23 +798,63 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       state = state.copyWith(selectedImages: const []);
       return;
     }
-    final images = await _imageRepository.getPreviewsForArea(
-      areaId: location.id,
-      limit: 6,
-    );
-    state = state.copyWith(selectedImages: images);
+    try {
+      final images = await _imageRepository.getPreviewsForArea(
+        areaId: location.id,
+        limit: 6,
+      );
+      state = state.copyWith(selectedImages: images);
+    } on Object catch (error) {
+      state = state.copyWith(
+        selectedImages: const [],
+        error: FirebaseErrorMessages.friendlyMessage(error),
+      );
+    }
   }
 
   void _startRealtimeListeners(String adminId) {
     _parkingSubscription ??= _parkingRepository
         .watchByAdmin(adminId, limit: 50)
-        .listen((locations) => state = state.copyWith(locations: locations));
+        .listen(
+          (locations) => state = state.copyWith(locations: locations),
+          onError: (Object error) {
+            state = state.copyWith(
+              isLoading: false,
+              error: FirebaseErrorMessages.friendlyMessage(error),
+            );
+          },
+        );
     _bookingSubscription ??= _bookingRepository
         .watchForAdmin(adminId, limit: 50)
-        .listen((bookings) => state = state.copyWith(bookings: bookings));
+        .listen(
+          (bookings) => state = state.copyWith(bookings: bookings),
+          onError: (Object error) {
+            state = state.copyWith(
+              isLoading: false,
+              error: FirebaseErrorMessages.friendlyMessage(error),
+            );
+          },
+        );
     _issueSubscription ??= _issueRepository
         .watchForAdmin(adminId)
-        .listen((issues) => state = state.copyWith(issues: issues));
+        .listen(
+          (issues) => state = state.copyWith(issues: issues),
+          onError: (Object error) {
+            state = state.copyWith(
+              isLoading: false,
+              error: FirebaseErrorMessages.friendlyMessage(error),
+            );
+          },
+        );
+  }
+
+  Future<void> _resetRealtimeListeners() async {
+    await _parkingSubscription?.cancel();
+    await _bookingSubscription?.cancel();
+    await _issueSubscription?.cancel();
+    _parkingSubscription = null;
+    _bookingSubscription = null;
+    _issueSubscription = null;
   }
 
   @override

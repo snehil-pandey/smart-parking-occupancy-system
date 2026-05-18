@@ -38,6 +38,7 @@ export 'routing/straight_line_route_provider.dart';
 export 'services/auth_service.dart';
 export 'services/firebase_collection_paths.dart';
 export 'services/firebase_auth_service.dart';
+export 'services/firebase_error_messages.dart';
 export 'services/firebase_readiness_service.dart';
 export 'services/image_optimizer.dart';
 export 'services/image_payload_cache.dart';

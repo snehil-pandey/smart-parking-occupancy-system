@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/issue_report.dart';
 import '../services/firebase_collection_paths.dart';
 import '../services/firestore_model_mapper.dart';
-import 'firebase_repository_exception.dart';
 import 'issue_repository.dart';
 
 class FirebaseIssueRepository implements IssueRepository {
@@ -61,12 +60,7 @@ class FirebaseIssueRepository implements IssueRepository {
         .map(
           (snapshot) =>
               snapshot.docs.map(FirestoreModelMapper.issueFromDoc).toList(),
-        )
-        .handleError((Object error) {
-          throw FirebaseRepositoryException(
-            'Unable to watch issues for admin $adminId: $error',
-          );
-        });
+        );
   }
 
   @override

@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/parking_review.dart';
 import '../services/firebase_collection_paths.dart';
 import '../services/firestore_model_mapper.dart';
-import 'firebase_repository_exception.dart';
 import 'review_repository.dart';
 
 class FirebaseReviewRepository implements ReviewRepository {
@@ -35,12 +34,7 @@ class FirebaseReviewRepository implements ReviewRepository {
           .map(
             (snapshot) =>
                 snapshot.docs.map(FirestoreModelMapper.reviewFromDoc).toList(),
-          )
-          .handleError((Object error) {
-            throw FirebaseRepositoryException(
-              'Unable to watch reviews for area $areaId: $error',
-            );
-          });
+          );
 
   @override
   Future<ParkingReview> upsertReview(ParkingReview review) async =>

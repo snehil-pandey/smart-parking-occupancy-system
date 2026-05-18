@@ -243,7 +243,7 @@ Indexes derived from current app code:
 | `reviews` | `areaId ASC`, `createdAt DESC` | Area detail comments |
 | `parking_area_images` | `areaId ASC`, `uploadedAt DESC` | Lazy thumbnail/preview pagination |
 
-`FAILED_PRECONDITION` errors usually mean a query needs a composite index that is still missing or still building. Compare the failing query fields with this table and redeploy `firestore.indexes.json` if repository queries change.
+`FAILED_PRECONDITION` errors usually mean a query needs a composite index that is still missing or still building. Compare the failing query fields with this table and redeploy `firestore.indexes.json` if repository queries change. During index build time, the apps keep the signed-in session alive and ask the user/admin to wait a few minutes and refresh.
 
 ## Optional Firebase Storage Migration
 

@@ -27,21 +27,14 @@ class FirebaseRegionRepository implements RegionRepository {
 
   @override
   Stream<ParkingRegion> watchMainRegion() {
-    return _regionDoc
-        .snapshots()
-        .map((doc) {
-          if (!doc.exists || doc.data() == null) {
-            throw const FirebaseRepositoryException(
-              'SIT Tumkur region is missing in Firestore.',
-            );
-          }
-          return FirestoreModelMapper.regionFromDoc(doc);
-        })
-        .handleError((Object error) {
-          throw FirebaseRepositoryException(
-            'Unable to watch SIT Tumkur region: $error',
-          );
-        });
+    return _regionDoc.snapshots().map((doc) {
+      if (!doc.exists || doc.data() == null) {
+        throw const FirebaseRepositoryException(
+          'SIT Tumkur region is missing in Firestore.',
+        );
+      }
+      return FirestoreModelMapper.regionFromDoc(doc);
+    });
   }
 
   @override

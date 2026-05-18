@@ -157,3 +157,8 @@
 - Regenerated `firestore.indexes.json` from the actual Firebase repository query shapes.
 - Added root Firebase config/rules files created by Firebase init so index deployment works from the repository root.
 - Documented query-derived indexes, project-root deployment, and index build timing.
+
+### fix(firebase): handle Firestore index build errors gracefully
+- Converted realtime stream index-build failures into visible user/admin state errors instead of unhandled stream exceptions.
+- Added refresh affordances so signed-in sessions can retry after Firestore finishes building composite indexes.
+- Documented the index build delay and retry behavior.

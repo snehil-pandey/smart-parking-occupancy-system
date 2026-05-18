@@ -41,6 +41,8 @@ final qrPayloadProvider = Provider<QrPayloadService>(
 
 enum UserAuthStatus { checking, signedOut, signedIn }
 
+const Object _unset = Object();
+
 class UserPosition {
   const UserPosition({
     required this.latitude,
@@ -250,7 +252,7 @@ class UserAppState {
     int? durationHours,
     bool? isLoading,
     String? actionMessage,
-    String? error,
+    Object? error = _unset,
   }) {
     return UserAppState(
       user: user ?? this.user,
@@ -271,7 +273,7 @@ class UserAppState {
       durationHours: durationHours ?? this.durationHours,
       isLoading: isLoading ?? this.isLoading,
       actionMessage: actionMessage,
-      error: error,
+      error: identical(error, _unset) ? this.error : error?.toString(),
     );
   }
 }
@@ -317,41 +319,57 @@ class UserAppController extends StateNotifier<UserAppState> {
   StreamSubscription<List<ParkingReview>>? _reviewSubscription;
 
   Future<void> load() async {
-    state = state.copyWith(isLoading: true);
+    state = state.copyWith(isLoading: true, error: null);
     final user = await _auth.loadCurrentUser();
     if (user == null) {
       state = UserAppState.signedOut();
       return;
     }
     final position = await _locationService.currentPosition();
+    await _resetRealtimeSubscriptions();
     _startLocationUpdates();
     _startParkingUpdates();
     _startBookingUpdates(user.id);
-    final locations = await _parkingRepository.watchNearby(
-      latitude: position.latitude,
-      longitude: position.longitude,
-    );
-    final bookings = await _bookingRepository.getForUser(user.id);
-    final activeBooking = bookings
-        .where((booking) => booking.status == BookingStatus.active)
-        .firstOrNull;
-    final activeQrTicket = activeBooking == null
-        ? null
-        : await _bookingRepository.getActiveQrForBooking(activeBooking.id);
-    state = state.copyWith(
-      locations: locations,
-      bookings: bookings,
-      user: user,
-      authStatus: UserAuthStatus.signedIn,
-      position: position,
-      activeQrTicket: activeQrTicket,
-      clearActiveQrTicket: activeQrTicket == null,
-      selectedLocation: locations.firstOrNull,
-      isLoading: false,
-    );
-    await _loadThumbnails(locations);
-    if (locations.isNotEmpty) {
-      await selectLocation(locations.first);
+    var locations = state.locations;
+    var bookings = state.bookings;
+    try {
+      locations = await _parkingRepository.watchNearby(
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+      bookings = await _bookingRepository.getForUser(user.id);
+      final activeBooking = bookings
+          .where((booking) => booking.status == BookingStatus.active)
+          .firstOrNull;
+      final activeQrTicket = activeBooking == null
+          ? null
+          : await _bookingRepository.getActiveQrForBooking(activeBooking.id);
+      state = state.copyWith(
+        locations: locations,
+        bookings: bookings,
+        user: user,
+        authStatus: UserAuthStatus.signedIn,
+        position: position,
+        activeQrTicket: activeQrTicket,
+        clearActiveQrTicket: activeQrTicket == null,
+        selectedLocation: locations.firstOrNull,
+        isLoading: false,
+        error: null,
+      );
+      await _loadThumbnails(locations);
+      if (locations.isNotEmpty) {
+        await selectLocation(locations.first);
+      }
+    } on Object catch (error) {
+      state = state.copyWith(
+        locations: locations,
+        bookings: bookings,
+        user: user,
+        authStatus: UserAuthStatus.signedIn,
+        position: position,
+        isLoading: false,
+        error: FirebaseErrorMessages.friendlyMessage(error),
+      );
     }
   }
 
@@ -391,15 +409,8 @@ class UserAppController extends StateNotifier<UserAppState> {
 
   Future<void> signOut() async {
     await _positionSubscription?.cancel();
-    await _parkingSubscription?.cancel();
-    await _bookingSubscription?.cancel();
-    await _activeQrSubscription?.cancel();
-    await _reviewSubscription?.cancel();
+    await _resetRealtimeSubscriptions();
     _positionSubscription = null;
-    _parkingSubscription = null;
-    _bookingSubscription = null;
-    _activeQrSubscription = null;
-    _reviewSubscription = null;
     await _auth.signOut();
     state = UserAppState.signedOut();
   }
@@ -612,22 +623,29 @@ class UserAppController extends StateNotifier<UserAppState> {
 
   Future<void> _loadThumbnails(List<ParkingLocation> locations) async {
     final thumbnails = <String, ParkingAreaImage>{};
-    for (final location in locations) {
-      final cached = _imageCache.getMany(location.thumbnailRefs).firstOrNull;
-      if (cached != null) {
-        thumbnails[location.id] = cached;
-        continue;
+    try {
+      for (final location in locations) {
+        final cached = _imageCache.getMany(location.thumbnailRefs).firstOrNull;
+        if (cached != null) {
+          thumbnails[location.id] = cached;
+          continue;
+        }
+        final images = await _imageRepository.getThumbnailsForArea(
+          areaId: location.id,
+          limit: 1,
+        );
+        if (images.isNotEmpty) {
+          _imageCache.put(images.first);
+          thumbnails[location.id] = images.first;
+        }
       }
-      final images = await _imageRepository.getThumbnailsForArea(
-        areaId: location.id,
-        limit: 1,
+      state = state.copyWith(thumbnailByArea: thumbnails);
+    } on Object catch (error) {
+      state = state.copyWith(
+        thumbnailByArea: thumbnails,
+        error: FirebaseErrorMessages.friendlyMessage(error),
       );
-      if (images.isNotEmpty) {
-        _imageCache.put(images.first);
-        thumbnails[location.id] = images.first;
-      }
     }
-    state = state.copyWith(thumbnailByArea: thumbnails);
   }
 
   Future<void> _loadPreviewImages(ParkingLocation location) async {
@@ -637,19 +655,33 @@ class UserAppController extends StateNotifier<UserAppState> {
       state = state.copyWith(previewImages: cached);
       return;
     }
-    final images = await _imageRepository.getPreviewsForArea(
-      areaId: location.id,
-      limit: 6,
-    );
-    for (final image in images) {
-      _imageCache.put(image);
+    try {
+      final images = await _imageRepository.getPreviewsForArea(
+        areaId: location.id,
+        limit: 6,
+      );
+      for (final image in images) {
+        _imageCache.put(image);
+      }
+      state = state.copyWith(previewImages: images);
+    } on Object catch (error) {
+      state = state.copyWith(
+        previewImages: const [],
+        error: FirebaseErrorMessages.friendlyMessage(error),
+      );
     }
-    state = state.copyWith(previewImages: images);
   }
 
   Future<void> _loadReviews(String areaId) async {
-    final reviews = await _reviewRepository.getForArea(areaId, limit: 5);
-    state = state.copyWith(selectedReviews: reviews);
+    try {
+      final reviews = await _reviewRepository.getForArea(areaId, limit: 5);
+      state = state.copyWith(selectedReviews: reviews);
+    } on Object catch (error) {
+      state = state.copyWith(
+        selectedReviews: const [],
+        error: FirebaseErrorMessages.friendlyMessage(error),
+      );
+    }
   }
 
   void _startLocationUpdates() {
@@ -670,22 +702,38 @@ class UserAppController extends StateNotifier<UserAppState> {
   void _startParkingUpdates() {
     _parkingSubscription ??= _parkingRepository
         .watchByRegion('region_sit_tumkur', limit: 30)
-        .listen((locations) async {
-          state = state.copyWith(locations: locations);
-          await _loadThumbnails(locations);
-        });
+        .listen(
+          (locations) async {
+            state = state.copyWith(locations: locations);
+            await _loadThumbnails(locations);
+          },
+          onError: (Object error) {
+            state = state.copyWith(
+              isLoading: false,
+              error: FirebaseErrorMessages.friendlyMessage(error),
+            );
+          },
+        );
   }
 
   void _startBookingUpdates(String userId) {
     _bookingSubscription ??= _bookingRepository
         .watchForUser(userId, limit: 30)
-        .listen((bookings) {
-          final activeBooking = bookings
-              .where((booking) => booking.status == BookingStatus.active)
-              .firstOrNull;
-          state = state.copyWith(bookings: bookings);
-          _startActiveQrUpdates(activeBooking?.id);
-        });
+        .listen(
+          (bookings) {
+            final activeBooking = bookings
+                .where((booking) => booking.status == BookingStatus.active)
+                .firstOrNull;
+            state = state.copyWith(bookings: bookings);
+            _startActiveQrUpdates(activeBooking?.id);
+          },
+          onError: (Object error) {
+            state = state.copyWith(
+              isLoading: false,
+              error: FirebaseErrorMessages.friendlyMessage(error),
+            );
+          },
+        );
   }
 
   void _startActiveQrUpdates(String? bookingId) {
@@ -702,6 +750,11 @@ class UserAppController extends StateNotifier<UserAppState> {
             activeQrTicket: ticket,
             clearActiveQrTicket: ticket == null,
           ),
+          onError: (Object error) {
+            state = state.copyWith(
+              error: FirebaseErrorMessages.friendlyMessage(error),
+            );
+          },
         );
   }
 
@@ -709,7 +762,25 @@ class UserAppController extends StateNotifier<UserAppState> {
     _reviewSubscription?.cancel();
     _reviewSubscription = _reviewRepository
         .watchForArea(areaId, limit: 5)
-        .listen((reviews) => state = state.copyWith(selectedReviews: reviews));
+        .listen(
+          (reviews) => state = state.copyWith(selectedReviews: reviews),
+          onError: (Object error) {
+            state = state.copyWith(
+              error: FirebaseErrorMessages.friendlyMessage(error),
+            );
+          },
+        );
+  }
+
+  Future<void> _resetRealtimeSubscriptions() async {
+    await _parkingSubscription?.cancel();
+    await _bookingSubscription?.cancel();
+    await _activeQrSubscription?.cancel();
+    await _reviewSubscription?.cancel();
+    _parkingSubscription = null;
+    _bookingSubscription = null;
+    _activeQrSubscription = null;
+    _reviewSubscription = null;
   }
 
   @override

@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/parking_location.dart';
 import '../services/firebase_collection_paths.dart';
 import '../services/firestore_model_mapper.dart';
-import 'firebase_repository_exception.dart';
 import 'parking_repository.dart';
 
 class FirebaseParkingRepository implements ParkingRepository {
@@ -42,12 +41,7 @@ class FirebaseParkingRepository implements ParkingRepository {
           (snapshot) => snapshot.docs
               .map(FirestoreModelMapper.parkingAreaFromDoc)
               .toList(),
-        )
-        .handleError((Object error) {
-          throw FirebaseRepositoryException(
-            'Unable to watch parking areas for admin $adminId: $error',
-          );
-        });
+        );
   }
 
   @override
@@ -77,12 +71,7 @@ class FirebaseParkingRepository implements ParkingRepository {
           (snapshot) => snapshot.docs
               .map(FirestoreModelMapper.parkingAreaFromDoc)
               .toList(),
-        )
-        .handleError((Object error) {
-          throw FirebaseRepositoryException(
-            'Unable to watch parking areas for region $regionId: $error',
-          );
-        });
+        );
   }
 
   @override

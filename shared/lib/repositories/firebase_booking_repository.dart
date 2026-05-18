@@ -5,7 +5,6 @@ import '../models/booking.dart';
 import '../services/firebase_collection_paths.dart';
 import '../services/firestore_model_mapper.dart';
 import 'booking_repository.dart';
-import 'firebase_repository_exception.dart';
 
 class FirebaseBookingRepository implements BookingRepository {
   FirebaseBookingRepository({FirebaseFirestore? firestore})
@@ -185,12 +184,7 @@ class FirebaseBookingRepository implements BookingRepository {
           (snapshot) => snapshot.docs.isEmpty
               ? null
               : FirestoreModelMapper.activeQrFromDoc(snapshot.docs.first),
-        )
-        .handleError((Object error) {
-          throw FirebaseRepositoryException(
-            'Unable to watch active QR for booking $bookingId: $error',
-          );
-        });
+        );
   }
 
   @override
@@ -235,12 +229,7 @@ class FirebaseBookingRepository implements BookingRepository {
         .map(
           (snapshot) =>
               snapshot.docs.map(FirestoreModelMapper.bookingFromDoc).toList(),
-        )
-        .handleError((Object error) {
-          throw FirebaseRepositoryException(
-            'Unable to watch bookings for admin $adminId: $error',
-          );
-        });
+        );
   }
 
   @override
@@ -263,12 +252,7 @@ class FirebaseBookingRepository implements BookingRepository {
         .map(
           (snapshot) =>
               snapshot.docs.map(FirestoreModelMapper.bookingFromDoc).toList(),
-        )
-        .handleError((Object error) {
-          throw FirebaseRepositoryException(
-            'Unable to watch bookings for user $userId: $error',
-          );
-        });
+        );
   }
 
   @override

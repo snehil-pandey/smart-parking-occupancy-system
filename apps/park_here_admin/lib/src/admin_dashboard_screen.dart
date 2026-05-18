@@ -37,6 +37,13 @@ class AdminDashboardScreen extends ConsumerWidget {
         title: const Text('Park Here: Location Administrator'),
         actions: [
           IconButton(
+            tooltip: 'Refresh Firebase data',
+            onPressed: () {
+              controller.load();
+            },
+            icon: const Icon(Icons.refresh),
+          ),
+          IconButton(
             tooltip: 'Owner profile',
             onPressed: () => _showAdminProfileSheet(context, ref),
             icon: const Icon(Icons.account_circle_outlined),
@@ -62,6 +69,10 @@ class AdminDashboardScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(18),
             children: [
               _SetupBanner(firebase: firebase, admin: state.admin!),
+              if (state.error != null) ...[
+                const SizedBox(height: 12),
+                _ErrorBanner(message: state.error!, onRefresh: controller.load),
+              ],
               const SizedBox(height: 16),
               _AdminSectionTabs(state: state, controller: controller),
               const SizedBox(height: 16),
@@ -542,6 +553,41 @@ class _SetupBanner extends StatelessWidget {
                 '${admin.businessName} - ${firebase.message}',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message, required this.onRefresh});
+
+  final String message;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFECEC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFF4B8B8)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            const Icon(Icons.error_outline),
+            const SizedBox(width: 10),
+            Expanded(child: Text(message)),
+            TextButton.icon(
+              onPressed: () {
+                onRefresh();
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Refresh'),
             ),
           ],
         ),

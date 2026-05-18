@@ -103,6 +103,14 @@ Use the root `firestore.indexes.json` file when prompted.
 
 Index creation can take a few minutes after deployment. A Firestore `FAILED_PRECONDITION` message with an index link means the required composite index is missing or still building.
 
+While an index is still building, the apps keep the Firebase Auth session alive and show:
+
+```text
+Firebase index is still building. Please wait a few minutes and refresh.
+```
+
+Use the refresh button in the app after Firebase Console marks the index as enabled.
+
 Firebase Storage:
 
 Storage is optional. Firebase Storage may require Blaze/pay-as-you-go billing, so Park Here defaults to Firestore-only optimized image records. Do not enable Storage code unless your Firebase project is ready for it.
@@ -361,6 +369,7 @@ Image upload fails:
 Firestore asks for an index:
 
 - This usually appears as a `FAILED_PRECONDITION` error.
+- If the message says the index is currently building, wait a few minutes and refresh the app.
 - Review `docs/FIREBASE_SCHEMA.md` for the query-derived composite indexes.
 - Prefer deploying the checked-in index config:
 
