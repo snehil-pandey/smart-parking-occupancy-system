@@ -21,6 +21,7 @@ ADMIN_ID = "admin_sit_parking_office"
 ADMIN_EMAIL = "admin@parkhere.demo"
 DEMO_PASSWORD = "ParkHere@123"
 NOW = datetime.now(timezone.utc)
+CANONICAL_VEHICLE_TYPES = {"bike", "car", "ev", "van"}
 
 USER_ACCOUNTS = [
     {
@@ -384,6 +385,9 @@ def seed_parking_areas(db: firestore.Client, admin_uid: str) -> None:
     for area in parking_areas():
         area_id = str(area["areaId"])
         vehicle_types = list(area["supportedVehicleTypes"])
+        invalid_types = set(vehicle_types) - CANONICAL_VEHICLE_TYPES
+        if invalid_types:
+            raise ValueError(f"{area_id} has unsupported vehicle types: {invalid_types}")
         db.collection("parking_areas").document(area_id).set(
             {
                 **area,
@@ -419,6 +423,9 @@ def seed_users(db: firestore.Client) -> dict[str, str]:
             email=email,
             display_name=name,
         )
+        vehicle_type = str(account["defaultVehicleType"])
+        if vehicle_type not in CANONICAL_VEHICLE_TYPES:
+            raise ValueError(f"{preferred_uid} has unsupported vehicle type: {vehicle_type}")
         user_uids[preferred_uid] = uid
         db.collection("users").document(uid).set(
             {
