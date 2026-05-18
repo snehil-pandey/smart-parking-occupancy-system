@@ -1,22 +1,23 @@
-"""Seed Firestore with a small, idempotent Park Here SIT Tumkur demo.
+"""Seed Firestore with idempotent Park Here demo data for SIT Tumkur only.
 
-The script intentionally writes lightweight placeholder image payloads only.
-Do not put real service account JSON in git.
+Coordinates are campus-local approximate placeholders. Use the Admin app GPS
+marker mode to physically re-mark parking area corners and gates before any
+real deployment.
 """
 
 from __future__ import annotations
 
-import base64
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import firebase_admin
 from firebase_admin import credentials, firestore
 
 
 REGION_ID = "region_sit_tumkur"
-ADMIN_ID = "admin_demo_001"
+ADMIN_ID = "admin_sit_parking_office"
 NOW = datetime.now(timezone.utc)
 
 
@@ -41,45 +42,53 @@ def initialize_firestore() -> firestore.Client:
     if not project_id:
         raise SystemExit("Set FIREBASE_PROJECT_ID in demo/.env or your shell.")
 
-    cred = credentials.Certificate(service_account_path)
-    firebase_admin.initialize_app(cred, {"projectId": project_id})
+    if not firebase_admin._apps:
+        cred = credentials.Certificate(service_account_path)
+        firebase_admin.initialize_app(cred, {"projectId": project_id})
     return firestore.client()
 
 
 def gp(lat: float, lng: float) -> dict[str, float]:
-    return {"latitude": lat, "longitude": lng}
+    return {"latitude": round(lat, 7), "longitude": round(lng, 7)}
+
+
+def gate(
+    gate_id: str,
+    name: str,
+    lat: float,
+    lng: float,
+    gate_type: str = "both",
+) -> dict[str, Any]:
+    return {
+        "gateId": gate_id,
+        "name": name,
+        "latitude": round(lat, 7),
+        "longitude": round(lng, 7),
+        "type": gate_type,
+        "createdAt": ts(-48),
+    }
 
 
 def ts(hours: int = 0) -> datetime:
     return NOW + timedelta(hours=hours)
 
 
-def tiny_png_base64() -> str:
-    # 1x1 transparent PNG, useful as a safe placeholder under Firestore limits.
-    return base64.b64encode(
-        bytes.fromhex(
-            "89504e470d0a1a0a0000000d4948445200000001000000010806000000"
-            "1f15c4890000000a49444154789c63600000020001e221bc3300000000"
-            "49454e44ae426082"
-        )
-    ).decode("ascii")
-
-
 def seed_region(db: firestore.Client) -> None:
+    # Approximate campus envelope around public SIT Tumkur center coordinates.
     boundary = [
-        gp(13.0058, 77.0883),
-        gp(13.0058, 77.0996),
-        gp(12.9951, 77.1001),
-        gp(12.9948, 77.0878),
+        gp(13.33025, 77.12265),
+        gp(13.33060, 77.12870),
+        gp(13.32545, 77.12925),
+        gp(13.32505, 77.12305),
     ]
     db.collection("regions").document(REGION_ID).set(
         {
             "regionId": REGION_ID,
             "name": "SIT Tumkur",
-            "address": "Siddaganga Institute of Technology, Tumakuru, Karnataka",
+            "address": "Siddaganga Institute of Technology, Tumakuru, Karnataka 572103",
             "boundaryPoints": boundary,
-            "centerLat": 13.0007,
-            "centerLng": 77.0941,
+            "centerLat": 13.3281211,
+            "centerLng": 77.1256930,
             "createdByAdminId": ADMIN_ID,
             "createdAt": ts(-72),
             "updatedAt": ts(),
@@ -93,7 +102,9 @@ def seed_admin(db: firestore.Client) -> None:
     db.collection("admins").document(ADMIN_ID).set(
         {
             "adminId": ADMIN_ID,
-            "businessName": "SIT Parking Office",
+            "id": ADMIN_ID,
+            "businessName": "SIT Tumkur Parking Office",
+            "ownerName": "Campus Parking Administrator",
             "phone": "+91 90000 10001",
             "upiId": "sitparking@upi",
             "role": "admin",
@@ -102,58 +113,166 @@ def seed_admin(db: firestore.Client) -> None:
         },
         merge=True,
     )
-    print("Seeded demo admin")
+    print("Seeded demo admin profile")
 
 
-def parking_areas() -> list[dict[str, object]]:
+def parking_areas() -> list[dict[str, Any]]:
     return [
         {
-            "areaId": "area_sit_main_gate",
+            "areaId": "area_sit_main_gate_parking",
             "name": "Main Gate Parking",
-            "description": "Fast access for visitors and admissions office traffic.",
-            "centerLat": 13.0022,
-            "centerLng": 77.0918,
-            "totalSpaces": 64,
-            "availableSpaces": 22,
-            "pricePerHour": 25.0,
+            "description": "Visitor-friendly parking near the public-facing campus entrance.",
+            "centerLat": 13.32835,
+            "centerLng": 77.12355,
+            "boundaryPoints": [
+                gp(13.32872, 77.12318),
+                gp(13.32874, 77.12388),
+                gp(13.32806, 77.12392),
+                gp(13.32804, 77.12320),
+            ],
+            "gatePoints": [
+                gate("gate_main_entry", "Main Gate", 13.32831, 77.12316, "both"),
+            ],
+            "totalSpaces": 52,
+            "availableSpaces": 18,
+            "pricePerHour": 20.0,
+            "supportedVehicleTypes": ["car", "bike", "ev"],
             "ratingAverage": 4.4,
             "ratingCount": 31,
         },
         {
-            "areaId": "area_sit_mechanical_block",
-            "name": "Mechanical Block Parking",
-            "description": "Large two-wheeler and car zone near workshops.",
-            "centerLat": 12.9997,
-            "centerLng": 77.0966,
-            "totalSpaces": 88,
-            "availableSpaces": 37,
-            "pricePerHour": 20.0,
-            "ratingAverage": 4.1,
-            "ratingCount": 18,
+            "areaId": "area_sit_admin_block_parking",
+            "name": "Admin Block Parking",
+            "description": "Short-stay parking for office, admissions, and staff visits.",
+            "centerLat": 13.32888,
+            "centerLng": 77.12520,
+            "boundaryPoints": [
+                gp(13.32918, 77.12486),
+                gp(13.32920, 77.12548),
+                gp(13.32858, 77.12554),
+                gp(13.32854, 77.12488),
+            ],
+            "gatePoints": [
+                gate("gate_admin_staff", "Staff Gate", 13.32878, 77.12488, "both"),
+            ],
+            "totalSpaces": 34,
+            "availableSpaces": 7,
+            "pricePerHour": 30.0,
+            "supportedVehicleTypes": ["car", "bike"],
+            "ratingAverage": 4.2,
+            "ratingCount": 17,
         },
         {
-            "areaId": "area_sit_library",
-            "name": "Library Side EV Parking",
-            "description": "Quiet zone with demo EV-friendly parking slots.",
-            "centerLat": 13.0011,
-            "centerLng": 77.0943,
-            "totalSpaces": 32,
-            "availableSpaces": 9,
-            "pricePerHour": 30.0,
-            "ratingAverage": 4.7,
+            "areaId": "area_sit_library_parking",
+            "name": "Library Parking",
+            "description": "Quiet student and faculty parking near the library side.",
+            "centerLat": 13.32772,
+            "centerLng": 77.12586,
+            "boundaryPoints": [
+                gp(13.32804, 77.12548),
+                gp(13.32804, 77.12622),
+                gp(13.32738, 77.12624),
+                gp(13.32736, 77.12550),
+            ],
+            "gatePoints": [
+                gate("gate_library_student", "Student Gate", 13.32768, 77.12548, "both"),
+            ],
+            "totalSpaces": 46,
+            "availableSpaces": 0,
+            "pricePerHour": 10.0,
+            "supportedVehicleTypes": ["bike", "car"],
+            "ratingAverage": 4.6,
             "ratingCount": 24,
         },
         {
-            "areaId": "area_sit_auditorium",
-            "name": "Auditorium Event Parking",
-            "description": "Best for events, seminars, and weekend campus programs.",
-            "centerLat": 12.9978,
-            "centerLng": 77.0928,
-            "totalSpaces": 52,
-            "availableSpaces": 14,
-            "pricePerHour": 35.0,
+            "areaId": "area_sit_cse_academic_block_parking",
+            "name": "CSE/Academic Block Parking",
+            "description": "Academic block parking intended for students and faculty during class hours.",
+            "centerLat": 13.32705,
+            "centerLng": 77.12676,
+            "boundaryPoints": [
+                gp(13.32740, 77.12638),
+                gp(13.32738, 77.12716),
+                gp(13.32672, 77.12716),
+                gp(13.32670, 77.12640),
+            ],
+            "gatePoints": [
+                gate("gate_cse_entry", "Academic Entry", 13.32703, 77.12638, "entry"),
+                gate("gate_cse_exit", "Academic Exit", 13.32676, 77.12710, "exit"),
+            ],
+            "totalSpaces": 72,
+            "availableSpaces": 26,
+            "pricePerHour": 15.0,
+            "supportedVehicleTypes": ["bike", "car"],
+            "ratingAverage": 4.1,
+            "ratingCount": 21,
+        },
+        {
+            "areaId": "area_sit_auditorium_parking",
+            "name": "Auditorium Parking",
+            "description": "Event parking for seminars, college programs, and weekend gatherings.",
+            "centerLat": 13.32638,
+            "centerLng": 77.12462,
+            "boundaryPoints": [
+                gp(13.32680, 77.12418),
+                gp(13.32678, 77.12508),
+                gp(13.32598, 77.12510),
+                gp(13.32596, 77.12420),
+            ],
+            "gatePoints": [
+                gate("gate_auditorium_event", "Event Gate", 13.32642, 77.12420, "both"),
+            ],
+            "totalSpaces": 58,
+            "availableSpaces": 11,
+            "pricePerHour": 25.0,
+            "supportedVehicleTypes": ["car", "bike", "van"],
             "ratingAverage": 4.0,
             "ratingCount": 15,
+        },
+        {
+            "areaId": "area_sit_hostel_side_parking",
+            "name": "Hostel Side Parking",
+            "description": "Longer-stay student parking near the hostel side of campus.",
+            "centerLat": 13.32952,
+            "centerLng": 77.12738,
+            "boundaryPoints": [
+                gp(13.32986, 77.12702),
+                gp(13.32986, 77.12778),
+                gp(13.32920, 77.12782),
+                gp(13.32918, 77.12704),
+            ],
+            "gatePoints": [
+                gate("gate_hostel_side", "Hostel Side Gate", 13.32948, 77.12702, "both"),
+            ],
+            "totalSpaces": 64,
+            "availableSpaces": 42,
+            "pricePerHour": 0.0,
+            "supportedVehicleTypes": ["bike", "car"],
+            "ratingAverage": 4.3,
+            "ratingCount": 19,
+        },
+        {
+            "areaId": "area_sit_sports_ground_parking",
+            "name": "Sports Ground Parking",
+            "description": "Open parking area used during sports events and large campus activities.",
+            "centerLat": 13.32582,
+            "centerLng": 77.12756,
+            "boundaryPoints": [
+                gp(13.32622, 77.12706),
+                gp(13.32620, 77.12808),
+                gp(13.32544, 77.12810),
+                gp(13.32542, 77.12708),
+            ],
+            "gatePoints": [
+                gate("gate_sports_entry", "Sports Ground Gate", 13.32584, 77.12706, "both"),
+            ],
+            "totalSpaces": 80,
+            "availableSpaces": 0,
+            "pricePerHour": 15.0,
+            "supportedVehicleTypes": ["car", "bike", "van"],
+            "ratingAverage": 3.9,
+            "ratingCount": 12,
+            "isOpen": False,
         },
     ]
 
@@ -161,49 +280,49 @@ def parking_areas() -> list[dict[str, object]]:
 def seed_parking_areas(db: firestore.Client) -> None:
     for area in parking_areas():
         area_id = str(area["areaId"])
-        lat = float(area["centerLat"])
-        lng = float(area["centerLng"])
+        vehicle_types = list(area["supportedVehicleTypes"])
         db.collection("parking_areas").document(area_id).set(
             {
                 **area,
                 "id": area_id,
                 "regionId": REGION_ID,
                 "adminId": ADMIN_ID,
-                "address": "SIT Tumkur Campus",
-                "boundaryPoints": [
-                    gp(lat + 0.0004, lng - 0.0005),
-                    gp(lat + 0.0004, lng + 0.0005),
-                    gp(lat - 0.0004, lng + 0.0005),
-                    gp(lat - 0.0004, lng - 0.0005),
-                ],
-                "latitude": lat,
-                "longitude": lng,
-                "isOpen": True,
+                "address": "SIT Tumkur Campus, Tumakuru, Karnataka",
+                "latitude": area["centerLat"],
+                "longitude": area["centerLng"],
+                "isOpen": area.get("isOpen", True),
                 "openingTime": "06:00",
                 "closingTime": "22:00",
-                "supportedVehicleTypes": ["twoWheeler", "car"],
-                "vehicleTypes": ["twoWheeler", "car"],
-                "thumbnailRefs": [f"img_{area_id}_thumb"],
-                "imagePreviewRefs": [f"img_{area_id}_preview"],
+                "vehicleTypes": vehicle_types,
+                "thumbnailRefs": [],
+                "imagePreviewRefs": [],
                 "imageUrls": [],
                 "createdAt": ts(-48),
                 "updatedAt": ts(),
             },
             merge=True,
         )
-    print(f"Seeded {len(parking_areas())} parking areas")
+    print(f"Seeded {len(parking_areas())} SIT Tumkur parking areas")
 
 
 def seed_users(db: firestore.Client) -> None:
-    for index in range(1, 7):
-        user_id = f"user_demo_{index:03d}"
+    names = [
+        ("user_demo_001", "Ananya R", "KA 06 AB 1201", "car"),
+        ("user_demo_002", "Karthik S", "KA 06 HS 4421", "bike"),
+        ("user_demo_003", "Meera N", "KA 05 EV 8872", "ev"),
+        ("user_demo_004", "Rahul M", "KA 06 CM 7634", "bike"),
+        ("user_demo_005", "Sneha P", "KA 06 AR 5510", "car"),
+        ("user_demo_006", "Vikram G", "KA 01 VN 2290", "van"),
+    ]
+    for index, (user_id, name, vehicle_number, vehicle_type) in enumerate(names, start=1):
         db.collection("users").document(user_id).set(
             {
                 "userId": user_id,
-                "name": f"Demo Driver {index}",
+                "id": user_id,
+                "name": name,
                 "phone": f"+91 90000 20{index:03d}",
-                "vehicleNumber": f"KA 06 DEMO {1000 + index}",
-                "defaultVehicleType": "car" if index % 2 else "twoWheeler",
+                "vehicleNumber": vehicle_number,
+                "defaultVehicleType": vehicle_type,
                 "role": "user",
                 "createdAt": ts(-36),
                 "updatedAt": ts(),
@@ -213,33 +332,12 @@ def seed_users(db: firestore.Client) -> None:
     print("Seeded 6 demo users")
 
 
-def seed_images(db: firestore.Client) -> None:
-    payload = tiny_png_base64()
-    for area in parking_areas():
-        area_id = str(area["areaId"])
-        for kind in ("thumb", "preview"):
-            image_id = f"img_{area_id}_{kind}"
-            db.collection("parking_area_images").document(image_id).set(
-                {
-                    "imageId": image_id,
-                    "areaId": area_id,
-                    "uploadedByAdminId": ADMIN_ID,
-                    "thumbnailBase64": payload,
-                    "previewBase64": payload,
-                    "mimeType": "image/png",
-                    "uploadedAt": ts(-24),
-                },
-                merge=True,
-            )
-    print("Seeded lightweight placeholder image records")
-
-
 def seed_reviews_and_issues(db: firestore.Client) -> None:
     reviews = [
-        ("rev_001", "user_demo_001", "area_sit_main_gate", 5, "Easy entry and clear markings."),
-        ("rev_002", "user_demo_002", "area_sit_library", 5, "Good spot when the library gets crowded."),
-        ("rev_003", "user_demo_003", "area_sit_auditorium", 4, "Useful during seminar days."),
-        ("rev_004", "user_demo_004", "area_sit_mechanical_block", 4, "Plenty of room near the workshop side."),
+        ("rev_sit_001", "user_demo_001", "area_sit_main_gate_parking", 5, "Easy to find from the main road."),
+        ("rev_sit_002", "user_demo_002", "area_sit_cse_academic_block_parking", 4, "Useful during morning classes."),
+        ("rev_sit_003", "user_demo_003", "area_sit_hostel_side_parking", 5, "Free parking helps students."),
+        ("rev_sit_004", "user_demo_004", "area_sit_auditorium_parking", 4, "Good during events, but entry needs markings."),
     ]
     for review_id, user_id, area_id, rating, comment in reviews:
         db.collection("reviews").document(review_id).set(
@@ -256,8 +354,8 @@ def seed_reviews_and_issues(db: firestore.Client) -> None:
         )
 
     issues = [
-        ("issue_001", "user_demo_005", "area_sit_main_gate", "availability", "Board shows more slots than visible.", "open"),
-        ("issue_002", "user_demo_006", "area_sit_auditorium", "access", "Event traffic needs clearer entry lane.", "in_progress"),
+        ("issue_sit_001", "user_demo_005", "area_sit_library_parking", "availability", "Library parking is marked full; please verify the count.", "open"),
+        ("issue_sit_002", "user_demo_006", "area_sit_auditorium_parking", "access", "Event traffic needs clearer entry and exit gate labels.", "in_progress"),
     ]
     for issue_id, user_id, area_id, issue_type, message, status in issues:
         db.collection("issue_reports").document(issue_id).set(
@@ -274,26 +372,30 @@ def seed_reviews_and_issues(db: firestore.Client) -> None:
             },
             merge=True,
         )
-    print("Seeded reviews and issues")
+    print("Seeded SIT reviews and issues")
 
 
 def seed_booking_and_qr(db: firestore.Client) -> None:
-    booking_id = "book_demo_001"
-    qr_id = "qr_book_demo_001"
+    booking_id = "book_sit_demo_001"
+    qr_id = "qr_book_sit_demo_001"
     db.collection("bookings").document(booking_id).set(
         {
             "bookingId": booking_id,
             "userId": "user_demo_001",
             "adminId": ADMIN_ID,
-            "parkingLocationId": "area_sit_main_gate",
-            "areaId": "area_sit_main_gate",
-            "vehicleNumber": "KA 06 DEMO 1001",
+            "parkingLocationId": "area_sit_main_gate_parking",
+            "areaId": "area_sit_main_gate_parking",
+            "vehicleNumber": "KA 06 AB 1201",
             "startTime": ts(-1),
             "endTime": ts(2),
-            "price": 75.0,
+            "price": 60.0,
             "status": "active",
             "qrId": qr_id,
-            "qrPayload": '{"issuer":"park_here","bookingId":"book_demo_001","qrId":"qr_book_demo_001","version":1}',
+            "qrPayload": '{"issuer":"park_here","bookingId":"book_sit_demo_001","qrId":"qr_book_sit_demo_001","version":1}',
+            "cancellationFine": 0.0,
+            "cancelledAt": None,
+            "cancellationReason": None,
+            "refundAmount": None,
             "createdAt": ts(-1),
             "updatedAt": ts(),
         },
@@ -305,14 +407,14 @@ def seed_booking_and_qr(db: firestore.Client) -> None:
             "bookingId": booking_id,
             "userId": "user_demo_001",
             "adminId": ADMIN_ID,
-            "areaId": "area_sit_main_gate",
+            "areaId": "area_sit_main_gate_parking",
             "status": "active",
             "createdAt": ts(-1),
             "expiresAt": ts(2),
         },
         merge=True,
     )
-    print("Seeded active demo booking and QR ticket")
+    print("Seeded one active SIT booking and QR ticket")
 
 
 def main() -> None:
@@ -322,7 +424,6 @@ def main() -> None:
     seed_admin(db)
     seed_users(db)
     seed_parking_areas(db)
-    seed_images(db)
     seed_reviews_and_issues(db)
     seed_booking_and_qr(db)
     print("Demo seed complete. Re-run anytime; fixed document IDs are merged.")
