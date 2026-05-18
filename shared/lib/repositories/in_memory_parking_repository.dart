@@ -66,6 +66,7 @@ class InMemoryParkingRepository implements ParkingRepository {
     required bool isOpen,
     required double pricePerHour,
   }) async {
+    ParkingLocation.validatePrice(pricePerHour);
     final index = _locations.indexWhere(
       (location) => location.id == locationId,
     );
@@ -83,6 +84,7 @@ class InMemoryParkingRepository implements ParkingRepository {
 
   @override
   Future<void> upsert(ParkingLocation location) async {
+    ParkingLocation.validatePrice(location.pricePerHour);
     final index = _locations.indexWhere((item) => item.id == location.id);
     if (index == -1) {
       _locations.add(location);
@@ -103,6 +105,24 @@ class InMemoryParkingRepository implements ParkingRepository {
     }
     final updated = location.copyWith(
       availableSpaces: location.availableSpaces - 1,
+      updatedAt: DateTime.now(),
+    );
+    _locations[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<ParkingLocation> releaseSlot(String areaId) async {
+    final index = _locations.indexWhere((location) => location.id == areaId);
+    if (index == -1) {
+      throw StateError('Parking area $areaId was not found.');
+    }
+    final location = _locations[index];
+    final updated = location.copyWith(
+      availableSpaces: (location.availableSpaces + 1).clamp(
+        0,
+        location.totalSpaces,
+      ),
       updatedAt: DateTime.now(),
     );
     _locations[index] = updated;

@@ -23,6 +23,8 @@ abstract interface class ParkingRepository {
 
   Future<ParkingLocation> reserveSlot(String areaId);
 
+  Future<ParkingLocation> releaseSlot(String areaId);
+
   Future<void> updateAvailability({
     required String locationId,
     required int totalSpaces,
