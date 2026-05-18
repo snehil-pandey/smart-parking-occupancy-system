@@ -38,6 +38,80 @@ class FirebaseBookingRepository implements BookingRepository {
   }
 
   @override
+  Future<Booking> cancelBooking({
+    required String bookingId,
+    String? reason,
+  }) async {
+    final bookingRef = _bookings.doc(bookingId);
+    return _firestore.runTransaction((transaction) async {
+      final bookingDoc = await transaction.get(bookingRef);
+      if (!bookingDoc.exists || bookingDoc.data() == null) {
+        throw StateError('Booking $bookingId was not found.');
+      }
+      final booking = FirestoreModelMapper.bookingFromDoc(bookingDoc);
+      if (booking.status == BookingStatus.cancelled) {
+        return booking;
+      }
+      if (booking.status == BookingStatus.completed ||
+          booking.status == BookingStatus.expired) {
+        throw StateError('Booking $bookingId cannot be cancelled now.');
+      }
+
+      final areaRef = _areas.doc(booking.parkingLocationId);
+      final areaDoc = await transaction.get(areaRef);
+      if (!areaDoc.exists || areaDoc.data() == null) {
+        throw StateError(
+          'Parking area ${booking.parkingLocationId} not found.',
+        );
+      }
+      final activeQrDoc = booking.qrId == null
+          ? null
+          : await transaction.get(_activeQrTickets.doc(booking.qrId!));
+      final area = FirestoreModelMapper.parkingAreaFromDoc(areaDoc);
+      final now = DateTime.now();
+      final fine = area.pricePerHour > 10 ? 10.0 : 0.0;
+      final updated = booking.copyWith(
+        status: BookingStatus.cancelled,
+        cancellationFine: fine,
+        cancelledAt: now,
+        cancellationReason: reason?.trim().isEmpty == true
+            ? null
+            : reason?.trim(),
+        refundAmount: (booking.price - fine).clamp(0, booking.price).toDouble(),
+        updatedAt: now,
+      );
+
+      transaction.update(bookingRef, {
+        'status': BookingStatus.cancelled.name,
+        'cancellationFine': fine,
+        'cancelledAt': Timestamp.fromDate(now),
+        'cancellationReason': updated.cancellationReason,
+        'refundAmount': updated.refundAmount,
+        'updatedAt': Timestamp.fromDate(now),
+      });
+      transaction.update(areaRef, {
+        'availableSpaces': (area.availableSpaces + 1).clamp(
+          0,
+          area.totalSpaces,
+        ),
+        'updatedAt': Timestamp.fromDate(now),
+      });
+
+      if (activeQrDoc != null &&
+          activeQrDoc.exists &&
+          activeQrDoc.data() != null) {
+        final active = FirestoreModelMapper.activeQrFromDoc(activeQrDoc);
+        if (active.status == ActiveQrStatus.active) {
+          transaction.update(_activeQrTickets.doc(active.qrId), {
+            'status': ActiveQrStatus.expired.name,
+          });
+        }
+      }
+      return updated;
+    });
+  }
+
+  @override
   Future<ActiveQrTicket> createActiveQrTicket(Booking booking) async {
     final qrId = booking.qrId ?? 'qr_${booking.id}';
     final ticketRef = _activeQrTickets.doc(qrId);
@@ -239,4 +313,7 @@ class FirebaseBookingRepository implements BookingRepository {
 
   CollectionReference<Map<String, dynamic>> get _activeQrTickets =>
       _firestore.collection(FirebaseCollectionPaths.activeQrTickets);
+
+  CollectionReference<Map<String, dynamic>> get _areas =>
+      _firestore.collection(FirebaseCollectionPaths.parkingAreas);
 }

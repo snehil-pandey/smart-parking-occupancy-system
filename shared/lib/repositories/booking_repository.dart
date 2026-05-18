@@ -22,6 +22,8 @@ abstract interface class BookingRepository {
 
   Future<void> consumeQrTicket(String qrId);
 
+  Future<Booking> cancelBooking({required String bookingId, String? reason});
+
   Future<void> updateStatus({
     required String bookingId,
     required BookingStatus status,

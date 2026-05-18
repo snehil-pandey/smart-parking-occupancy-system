@@ -16,6 +16,10 @@ class Booking {
     required this.qrPayload,
     required this.createdAt,
     required this.updatedAt,
+    this.cancellationFine = 0,
+    this.cancelledAt,
+    this.cancellationReason,
+    this.refundAmount,
   });
 
   final String id;
@@ -32,6 +36,10 @@ class Booking {
   final String qrPayload;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final double cancellationFine;
+  final DateTime? cancelledAt;
+  final String? cancellationReason;
+  final double? refundAmount;
 
   int get durationHours => endTime.difference(startTime).inHours;
 
@@ -50,6 +58,10 @@ class Booking {
     String? qrPayload,
     DateTime? createdAt,
     DateTime? updatedAt,
+    double? cancellationFine,
+    DateTime? cancelledAt,
+    String? cancellationReason,
+    double? refundAmount,
   }) {
     return Booking(
       id: id ?? this.id,
@@ -66,6 +78,10 @@ class Booking {
       qrPayload: qrPayload ?? this.qrPayload,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      cancellationFine: cancellationFine ?? this.cancellationFine,
+      cancelledAt: cancelledAt ?? this.cancelledAt,
+      cancellationReason: cancellationReason ?? this.cancellationReason,
+      refundAmount: refundAmount ?? this.refundAmount,
     );
   }
 
@@ -85,5 +101,9 @@ class Booking {
     'qrPayload': qrPayload,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
+    'cancellationFine': cancellationFine,
+    'cancelledAt': cancelledAt?.toIso8601String(),
+    'cancellationReason': cancellationReason,
+    'refundAmount': refundAmount,
   };
 }

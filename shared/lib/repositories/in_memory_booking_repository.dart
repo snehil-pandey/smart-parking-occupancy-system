@@ -2,9 +2,14 @@ import '../models/active_qr_ticket.dart';
 import '../models/booking.dart';
 import '../utils/demo_seed.dart';
 import 'booking_repository.dart';
+import 'parking_repository.dart';
 
 class InMemoryBookingRepository implements BookingRepository {
-  InMemoryBookingRepository({List<Booking>? seed}) : _bookings = [...?seed] {
+  InMemoryBookingRepository({
+    List<Booking>? seed,
+    ParkingRepository? parkingRepository,
+  }) : _bookings = [...?seed],
+       _parkingRepository = parkingRepository {
     if (_bookings.isEmpty) {
       _bookings.addAll(DemoSeed.bookings());
     }
@@ -28,6 +33,7 @@ class InMemoryBookingRepository implements BookingRepository {
 
   final List<Booking> _bookings;
   final List<ActiveQrTicket> _activeQrTickets = [];
+  final ParkingRepository? _parkingRepository;
 
   @override
   Future<Booking?> activeForUser(String userId) async {
@@ -111,6 +117,52 @@ class InMemoryBookingRepository implements BookingRepository {
         updatedAt: now,
       ),
     );
+  }
+
+  @override
+  Future<Booking> cancelBooking({
+    required String bookingId,
+    String? reason,
+  }) async {
+    final index = _bookings.indexWhere((booking) => booking.id == bookingId);
+    if (index == -1) {
+      throw StateError('Booking $bookingId was not found.');
+    }
+    final booking = _bookings[index];
+    if (booking.status == BookingStatus.cancelled) {
+      return booking;
+    }
+    if (booking.status == BookingStatus.completed ||
+        booking.status == BookingStatus.expired) {
+      throw StateError('Booking $bookingId cannot be cancelled now.');
+    }
+    final now = DateTime.now();
+    final inferredHourlyPrice =
+        booking.price / booking.durationHours.clamp(1, 24);
+    final fine = inferredHourlyPrice > 10 ? 10.0 : 0.0;
+    final updated = booking.copyWith(
+      status: BookingStatus.cancelled,
+      cancellationFine: fine,
+      cancelledAt: now,
+      cancellationReason: reason?.trim().isEmpty == true
+          ? null
+          : reason?.trim(),
+      refundAmount: (booking.price - fine).clamp(0, booking.price).toDouble(),
+      updatedAt: now,
+    );
+    _bookings[index] = updated;
+    await _parkingRepository?.releaseSlot(booking.parkingLocationId);
+    final qrIndex = _activeQrTickets.indexWhere(
+      (ticket) =>
+          ticket.bookingId == bookingId &&
+          ticket.status == ActiveQrStatus.active,
+    );
+    if (qrIndex != -1) {
+      _activeQrTickets[qrIndex] = _activeQrTickets[qrIndex].copyWith(
+        status: ActiveQrStatus.expired,
+      );
+    }
+    return updated;
   }
 
   @override
