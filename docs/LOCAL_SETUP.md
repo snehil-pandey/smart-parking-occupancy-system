@@ -77,6 +77,7 @@ Authentication:
 1. Open **Build > Authentication**.
 2. Enable **Email/Password** sign-in.
 3. User and admin apps both use Firebase Auth, but profiles are stored in separate Firestore collections.
+4. The demo seed creates Email/Password Auth users for `@parkhere.demo` accounts. If Email/Password is disabled, seeded logins cannot work.
 
 Cloud Firestore:
 
@@ -261,6 +262,7 @@ The script seeds:
 - SIT Tumkur region
 - One demo admin
 - Demo users
+- Firebase Auth Email/Password accounts for the demo admin and users
 - Parking areas
 - Parking area corner and gate placeholders
 - Reviews

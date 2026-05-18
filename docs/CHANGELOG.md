@@ -124,3 +124,15 @@
 
 ### docs(demo): document SIT Tumkur coordinate verification
 - Updated demo setup, Firebase schema, local setup, and architecture docs for gate points, cancellation, price limits, GPS marking, and SIT coordinate caveats.
+
+### docs(setup): add Flutter web browser launch troubleshooting
+- Added Edge/browser launch troubleshooting with `flutter devices`, `flutter run -d chrome`, and `flutter run -d web-server` guidance.
+
+### feat(auth): add email-based demo users and admin
+- Added deterministic demo emails, `authUid`, and display names to seeded Firestore user/admin profiles.
+
+### feat(demo): seed Firebase Auth accounts safely
+- Demo seed now creates or reuses Firebase Auth Email/Password users through Firebase Admin SDK and maps Firestore profiles to the actual Auth UID.
+
+### docs(auth): add demo login credential setup
+- Documented demo credentials, Auth seeding behavior, password reset behavior, and Email/Password provider requirements.

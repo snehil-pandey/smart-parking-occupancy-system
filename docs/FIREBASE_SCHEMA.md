@@ -7,7 +7,10 @@ The apps use Firebase-backed repositories in normal runtime. In-memory repositor
 | Field | Type | Notes |
 | --- | --- | --- |
 | `userId` / `id` | string | Must match Firebase Auth uid |
+| `authUid` | string | Firebase Auth uid; same value as `userId` in seeded profiles |
+| `email` | string | Firebase Auth email used for login |
 | `name` | string | Driver display name |
+| `displayName` | string/null | Optional Auth/profile display name |
 | `phone` | string | Driver contact number |
 | `vehicleNumber` | string | Default vehicle registration |
 | `defaultVehicleType` | string | `car`, `bike`, `van`, or `ev` |
@@ -18,7 +21,10 @@ The apps use Firebase-backed repositories in normal runtime. In-memory repositor
 | Field | Type | Notes |
 | --- | --- | --- |
 | `adminId` / `id` | string | Must match Firebase Auth uid |
+| `authUid` | string | Firebase Auth uid; same value as `adminId` in seeded profiles |
+| `email` | string | Firebase Auth email used for login |
 | `businessName` | string | Parking owner/business name |
+| `displayName` | string/null | Optional Auth/profile display name |
 | `ownerName` | string | Owner contact person |
 | `phone` | string | Admin phone |
 | `upiId` | string/null | Optional payment identifier |
@@ -222,6 +228,7 @@ The app should continue using `ImageRepository`, swapping `FirestoreImageReposit
 - User and admin identity comes from Firebase Auth uid.
 - Sign-up writes the matching `/users/{uid}` or `/admins/{uid}` profile.
 - Sign-in creates a minimal profile if Auth exists but the role-specific Firestore profile is missing.
+- The Firebase demo seed creates/reuses Auth users first, then writes profiles under the actual Auth UID.
 - User discovery reads parking areas by region and displays full/closed areas as disabled.
 - Admin area management reads by `adminId` so closed areas remain manageable.
 - Images are not stored on parking area documents; parking areas store image ids only.
