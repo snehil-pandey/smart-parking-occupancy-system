@@ -162,3 +162,17 @@
 - Converted realtime stream index-build failures into visible user/admin state errors instead of unhandled stream exceptions.
 - Added refresh affordances so signed-in sessions can retry after Firestore finishes building composite indexes.
 - Documented the index build delay and retry behavior.
+
+### feat(user-ui): restructure user app navigation
+- Split the user app into Home, Bookings, Explore, Updates, and Profile tabs while keeping the existing Firebase-backed controller and repositories.
+- Added a dedicated parking area detail screen for images, pricing, availability, route options, reviews, reports, and booking.
+
+### feat(search): add realtime place and parking search
+- Added `PlaceSearchService` with a local SIT Tumkur search provider.
+- Search now combines SIT landmarks, current-location intent, and Firebase-loaded parking areas.
+
+### feat(map): improve interactive parking map experience
+- Replaced the static map feel with pan/zoom map interactions, current-location marker, parking polygons, gate markers, route polylines, and animated focus to selected places.
+
+### perf(user): optimize user discovery flow
+- Added debounced search, lazy image usage in cards/details, tab separation, and filtered views to reduce all-in-one screen rebuild pressure.

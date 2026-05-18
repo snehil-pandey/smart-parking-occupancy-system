@@ -38,6 +38,43 @@ flowchart TD
   Status --> History["Booking history remains in /bookings"]
 ```
 
+## User App Navigation
+
+The user app now separates the mobility flow into five tabs instead of placing every feature on one screen:
+
+```mermaid
+flowchart LR
+  Shell["UserHomeScreen shell"] --> Home["Home: map, search, filters, discovery sheet"]
+  Shell --> Bookings["Bookings: active QR, cancellation, history"]
+  Shell --> Explore["Explore: top rated, cheapest, free parking"]
+  Shell --> Updates["Updates: QR, booking, Firebase/index messages"]
+  Shell --> Profile["Profile: driver and vehicle settings"]
+  Home --> Map["InteractiveParkingMap"]
+  Home --> Search["PlaceSearchService"]
+  Home --> Details["ParkingAreaDetailScreen"]
+  Details --> Booking["Existing booking repository flow"]
+```
+
+The tabs reuse `UserAppController` and the existing Firebase repositories. The refactor is display/navigation separation only; Firebase remains the source of truth for parking areas, bookings, QR tickets, reviews, issues, and image records.
+
+## Map And Search Flow
+
+```mermaid
+flowchart TD
+  GPS["User GPS stream"] --> MapState["Map current-location marker"]
+  Areas["parking_areas stream"] --> MapState
+  Areas --> Polygons["Parking area polygons and markers"]
+  Gates["gatePoints"] --> GateMarkers["Entry/exit gate markers"]
+  SearchBox["Search bar"] --> SearchService["PlaceSearchService"]
+  SearchService --> LocalPlaces["SIT Tumkur local place index"]
+  SearchService --> AreaSearch["Loaded Firebase parking areas"]
+  AreaSearch --> Focus["Focus map camera / select area"]
+  LocalPlaces --> Focus
+  Focus --> Routes["RouteProvider fallback route options"]
+```
+
+`PlaceSearchService` is an abstraction so Google Places, Nominatim, or another provider can be added later without putting API logic in widgets. Current runtime uses `LocalSitTumkurPlaceSearchService`, which is free/local-friendly and searches SIT Tumkur landmarks plus Firebase-loaded parking areas.
+
 ## Admin App Flow
 
 ```mermaid

@@ -208,6 +208,25 @@ Realtime listeners are bounded:
 
 Slot reservation uses a Firestore transaction in `FirebaseParkingRepository.reserveSlot`. Active QR consumption uses transaction-style repository logic to prevent double use.
 
+## User App Map And Search
+
+The user app uses an interactive local campus map canvas by default:
+
+- live GPS marker from `GeolocatorUserLocationService`
+- pan and zoom through Flutter gestures
+- animated focus when a parking area or search result is selected
+- parking area polygons from `boundaryPoints`
+- gate markers from `gatePoints`
+- route polylines from the current `RouteProvider`
+
+Search is routed through `PlaceSearchService`. The default implementation is `LocalSitTumkurPlaceSearchService`, so no API key is required. It searches:
+
+- current location
+- SIT Tumkur landmarks
+- Firebase-loaded parking areas
+
+If you later replace it with Google Places or OpenStreetMap/Nominatim, keep the same service interface and store API keys outside source control.
+
 ## GPS Permissions
 
 The user app uses live device location for nearby parking and route origin. The admin app uses live GPS to mark parking area corners and gates while the admin physically stands at each point.
