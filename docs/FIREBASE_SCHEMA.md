@@ -212,21 +212,44 @@ Active QR documents are short-lived operational records. Do not delete the booki
 
 ## Recommended Composite Indexes
 
-Create indexes only after Firestore asks for them, but these are expected:
+The root `firestore.indexes.json` contains the composite indexes used by the apps. Deploy it before testing Firebase realtime queries:
+
+```bash
+firebase login
+firebase use park-here-dev
+firebase deploy --only firestore:indexes
+```
+
+If Firebase CLI has not been initialized for Firestore yet:
+
+```bash
+firebase init firestore
+```
+
+Use the checked-in `firestore.indexes.json` file. The Python seed script cannot create composite indexes.
+
+Indexes included in `firestore.indexes.json`:
 
 | Collection | Fields | Screen/Use |
 | --- | --- | --- |
-| `parking_areas` | `regionId ASC`, `availableSpaces DESC` | User nearby availability including full/closed state |
-| `parking_areas` | `regionId ASC`, `isOpen ASC` | Optional filtering for open-only views |
-| `parking_areas` | `adminId ASC`, `updatedAt DESC` | Admin parking area realtime list, including closed areas |
-| `parking_areas` | `adminId ASC`, `regionId ASC`, `updatedAt DESC` | Optional admin region-filtered list |
+| `bookings` | `userId ASC`, `createdAt DESC` | User booking history |
+| `bookings` | `adminId ASC`, `createdAt DESC` | Admin booking history |
+| `bookings` | `areaId ASC`, `createdAt DESC` | Area booking history |
 | `bookings` | `userId ASC`, `status ASC`, `createdAt DESC` | User active booking/history |
 | `bookings` | `adminId ASC`, `status ASC`, `createdAt DESC` | Admin active bookings |
 | `bookings` | `areaId ASC`, `status ASC`, `createdAt DESC` | Area-level booking review and future analytics |
-| `active_qr_tickets` | `bookingId ASC`, `status ASC`, `expiresAt ASC` | Active QR status |
-| `issue_reports` | `adminId ASC`, `status ASC`, `createdAt DESC` | Issues Received |
+| `parking_areas` | `regionId ASC`, `isOpen ASC` | Optional filtering for open-only views |
+| `parking_areas` | `adminId ASC`, `isOpen ASC` | Optional admin open/closed filtered list |
+| `parking_areas` | `regionId ASC`, `isOpen ASC`, `availableSpaces DESC` | Open areas ordered by capacity |
+| `parking_areas` | `adminId ASC`, `isOpen ASC`, `updatedAt DESC` | Admin open/closed areas ordered by update time |
+| `issue_reports` | `adminId ASC`, `createdAt DESC` | Issues Received |
+| `issue_reports` | `adminId ASC`, `status ASC`, `createdAt DESC` | Filtered Issues Received |
+| `issue_reports` | `areaId ASC`, `createdAt DESC` | Area issue history |
 | `reviews` | `areaId ASC`, `createdAt DESC` | Area detail comments |
-| `parking_area_images` | `areaId ASC`, `uploadedAt DESC` | Lazy thumbnails/previews |
+| `reviews` | `userId ASC`, `createdAt DESC` | User review history |
+| `active_qr_tickets` | `userId ASC`, `status ASC`, `createdAt DESC` | User QR status |
+| `active_qr_tickets` | `bookingId ASC`, `status ASC` | Active QR lookup for booking |
+| `active_qr_tickets` | `areaId ASC`, `status ASC`, `createdAt DESC` | Gate/area QR operations |
 
 ## Optional Firebase Storage Migration
 

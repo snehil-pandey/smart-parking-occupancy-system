@@ -60,6 +60,24 @@ From `demo`:
 python seed_firebase_demo.py
 ```
 
+## Firestore Indexes
+
+The Python seed script cannot create Firestore composite indexes. Deploy indexes before testing realtime queries in the Flutter apps:
+
+```bash
+firebase login
+firebase use park-here-dev
+firebase deploy --only firestore:indexes
+```
+
+If Firebase CLI has not been initialized for Firestore yet:
+
+```bash
+firebase init firestore
+```
+
+Use the root `firestore.indexes.json` file. Missing indexes usually appear as a Firestore `FAILED_PRECONDITION` error, often for queries such as `bookings where userId == ... order by createdAt desc`.
+
 ## Reset And Reseed
 
 When old Firestore demo data contains stale enum values such as `twoWheeler`, reset the demo collections before reseeding.

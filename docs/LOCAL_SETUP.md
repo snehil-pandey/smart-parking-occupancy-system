@@ -85,6 +85,21 @@ Cloud Firestore:
 2. Create a database near your users.
 3. Use test mode only while developing locally.
 4. Before production, replace rules with role-aware rules matching `docs/FIREBASE_SCHEMA.md`.
+5. Deploy composite indexes before testing realtime app queries:
+
+```bash
+firebase login
+firebase use park-here-dev
+firebase deploy --only firestore:indexes
+```
+
+If Firebase CLI has not been initialized for Firestore yet:
+
+```bash
+firebase init firestore
+```
+
+Use the root `firestore.indexes.json` file when prompted.
 
 Firebase Storage:
 
@@ -345,6 +360,13 @@ Firestore asks for an index:
 
 - Create the suggested index from the Firebase console link.
 - Also review `docs/FIREBASE_SCHEMA.md` for the expected composite indexes.
+- Prefer deploying the checked-in index config:
+
+```bash
+firebase login
+firebase use park-here-dev
+firebase deploy --only firestore:indexes
+```
 
 Flutter web builds but Edge fails to launch:
 

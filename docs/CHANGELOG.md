@@ -148,3 +148,7 @@
 
 ### docs(firebase): document reset and clean seed workflow
 - Documented reset/reseed commands, canonical vehicle enum values, and Firebase Auth UID profile mapping.
+
+### docs(firebase): add Firestore composite index deployment guide
+- Added root `firestore.indexes.json` with composite indexes for bookings, parking areas, issues, reviews, and active QR tickets.
+- Documented `firebase deploy --only firestore:indexes` workflow and the Firestore `FAILED_PRECONDITION` missing-index error.
