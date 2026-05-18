@@ -31,7 +31,7 @@ The SIT Tumkur region is an admin organization boundary, not a user destination.
 
 The local Dijkstra fallback remains useful for demos, offline testing, and explaining the shortest-route choice without tying the UI to any paid routing API.
 
-## Replacing With Real Maps
+## Replacing With Real Routing
 
 Production routing should keep the same contract:
 
@@ -44,4 +44,4 @@ abstract interface class RouteProvider {
 }
 ```
 
-A Google/OSRM provider can call an API, map its response into `RouteOption`, and leave the UI untouched.
+The user app already renders real OpenStreetMap tiles. A Google/OSRM/OpenRouteService routing provider can call an API, map its response into `RouteOption`, and leave the UI untouched.

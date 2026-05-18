@@ -176,3 +176,25 @@
 
 ### perf(user): optimize user discovery flow
 - Added debounced search, lazy image usage in cards/details, tab separation, and filtered views to reduce all-in-one screen rebuild pressure.
+
+### feat(map): replace placeholder map with OpenStreetMap layers
+- Swapped the user Home map surface to `flutter_map` OpenStreetMap tiles.
+- Parking area polygons, gate markers, current GPS, route polylines, and selected-area focus now render as overlays on real map tiles.
+
+### feat(explore): show nearby available parking areas
+- Explore now prioritizes bookable nearby parking sorted by live GPS distance.
+- Added recently used, free, cheapest, and top-rated sections from realtime Firebase state.
+
+### feat(qr): use opaque QR identifiers only
+- New QR payload generation renders only `qr_live_...` ids and keeps full booking/user/area mapping in Firestore.
+- Legacy JSON QR parsing remains migration-safe.
+
+### feat(bookings): add enlarged QR ticket viewer
+- Active booking QR cards now open a scanner-friendly full-screen QR viewer with countdown and best-effort screen brightness boost.
+
+### feat(notifications): add QR expiry alerts
+- Added notification model/repository, user Updates feed, booking confirmed/cancelled notifications, and QR expiry alerts.
+- Local notifications are scheduled best-effort at 10 minutes, 2 minutes, and expiry where platform support allows.
+
+### perf(cache): add Firebase-first client caching strategy
+- Enabled Firestore offline persistence in the user app and documented Riverpod session cache, image payload cache, lazy image reads, and why Redis is not used in a Flutter-only Firebase app.

@@ -13,9 +13,11 @@ This folder seeds a SIT Tumkur-focused dataset into Firestore for local testing 
 - Approximate `gatePoints` for entry/exit markers
 - Empty image refs by default
 - Reviews and issue reports
-- One active booking with one active QR ticket
+- One active booking with one active QR ticket using an opaque `qr_live_...` id
 
 The script uses deterministic emails and preferred UIDs. It checks Firebase Auth first and reuses an existing user for the email when present. Firestore profile documents are written under the actual Firebase Auth UID so app login maps correctly.
+
+The seeded QR payload is intentionally just the QR id. Booking, user, admin, area, vehicle, and validity details remain in Firestore documents.
 
 ## Setup
 
@@ -165,6 +167,7 @@ In Firebase Console > Firestore, confirm these collections exist:
 - `issue_reports`
 - `bookings`
 - `active_qr_tickets`
+- `notifications` after the app creates booking/cancellation/QR expiry alerts
 
 ## Safety Notes
 

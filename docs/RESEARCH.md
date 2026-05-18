@@ -23,13 +23,13 @@ The app runtime now uses Firebase repositories by default. Local in-memory repos
 
 Parking decisions are spatial decisions. A list alone hides the most important questions: direction, distance, traffic expectation, and nearby alternatives. A map-first interface keeps the driver oriented while the bottom sheet handles choices and actions.
 
-The user app is inspired by Namma Yatri’s clarity: a map as the main canvas, simple controls, large readable actions, and minimal clutter.
+The user app is inspired by Namma Yatri's clarity: a map as the main canvas, simple controls, large readable actions, and minimal clutter.
 
 ## Routing Options
 
 Real routing APIs are best for production because they understand road networks, live conditions, turn restrictions, and travel modes. For local development, those APIs often require keys, billing, or network access. Park Here therefore uses a route provider interface with a local Dijkstra fallback.
 
-The local fallback models the city as nodes and weighted edges. It is not a replacement for Google Maps, OSRM, Mapbox, or OpenRouteService, but it gives the app a deterministic route comparison flow while staying free and offline-friendly.
+The local fallback models the city as nodes and weighted edges. It is not a replacement for Google Maps, OSRM, Mapbox, or OpenRouteService, but it gives the app a deterministic route comparison flow while staying free and offline-friendly. The map surface now uses OpenStreetMap tiles; routing can still be upgraded independently behind `RouteProvider`.
 
 ## Free Map Alternatives
 
@@ -38,11 +38,11 @@ The local fallback models the city as nodes and weighted edges. It is not a repl
 - OpenRouteService free tier
 - Self-hosted Valhalla or OSRM for serious deployments
 
-The current MVP keeps map rendering dependency-light and draws a local route canvas. A real map provider can be added behind the route/map interface.
+The current MVP uses OpenStreetMap tiles through `flutter_map`, then overlays Firebase parking polygons, gate markers, GPS, and fallback route polylines. OpenStreetMap is free to start with, but production traffic should follow tile usage policy or use an OSM-compliant provider.
 
 ## Limitations
 
 - Demo routing is graph-based, not real road navigation.
 - Firebase config is required for normal runtime; missing config shows a setup error instead of app-bundled demo data.
-- QR signing uses a local deterministic checksum for MVP verification readiness. Production should use a server-side HMAC or signed token.
+- QR images encode only an opaque live QR id. Gate verification must fetch details from Firestore or a future API.
 - Images use Firestore-only optimized thumbnail/preview records by default. Firebase Storage is optional later because it may require Blaze billing.

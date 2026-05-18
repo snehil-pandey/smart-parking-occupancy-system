@@ -15,9 +15,11 @@ flowchart LR
   Contracts -. tests only .-> LocalRepos["In-memory test repositories"]
   FirebaseRepos --> Firestore["Cloud Firestore"]
   FirebaseRepos --> Auth["Firebase Auth"]
+  UserApp --> OSM["flutter_map + OpenStreetMap tiles"]
   Shared --> Routing["RouteProvider + StraightLine/Dijkstra fallback"]
   Shared --> Images["ImageRepository + Firestore image mode"]
   Shared --> QR["QR Payload + Active Ticket Services"]
+  Shared --> Notifications["NotificationRepository"]
 ```
 
 ## User App Flow
@@ -46,8 +48,8 @@ The user app now separates the mobility flow into five tabs instead of placing e
 flowchart LR
   Shell["UserHomeScreen shell"] --> Home["Home: map, search, filters, discovery sheet"]
   Shell --> Bookings["Bookings: active QR, cancellation, history"]
-  Shell --> Explore["Explore: top rated, cheapest, free parking"]
-  Shell --> Updates["Updates: QR, booking, Firebase/index messages"]
+  Shell --> Explore["Explore: nearby available, recently used, free, cheapest, top rated"]
+  Shell --> Updates["Updates: QR expiry, booking, issue, Firebase/index messages"]
   Shell --> Profile["Profile: driver and vehicle settings"]
   Home --> Map["InteractiveParkingMap"]
   Home --> Search["PlaceSearchService"]
@@ -61,9 +63,10 @@ The tabs reuse `UserAppController` and the existing Firebase repositories. The r
 
 ```mermaid
 flowchart TD
+  OSM["OpenStreetMap tile layer"] --> MapState["flutter_map camera"]
   GPS["User GPS stream"] --> MapState["Map current-location marker"]
   Areas["parking_areas stream"] --> MapState
-  Areas --> Polygons["Parking area polygons and markers"]
+  Areas --> Polygons["Parking area polygon layer and markers"]
   Gates["gatePoints"] --> GateMarkers["Entry/exit gate markers"]
   SearchBox["Search bar"] --> SearchService["PlaceSearchService"]
   SearchService --> LocalPlaces["SIT Tumkur local place index"]
@@ -72,6 +75,8 @@ flowchart TD
   LocalPlaces --> Focus
   Focus --> Routes["RouteProvider fallback route options"]
 ```
+
+The user map uses `flutter_map` with public OpenStreetMap tiles for local development, then overlays Firebase parking polygons, gate markers, current GPS, and route polylines. OpenStreetMap does not require Google Maps billing or an API key, but production traffic should use an OSM-compliant tile provider or self-hosted tiles.
 
 `PlaceSearchService` is an abstraction so Google Places, Nominatim, or another provider can be added later without putting API logic in widgets. Current runtime uses `LocalSitTumkurPlaceSearchService`, which is free/local-friendly and searches SIT Tumkur landmarks plus Firebase-loaded parking areas.
 
@@ -114,12 +119,14 @@ flowchart TD
   UserHome --> UserBookings["bookings: userId + limit"]
   UserBookings --> UserQR["active_qr_tickets: bookingId + active"]
   UserHome --> Reviews["reviews: areaId + limit"]
+  UserHome --> Notifications["notifications: userId + limit"]
   AdminHome["Admin Dashboard"] --> AdminAreas["parking_areas: adminId + limit"]
   AdminHome --> AdminBookings["bookings: adminId + limit"]
   AdminHome --> AdminIssues["issue_reports: adminId + limit"]
   UserAreas --> Riverpod["Riverpod state"]
   AdminAreas --> Riverpod
   UserQR --> Riverpod
+  Notifications --> Riverpod
 ```
 
 Bounded listeners are used only where live updates matter. Image payloads are lazy-loaded, not streamed as entire collections.
@@ -136,9 +143,9 @@ sequenceDiagram
   User->>App: Selects area and duration
   App->>Firestore: Transaction decrements availableSpaces
   App->>Firestore: Creates /bookings/{bookingId}
-  App->>Firestore: Creates /active_qr_tickets/{qrId}
-  App-->>User: Shows QR payload
-  Gate->>Firestore: Looks up active QR
+  App->>Firestore: Creates /active_qr_tickets/{opaqueQrId}
+  App-->>User: Shows QR with opaque id only
+  Gate->>Firestore: Looks up active QR by opaque id
   Firestore-->>Gate: Active ticket + booking
   Gate->>Firestore: Consumes QR once
   Firestore->>Firestore: Marks ticket used and booking completed
@@ -154,6 +161,33 @@ stateDiagram-v2
 ```
 
 Booking history is never deleted. Active QR records are operational and may be marked `used` or expired.
+
+QR codes are privacy-preserving: rendered QR data is only `qr_live_...`. User id, vehicle number, booking id, admin id, and area id are looked up through Firebase by the future gate/API, not exposed inside the QR image.
+
+## Notification Flow
+
+```mermaid
+flowchart TD
+  ActiveQR["Active QR stream"] --> Countdown["In-app countdown"]
+  ActiveQR --> Local["Best-effort local notifications"]
+  ActiveQR --> FirestoreNotif["/notifications/{notificationId}"]
+  FirestoreNotif --> UpdatesTab["User Updates tab"]
+  BookingCancel["Booking cancelled/completed"] --> CancelLocal["Cancel scheduled local alerts"]
+```
+
+The app schedules QR expiry alerts at 10 minutes, 2 minutes, and expiry where platform APIs allow it. Web may ignore local notifications or screen brightness changes, so the Updates tab and QR countdown remain the reliable in-app path.
+
+## Client Cache Strategy
+
+Park Here is Flutter + Firebase only, so Redis is not embedded in the app. Client-side caching is used instead:
+
+- Firestore offline persistence for user runtime reads where the platform supports it.
+- Riverpod `UserAppState` as the current session cache for parking areas, bookings, QR, reviews, and notifications.
+- `ImagePayloadCache` for optimized Firestore image payloads.
+- Last known GPS position from `GeolocatorUserLocationService` while the app session is alive.
+- Lazy thumbnail/preview fetching instead of streaming image blobs.
+
+Redis would only make sense later behind a FastAPI/Node/Cloud Run backend that aggregates high-volume analytics or external routing/search results.
 
 Cancellation uses the booking repository transaction path. It marks the booking cancelled, records a `Rs. 10` fine only when the parking area's hourly price is above `Rs. 10`, expires the active QR, and releases the slot once.
 

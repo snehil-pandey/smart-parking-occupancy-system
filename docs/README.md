@@ -15,10 +15,12 @@ Driver app:
 
 - Firebase Auth profile
 - Map-first nearby parking discovery
+- Real OpenStreetMap tile map with Firebase parking polygons and gates
 - Parking areas only, with available slots, price, ratings, images, and route comparison
 - Dijkstra fallback route provider
 - Duration-based booking
-- QR ticket generation with active QR lifecycle data
+- Opaque QR ticket generation with active QR lifecycle data
+- QR expiry notifications and enlarged scanner-friendly QR view
 - Reviews, comments, and issue reporting
 
 Admin app:
@@ -91,10 +93,12 @@ Default image mode is Firestore-only and stores compressed thumbnails/previews i
 
 ## Maps Setup
 
-The MVP uses live GPS for route origin and a local map-style canvas with route providers so it runs free and offline-friendly. For production maps, add a provider behind `RouteProvider`:
+The user app uses OpenStreetMap tiles through `flutter_map`, with Firebase parking area polygons, gate markers, GPS, and route polylines overlaid. No Google Maps API key or Google billing account is required for local development.
 
-- Google Maps + Directions API
+For production traffic, follow OpenStreetMap tile usage policy, use an OSM-compliant tile provider, or self-host tiles. Routing still stays behind `RouteProvider`:
+
 - OpenStreetMap tiles with OSRM/OpenRouteService
+- Google Maps + Directions API
 - Self-hosted OSRM/Valhalla for scale
 
 ## Screenshots

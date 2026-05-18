@@ -194,6 +194,7 @@ Runtime providers now use Firebase implementations:
 - `FirebaseRegionRepository`
 - `FirebaseReviewRepository`
 - `FirebaseIssueRepository`
+- `FirebaseNotificationRepository`
 - `FirestoreImageRepository`
 - `FirebaseAuthService`
 
@@ -202,6 +203,7 @@ Realtime listeners are bounded:
 - User parking availability: `parking_areas` by `regionId`, open status, and limit.
 - User bookings: `bookings` by `userId`.
 - User active QR: `active_qr_tickets` by `bookingId`.
+- User notifications: `notifications` by `userId`.
 - Admin areas: `parking_areas` by `adminId`.
 - Admin bookings: `bookings` by `adminId`.
 - Admin issues: `issue_reports` by `adminId`.
@@ -210,7 +212,7 @@ Slot reservation uses a Firestore transaction in `FirebaseParkingRepository.rese
 
 ## User App Map And Search
 
-The user app uses an interactive local campus map canvas by default:
+The user app uses real OpenStreetMap tiles through `flutter_map`:
 
 - live GPS marker from `GeolocatorUserLocationService`
 - pan and zoom through Flutter gestures
@@ -218,6 +220,9 @@ The user app uses an interactive local campus map canvas by default:
 - parking area polygons from `boundaryPoints`
 - gate markers from `gatePoints`
 - route polylines from the current `RouteProvider`
+- fallback message when tile loading fails
+
+OpenStreetMap does not require a Google Maps API key or Google billing account. For production-scale public traffic, follow the OpenStreetMap tile usage policy, use an OSM-compliant commercial tile provider, or self-host tiles.
 
 Search is routed through `PlaceSearchService`. The default implementation is `LocalSitTumkurPlaceSearchService`, so no API key is required. It searches:
 
@@ -226,6 +231,39 @@ Search is routed through `PlaceSearchService`. The default implementation is `Lo
 - Firebase-loaded parking areas
 
 If you later replace it with Google Places or OpenStreetMap/Nominatim, keep the same service interface and store API keys outside source control.
+
+## QR Tickets And Notifications
+
+QR images encode only an opaque id such as:
+
+```text
+qr_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Sensitive booking/user/vehicle details stay in Firestore under `/active_qr_tickets/{qrId}` and `/bookings/{bookingId}`. Old JSON QR payloads are parsed defensively for migration, but new bookings generate opaque ids only.
+
+The Bookings tab opens a full-screen QR viewer when the active ticket is tapped. It enlarges the QR and attempts to raise screen brightness while open. Brightness control is best-effort and may be ignored by web or desktop platforms.
+
+QR expiry alerts are supported in two layers:
+
+- In-app Updates tab notifications from `/notifications`.
+- Best-effort local notifications via `flutter_local_notifications` at 10 minutes, 2 minutes, and expiry.
+
+Android/iOS notification permission behavior depends on OS version. Web support is limited; keep the app open for the in-app countdown and Updates tab.
+
+## Client Caching
+
+Do not add Redis inside the Flutter app. This project has no backend server where Redis would naturally live.
+
+Current cache strategy:
+
+- Firestore offline persistence is enabled in the user app after Firebase initialization.
+- Riverpod state keeps the latest parking areas, bookings, QR ticket, reviews, and notifications during the session.
+- `ImagePayloadCache` avoids repeatedly decoding/fetching optimized Firestore images.
+- Search is debounced and runs against loaded Firebase parking areas plus local SIT landmarks.
+- Image records are lazy-loaded by area and limit, not streamed as whole collections.
+
+Redis would be useful only if Park Here later adds a FastAPI/Node/Cloud Run backend for high-volume aggregation, rate-limited external APIs, or server-side route/search caching.
 
 ## GPS Permissions
 

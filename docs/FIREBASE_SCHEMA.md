@@ -139,7 +139,7 @@ Recommended query pattern:
 | `endTime` | timestamp/string | Booking end |
 | `price` | number | Calculated booking amount |
 | `status` | string | `pending`, `active`, `completed`, `cancelled`, `expired` |
-| `qrPayload` | string | Signed/checkable JSON payload |
+| `qrPayload` | string | Opaque QR id only, same value as `qrId` for new bookings |
 | `cancellationFine` | number | `10` when area `pricePerHour > 10`, otherwise `0` |
 | `cancelledAt` | timestamp/string/null | Set when user cancels |
 | `cancellationReason` | string/null | Optional user-entered reason |
@@ -161,6 +161,24 @@ Active QR documents are short-lived operational records. Do not delete the booki
 | `status` | string | `active`, `used`, or `expired` |
 | `createdAt` | timestamp/string | Ticket creation time |
 | `expiresAt` | timestamp/string | End of QR validity window |
+
+QR privacy rule: QR images should encode only the opaque `qrId`, for example `qr_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`. They must not encode `userId`, `adminId`, `areaId`, vehicle number, booking JSON, or timestamps. Those fields are resolved from Firestore by a future gate/API.
+
+## `/notifications/{notificationId}`
+
+User-facing notification records for in-app Updates tab. Local device notifications are scheduled best-effort from active QR state; Firestore notification records remain the cross-platform source.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `notificationId` | string | Notification id |
+| `userId` | string | Recipient user id |
+| `type` | string | `qrExpiringSoon`, `qrExpired`, `bookingConfirmed`, `bookingCancelled`, `issueResponse`, `parkingStatus` |
+| `title` | string | Short title |
+| `message` | string | User-facing message |
+| `relatedBookingId` | string/null | Optional booking link |
+| `relatedAreaId` | string/null | Optional parking area link |
+| `read` | boolean | Whether the user has read it |
+| `createdAt` | timestamp/string | Creation time |
 
 ## `/reviews/{reviewId}`
 
@@ -242,6 +260,7 @@ Indexes derived from current app code:
 | `issue_reports` | `adminId ASC`, `status ASC`, `createdAt DESC` | Filtered Issues Received |
 | `reviews` | `areaId ASC`, `createdAt DESC` | Area detail comments |
 | `parking_area_images` | `areaId ASC`, `uploadedAt DESC` | Lazy thumbnail/preview pagination |
+| `notifications` | `userId ASC`, `createdAt DESC` | User Updates tab |
 
 `FAILED_PRECONDITION` errors usually mean a query needs a composite index that is still missing or still building. Compare the failing query fields with this table and redeploy `firestore.indexes.json` if repository queries change. During index build time, the apps keep the signed-in session alive and ask the user/admin to wait a few minutes and refresh.
 
