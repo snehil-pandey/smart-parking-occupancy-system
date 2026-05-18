@@ -1,5 +1,35 @@
 enum VehicleType { car, bike, van, ev }
 
+VehicleType parseVehicleType(
+  Object? value, {
+  VehicleType fallback = VehicleType.car,
+}) {
+  final raw = value?.toString().trim();
+  if (raw == null || raw.isEmpty) {
+    return fallback;
+  }
+  final normalized = raw.replaceAll(RegExp(r'[\s_-]+'), '').toLowerCase();
+  final parsed = switch (normalized) {
+    'car' => VehicleType.car,
+    'fourwheeler' => VehicleType.car,
+    'bike' => VehicleType.bike,
+    'twowheeler' => VehicleType.bike,
+    'motorcycle' => VehicleType.bike,
+    'scooter' => VehicleType.bike,
+    'van' => VehicleType.van,
+    'ev' => VehicleType.ev,
+    'electric' => VehicleType.ev,
+    'electricvehicle' => VehicleType.ev,
+    _ => null,
+  };
+  if (parsed != null) {
+    return parsed;
+  }
+  // ignore: avoid_print
+  print('Unknown vehicle type "$raw"; falling back to ${fallback.name}.');
+  return fallback;
+}
+
 extension VehicleTypeLabel on VehicleType {
   String get label => switch (this) {
     VehicleType.car => 'Car',
@@ -58,9 +88,7 @@ class AppUser {
     name: json['name'] as String,
     phone: json['phone'] as String,
     vehicleNumber: json['vehicleNumber'] as String,
-    defaultVehicleType: VehicleType.values.byName(
-      json['defaultVehicleType'] as String,
-    ),
+    defaultVehicleType: parseVehicleType(json['defaultVehicleType']),
     role: json['role'] as String? ?? 'user',
   );
 }

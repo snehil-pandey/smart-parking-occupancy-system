@@ -7,6 +7,48 @@ void main() {
     expect(ParkingLocation.isValidPrice(100), isTrue);
   });
 
+  test('vehicle type parser handles legacy aliases safely', () {
+    expect(parseVehicleType('twoWheeler'), VehicleType.bike);
+    expect(parseVehicleType('fourWheeler'), VehicleType.car);
+    expect(parseVehicleType('motorcycle'), VehicleType.bike);
+    expect(parseVehicleType('scooter'), VehicleType.bike);
+  });
+
+  test('vehicle type parser handles unknown values safely', () {
+    expect(parseVehicleType('hoverboard'), VehicleType.car);
+  });
+
+  test('user profile maps from Firestore seed fields', () {
+    final user = AppUser.fromJson({
+      'userId': 'auth_user_001',
+      'authUid': 'auth_user_001',
+      'email': 'ananya@parkhere.demo',
+      'name': 'Ananya R',
+      'phone': '+91 90000 20001',
+      'vehicleNumber': 'KA 06 AB 1201',
+      'defaultVehicleType': 'twoWheeler',
+      'role': 'user',
+    });
+
+    expect(user.id, 'auth_user_001');
+    expect(user.defaultVehicleType, VehicleType.bike);
+  });
+
+  test('admin profile maps from Firestore seed fields', () {
+    final admin = AdminProfile.fromJson({
+      'adminId': 'admin_sit_parking_office',
+      'authUid': 'admin_sit_parking_office',
+      'email': 'admin@parkhere.demo',
+      'businessName': 'SIT Tumkur Parking Office',
+      'ownerName': 'Campus Parking Administrator',
+      'phone': '+91 90000 10001',
+      'role': 'admin',
+    });
+
+    expect(admin.id, 'admin_sit_parking_office');
+    expect(admin.businessName, 'SIT Tumkur Parking Office');
+  });
+
   test('parking price validation rejects negative and over-maximum prices', () {
     expect(ParkingLocation.isValidPrice(-1), isFalse);
     expect(ParkingLocation.isValidPrice(101), isFalse);

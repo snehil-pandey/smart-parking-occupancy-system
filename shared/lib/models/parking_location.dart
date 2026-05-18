@@ -189,8 +189,7 @@ class ParkingLocation {
       availableSpaces: json['availableSpaces'] as int,
       pricePerHour: (json['pricePerHour'] as num).toDouble(),
       vehicleTypes: (json['vehicleTypes'] as List<Object?>)
-          .cast<String>()
-          .map(VehicleType.values.byName)
+          .map(parseVehicleType)
           .toList(),
       thumbnailRefs: (json['thumbnailRefs'] as List<Object?>? ?? const [])
           .cast<String>(),
