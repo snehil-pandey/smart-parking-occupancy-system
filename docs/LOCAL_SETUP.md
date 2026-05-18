@@ -326,3 +326,27 @@ Firestore asks for an index:
 
 - Create the suggested index from the Firebase console link.
 - Also review `docs/FIREBASE_SCHEMA.md` for the expected composite indexes.
+
+Flutter web builds but Edge fails to launch:
+
+- This is usually an environment/browser launch issue, not app code.
+- Check available Flutter devices:
+
+```bash
+flutter devices
+```
+
+- Try Chrome directly:
+
+```bash
+flutter run -d chrome
+```
+
+- Or run a web server without auto-launching a browser:
+
+```bash
+flutter run -d web-server
+```
+
+- Flutter will print a local URL such as `http://localhost:xxxxx`. Open that URL manually in Edge, Chrome, or another browser.
+- If the browser still cannot load the app, confirm Firebase web config exists for the app you are running and that the local URL is allowed by Firebase Auth authorized domains when needed.
