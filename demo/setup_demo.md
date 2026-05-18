@@ -62,7 +62,7 @@ python seed_firebase_demo.py
 
 ## Firestore Indexes
 
-The Python seed script cannot create Firestore composite indexes. Deploy indexes before testing realtime queries in the Flutter apps:
+The Python seed script cannot create Firestore composite indexes. Deploy the query-derived indexes from the project root before testing realtime queries in the Flutter apps:
 
 ```bash
 firebase login
@@ -76,7 +76,7 @@ If Firebase CLI has not been initialized for Firestore yet:
 firebase init firestore
 ```
 
-Use the root `firestore.indexes.json` file. Missing indexes usually appear as a Firestore `FAILED_PRECONDITION` error, often for queries such as `bookings where userId == ... order by createdAt desc`.
+Use the root `firestore.indexes.json` file. Missing or still-building indexes usually appear as a Firestore `FAILED_PRECONDITION` error, often for queries such as `bookings where userId == ... order by createdAt desc`. Index builds can take a few minutes after deployment.
 
 ## Reset And Reseed
 

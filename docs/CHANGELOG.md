@@ -152,3 +152,8 @@
 ### docs(firebase): add Firestore composite index deployment guide
 - Added root `firestore.indexes.json` with composite indexes for bookings, parking areas, issues, reviews, and active QR tickets.
 - Documented `firebase deploy --only firestore:indexes` workflow and the Firestore `FAILED_PRECONDITION` missing-index error.
+
+### chore(firebase): generate Firestore indexes from app queries
+- Regenerated `firestore.indexes.json` from the actual Firebase repository query shapes.
+- Added root Firebase config/rules files created by Firebase init so index deployment works from the repository root.
+- Documented query-derived indexes, project-root deployment, and index build timing.

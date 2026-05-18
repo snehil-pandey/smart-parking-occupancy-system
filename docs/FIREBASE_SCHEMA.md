@@ -212,7 +212,7 @@ Active QR documents are short-lived operational records. Do not delete the booki
 
 ## Recommended Composite Indexes
 
-The root `firestore.indexes.json` contains the composite indexes used by the apps. Deploy it before testing Firebase realtime queries:
+The root `firestore.indexes.json` is generated from the Firestore query shapes in the shared Firebase repositories. Deploy it from the project root before testing Firebase realtime queries:
 
 ```bash
 firebase login
@@ -228,28 +228,22 @@ firebase init firestore
 
 Use the checked-in `firestore.indexes.json` file. The Python seed script cannot create composite indexes.
 
-Indexes included in `firestore.indexes.json`:
+Indexes derived from current app code:
 
 | Collection | Fields | Screen/Use |
 | --- | --- | --- |
-| `bookings` | `userId ASC`, `createdAt DESC` | User booking history |
+| `parking_areas` | `adminId ASC`, `updatedAt DESC` | Admin parking area list and realtime updates |
+| `parking_areas` | `regionId ASC`, `availableSpaces DESC` | User region discovery and realtime availability |
+| `bookings` | `userId ASC`, `status ASC`, `createdAt DESC` | User active booking lookup |
 | `bookings` | `adminId ASC`, `createdAt DESC` | Admin booking history |
-| `bookings` | `areaId ASC`, `createdAt DESC` | Area booking history |
-| `bookings` | `userId ASC`, `status ASC`, `createdAt DESC` | User active booking/history |
-| `bookings` | `adminId ASC`, `status ASC`, `createdAt DESC` | Admin active bookings |
-| `bookings` | `areaId ASC`, `status ASC`, `createdAt DESC` | Area-level booking review and future analytics |
-| `parking_areas` | `regionId ASC`, `isOpen ASC` | Optional filtering for open-only views |
-| `parking_areas` | `adminId ASC`, `isOpen ASC` | Optional admin open/closed filtered list |
-| `parking_areas` | `regionId ASC`, `isOpen ASC`, `availableSpaces DESC` | Open areas ordered by capacity |
-| `parking_areas` | `adminId ASC`, `isOpen ASC`, `updatedAt DESC` | Admin open/closed areas ordered by update time |
+| `bookings` | `userId ASC`, `createdAt DESC` | User booking history |
+| `active_qr_tickets` | `bookingId ASC`, `status ASC`, `expiresAt ASC` | Active QR lookup and QR status stream |
 | `issue_reports` | `adminId ASC`, `createdAt DESC` | Issues Received |
 | `issue_reports` | `adminId ASC`, `status ASC`, `createdAt DESC` | Filtered Issues Received |
-| `issue_reports` | `areaId ASC`, `createdAt DESC` | Area issue history |
 | `reviews` | `areaId ASC`, `createdAt DESC` | Area detail comments |
-| `reviews` | `userId ASC`, `createdAt DESC` | User review history |
-| `active_qr_tickets` | `userId ASC`, `status ASC`, `createdAt DESC` | User QR status |
-| `active_qr_tickets` | `bookingId ASC`, `status ASC` | Active QR lookup for booking |
-| `active_qr_tickets` | `areaId ASC`, `status ASC`, `createdAt DESC` | Gate/area QR operations |
+| `parking_area_images` | `areaId ASC`, `uploadedAt DESC` | Lazy thumbnail/preview pagination |
+
+`FAILED_PRECONDITION` errors usually mean a query needs a composite index that is still missing or still building. Compare the failing query fields with this table and redeploy `firestore.indexes.json` if repository queries change.
 
 ## Optional Firebase Storage Migration
 

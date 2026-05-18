@@ -85,7 +85,7 @@ Cloud Firestore:
 2. Create a database near your users.
 3. Use test mode only while developing locally.
 4. Before production, replace rules with role-aware rules matching `docs/FIREBASE_SCHEMA.md`.
-5. Deploy composite indexes before testing realtime app queries:
+5. Deploy composite indexes from the project root before testing realtime app queries. The checked-in index file is derived from the Firestore queries in the shared Firebase repositories:
 
 ```bash
 firebase login
@@ -100,6 +100,8 @@ firebase init firestore
 ```
 
 Use the root `firestore.indexes.json` file when prompted.
+
+Index creation can take a few minutes after deployment. A Firestore `FAILED_PRECONDITION` message with an index link means the required composite index is missing or still building.
 
 Firebase Storage:
 
@@ -358,8 +360,8 @@ Image upload fails:
 
 Firestore asks for an index:
 
-- Create the suggested index from the Firebase console link.
-- Also review `docs/FIREBASE_SCHEMA.md` for the expected composite indexes.
+- This usually appears as a `FAILED_PRECONDITION` error.
+- Review `docs/FIREBASE_SCHEMA.md` for the query-derived composite indexes.
 - Prefer deploying the checked-in index config:
 
 ```bash
