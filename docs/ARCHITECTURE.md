@@ -29,7 +29,7 @@ flowchart TD
   Auth --> Profile["Load or create /users/{uid}"]
   Profile --> GPS["Request GPS permission"]
   GPS --> Home["Map-first home"]
-  Home --> Areas["Stream open parking areas"]
+  Home --> Areas["Stream parking areas with live full/closed state"]
   Areas --> Details["Area details, thumbnails, reviews"]
   Details --> Route["Compare route options from GPS origin"]
   Route --> Book["Reserve slot with Firestore transaction"]
@@ -47,7 +47,7 @@ flowchart TD
   Auth --> Profile["Load or create /admins/{uid}"]
   Profile --> Region["Load SIT Tumkur region"]
   Region --> Areas["Stream admin parking areas"]
-  Areas --> Editor["Edit boundary, slots, price, images"]
+  Areas --> Editor["Edit boundary, gates, slots, price, images"]
   Profile --> Bookings["Stream admin bookings"]
   Profile --> Issues["Stream Issues Received"]
   Bookings --> Complete["Complete booking or consume QR"]
@@ -61,7 +61,8 @@ SIT Tumkur is the current main region. Admins manage that region boundary, then 
 flowchart TD
   Region["/regions/region_sit_tumkur"] --> Boundary["Admin edits region polygon"]
   Boundary --> Area["Admin creates parking area polygon"]
-  Area --> Publish["Publish area with slots, price, vehicle types, images"]
+  Area --> Gates["Admin marks entry/exit gates by GPS"]
+  Gates --> Publish["Publish area with slots, price, vehicle types, images"]
   Publish --> UserMap["User map/list shows parking areas only"]
   UserMap --> Booking["User books area"]
   Booking --> ActiveQR["/active_qr_tickets/{qrId}"]
@@ -72,7 +73,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  UserHome["User Home"] --> UserAreas["parking_areas: regionId + isOpen + limit"]
+  UserHome["User Home"] --> UserAreas["parking_areas: regionId + limit"]
   UserHome --> UserBookings["bookings: userId + limit"]
   UserBookings --> UserQR["active_qr_tickets: bookingId + active"]
   UserHome --> Reviews["reviews: areaId + limit"]
@@ -116,6 +117,22 @@ stateDiagram-v2
 ```
 
 Booking history is never deleted. Active QR records are operational and may be marked `used` or expired.
+
+Cancellation uses the booking repository transaction path. It marks the booking cancelled, records a `Rs. 10` fine only when the parking area's hourly price is above `Rs. 10`, expires the active QR, and releases the slot once.
+
+## Admin GPS Marking Flow
+
+```mermaid
+flowchart TD
+  Admin["Admin stands at real point"] --> Mode["Choose Corner or Gate"]
+  Mode --> GPS["Read current GPS + accuracy"]
+  GPS --> Draft["Add to draft boundaryPoints/gatePoints"]
+  Draft --> Review["Map shows numbered corners and gate markers"]
+  Review --> Save["Save Area Geometry"]
+  Save --> Firestore["/parking_areas/{areaId}"]
+```
+
+Poor GPS accuracy is shown in the Admin app. The seeded SIT Tumkur coordinates are approximate and should be corrected using this flow before real operation.
 
 ## Firestore-Only Image Flow
 

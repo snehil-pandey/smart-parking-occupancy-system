@@ -102,3 +102,25 @@
 
 ### docs(firebase): update setup and runtime data flow
 - Updated setup, architecture, and schema docs for Firebase-only runtime data, Auth profiles, GPS permissions, Firestore image mode, and demo seeding.
+
+### fix(demo): replace random seed data with SIT Tumkur parking areas
+- Replaced loose demo coordinates with fixed SIT Tumkur-focused region, parking areas, capacities, prices, reviews, issues, booking, and QR records.
+- Added coordinate notes explaining that internal campus boundaries are approximate and must be corrected physically.
+
+### feat(admin): add GPS based corner and gate marking
+- Added parking gate point model support and Firestore mapping.
+- Added Admin app GPS controls for marking current position as area corners or named entry/exit gates, with undo, clear, accuracy status, and save.
+
+### feat(user): disable booking for full parking areas
+- User app now shows full/closed parking areas in disabled grey states, keeps details viewable, and disables booking actions.
+- Free parking now renders as `Free`.
+
+### feat(booking): add cancellation fine and slot release flow
+- Added cancellation metadata to bookings.
+- Cancelling an active booking records a Rs. 10 fine only when hourly price is above Rs. 10, expires the active QR, and releases the slot once.
+
+### feat(pricing): enforce parking price range
+- Added shared and repository-level validation for parking hourly price range Rs. 0 to Rs. 100.
+
+### docs(demo): document SIT Tumkur coordinate verification
+- Updated demo setup, Firebase schema, local setup, and architecture docs for gate points, cancellation, price limits, GPS marking, and SIT coordinate caveats.

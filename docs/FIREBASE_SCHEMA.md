@@ -50,12 +50,13 @@ The apps use Firebase-backed repositories in normal runtime. In-memory repositor
 | `name` | string | Parking area name |
 | `description` | string | Short user-facing detail |
 | `address` | string | Human readable address |
-| `boundaryPoints` | array | Parking area polygon points |
+| `boundaryPoints` | array | Parking area polygon corner points: `{latitude, longitude}` |
+| `gatePoints` | array | Entry/exit markers for the area |
 | `centerLat` / `latitude` | number | Map coordinate |
 | `centerLng` / `longitude` | number | Map coordinate |
 | `totalSpaces` | number | Total capacity |
 | `availableSpaces` | number | Live bookable capacity |
-| `pricePerHour` | number | Hourly price in INR |
+| `pricePerHour` | number | Hourly price in INR, valid range `0..100` |
 | `vehicleTypes` / `supportedVehicleTypes` | array | Supported vehicle types |
 | `thumbnailRefs` | array | Image ids from `/parking_area_images` for list thumbnails |
 | `imagePreviewRefs` | array | Image ids from `/parking_area_images` for detail previews |
@@ -67,6 +68,17 @@ The apps use Firebase-backed repositories in normal runtime. In-memory repositor
 | `ratingCount` | number | Denormalized review count |
 | `createdAt` | timestamp/string | Creation time |
 | `updatedAt` | timestamp/string | Last update time |
+
+Gate point shape:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `gateId` | string | Stable gate id inside the parking area |
+| `name` | string | Example: `Main Gate`, `Exit Gate`, `Staff Gate`, `Student Gate` |
+| `latitude` | number | GPS latitude |
+| `longitude` | number | GPS longitude |
+| `type` | string | `entry`, `exit`, or `both` |
+| `createdAt` | timestamp/string | When the gate marker was created |
 
 ## `/parking_area_images/{imageId}`
 
@@ -106,6 +118,10 @@ Recommended query pattern:
 | `price` | number | Calculated booking amount |
 | `status` | string | `pending`, `active`, `completed`, `cancelled`, `expired` |
 | `qrPayload` | string | Signed/checkable JSON payload |
+| `cancellationFine` | number | `10` when area `pricePerHour > 10`, otherwise `0` |
+| `cancelledAt` | timestamp/string/null | Set when user cancels |
+| `cancellationReason` | string/null | Optional user-entered reason |
+| `refundAmount` | number/null | Future payment/refund helper value |
 | `createdAt` | timestamp/string | Creation time |
 | `updatedAt` | timestamp/string | Last update time |
 
@@ -163,8 +179,8 @@ Active QR documents are short-lived operational records. Do not delete the booki
 
 ## Security Direction
 
-- Users can read open parking areas and their own bookings.
-- Users can read thumbnails/previews for open parking areas.
+- Users can read parking areas in supported regions and their own bookings.
+- Users can read thumbnails/previews for visible parking areas.
 - Admins can manage areas where `parking_areas.adminId == request.auth.uid`.
 - Admins can create/update/delete image documents where `uploadedByAdminId == request.auth.uid`.
 - Admins can read bookings for their own areas.
@@ -178,11 +194,13 @@ Create indexes only after Firestore asks for them, but these are expected:
 
 | Collection | Fields | Screen/Use |
 | --- | --- | --- |
-| `parking_areas` | `regionId ASC`, `isOpen ASC`, `availableSpaces DESC` | User nearby availability |
+| `parking_areas` | `regionId ASC`, `availableSpaces DESC` | User nearby availability including full/closed state |
+| `parking_areas` | `regionId ASC`, `isOpen ASC` | Optional filtering for open-only views |
 | `parking_areas` | `adminId ASC`, `updatedAt DESC` | Admin parking area realtime list, including closed areas |
 | `parking_areas` | `adminId ASC`, `regionId ASC`, `updatedAt DESC` | Optional admin region-filtered list |
 | `bookings` | `userId ASC`, `status ASC`, `createdAt DESC` | User active booking/history |
 | `bookings` | `adminId ASC`, `status ASC`, `createdAt DESC` | Admin active bookings |
+| `bookings` | `areaId ASC`, `status ASC`, `createdAt DESC` | Area-level booking review and future analytics |
 | `active_qr_tickets` | `bookingId ASC`, `status ASC`, `expiresAt ASC` | Active QR status |
 | `issue_reports` | `adminId ASC`, `status ASC`, `createdAt DESC` | Issues Received |
 | `reviews` | `areaId ASC`, `createdAt DESC` | Area detail comments |
@@ -204,7 +222,8 @@ The app should continue using `ImageRepository`, swapping `FirestoreImageReposit
 - User and admin identity comes from Firebase Auth uid.
 - Sign-up writes the matching `/users/{uid}` or `/admins/{uid}` profile.
 - Sign-in creates a minimal profile if Auth exists but the role-specific Firestore profile is missing.
-- User discovery reads open parking areas only.
+- User discovery reads parking areas by region and displays full/closed areas as disabled.
 - Admin area management reads by `adminId` so closed areas remain manageable.
 - Images are not stored on parking area documents; parking areas store image ids only.
 - Active QR tickets are operational records. Booking history remains in `/bookings`.
+- Cancellation never deletes booking history. It marks `/bookings/{bookingId}.status = cancelled`, stores fine metadata, expires the active QR if present, and releases the reserved slot once.

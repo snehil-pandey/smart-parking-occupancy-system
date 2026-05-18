@@ -184,7 +184,7 @@ Slot reservation uses a Firestore transaction in `FirebaseParkingRepository.rese
 
 ## GPS Permissions
 
-The user app uses live device location for nearby parking and route origin.
+The user app uses live device location for nearby parking and route origin. The admin app uses live GPS to mark parking area corners and gates while the admin physically stands at each point.
 
 Android:
 
@@ -201,6 +201,8 @@ Web:
 - Run from `localhost` or HTTPS.
 
 If permission is denied or the platform cannot provide a location, the user app clearly falls back to the SIT Tumkur center for discovery calculations.
+
+For admin marking, do not save final geometry from fallback coordinates. Wait for a live GPS fix with acceptable accuracy, ideally outdoors.
 
 ## Firestore-Only Image Mode
 
@@ -260,10 +262,14 @@ The script seeds:
 - One demo admin
 - Demo users
 - Parking areas
-- Optimized placeholder image records
+- Parking area corner and gate placeholders
 - Reviews
 - Issues
 - Bookings and active QR data
+
+The seed does not create image payloads by default. Admins can upload optimized images through Firestore image mode.
+
+The seeded parking coordinates are approximate SIT Tumkur placeholders. Read `demo/SIT_TUMKUR_COORDINATE_NOTES.md`, then use the Admin app GPS marker controls to correct real corners and gates.
 
 Never commit:
 

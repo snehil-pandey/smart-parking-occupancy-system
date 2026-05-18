@@ -1,14 +1,16 @@
 # Park Here Firebase Demo Seed
 
-This folder seeds a small SIT Tumkur dataset into Firestore for local testing of the User and Admin apps.
+This folder seeds a SIT Tumkur-focused dataset into Firestore for local testing of the User and Admin apps.
 
 ## What the Script Creates
 
 - One region: `region_sit_tumkur`
-- One demo admin: `admin_demo_001`
+- One demo admin: `admin_sit_parking_office`
 - Six demo users
-- Four parking areas inside SIT Tumkur
-- Lightweight placeholder image records in `parking_area_images`
+- Seven parking areas inside/near SIT Tumkur
+- Approximate `boundaryPoints` for each parking area
+- Approximate `gatePoints` for entry/exit markers
+- Empty image refs by default
 - Reviews and issue reports
 - One active booking with one active QR ticket
 
@@ -63,7 +65,6 @@ In Firebase Console > Firestore, confirm these collections exist:
 - `admins`
 - `users`
 - `parking_areas`
-- `parking_area_images`
 - `reviews`
 - `issue_reports`
 - `bookings`
@@ -73,6 +74,21 @@ In Firebase Console > Firestore, confirm these collections exist:
 
 - The script writes demo data to the Firebase project in `.env`.
 - It does not delete existing data.
-- It does not create Firebase Auth users; app auth remains local-first unless you wire Firebase Auth providers.
-- Placeholder images are tiny base64 PNG records, not real parking photos.
+- It does not create Firebase Auth users; create matching Auth users manually or sign up through the apps.
+- Parking images are intentionally empty by default. Upload real optimized images through the Admin app.
 - Keep real credentials in `.env` and `serviceAccountKey.json`; do not commit either file.
+
+## Coordinate Verification
+
+The seed uses approximate coordinates around public SIT Tumkur center coordinates. Internal parking boundaries and gates must be verified physically.
+
+Use the Admin app:
+
+1. Open **Parking Areas**.
+2. Select a parking area.
+3. Stand at each real corner and tap **Mark Current Position as Corner**.
+4. Stand at each entry/exit point and tap **Mark Current Position as Gate**.
+5. Check GPS accuracy.
+6. Tap **Save Area Geometry**.
+
+Read `SIT_TUMKUR_COORDINATE_NOTES.md` before treating any seeded geometry as operational.
