@@ -41,7 +41,7 @@ final adminAppControllerProvider =
       )..load();
     });
 
-enum AdminSection { region, parkingAreas, issues }
+enum AdminSection { dashboard, region, parkingAreas, bookings, issues, profile }
 
 enum AdminAuthStatus { checking, signedOut, signedIn }
 
@@ -135,7 +135,7 @@ class AdminAppState {
     return AdminAppState(
       admin: admin,
       authStatus: AdminAuthStatus.checking,
-      section: AdminSection.region,
+      section: AdminSection.dashboard,
       region: _emptySitRegion,
       locations: const [],
       bookings: const [],
@@ -157,7 +157,7 @@ class AdminAppState {
     return AdminAppState(
       admin: null,
       authStatus: AdminAuthStatus.signedOut,
-      section: AdminSection.region,
+      section: AdminSection.dashboard,
       region: _emptySitRegion,
       locations: const [],
       bookings: const [],

@@ -66,7 +66,14 @@ class _AreaBoundaryEditor extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Area editor map', style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          'Area geometry preview',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Admin OSM tiles are not wired yet; this preview shows saved polygons and GPS gate points only.',
+        ),
         const SizedBox(height: 8),
         _MiniBoundaryMap(
           title: location.name,

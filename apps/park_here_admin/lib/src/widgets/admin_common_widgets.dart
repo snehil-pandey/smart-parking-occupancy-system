@@ -70,40 +70,6 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-class _AdminSectionTabs extends StatelessWidget {
-  const _AdminSectionTabs({required this.state, required this.controller});
-
-  final AdminAppState state;
-  final AdminAppController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return SegmentedButton<AdminSection>(
-      segments: const [
-        ButtonSegment(
-          value: AdminSection.region,
-          icon: Icon(Icons.polyline_outlined),
-          label: Text('Region Management'),
-        ),
-        ButtonSegment(
-          value: AdminSection.parkingAreas,
-          icon: Icon(Icons.local_parking),
-          label: Text('Parking Areas'),
-        ),
-        ButtonSegment(
-          value: AdminSection.issues,
-          icon: Icon(Icons.report_problem_outlined),
-          label: Text('Issues Received'),
-        ),
-      ],
-      selected: {state.section},
-      onSelectionChanged: (selection) {
-        controller.changeSection(selection.first);
-      },
-    );
-  }
-}
-
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.message});
 

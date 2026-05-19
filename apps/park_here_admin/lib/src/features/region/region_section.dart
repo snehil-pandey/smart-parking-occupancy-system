@@ -15,11 +15,16 @@ class _RegionManagementPanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(
+              'Region Management',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 6),
             Text(region.name, style: Theme.of(context).textTheme.titleLarge),
             Text(region.address),
             const SizedBox(height: 12),
             _MiniBoundaryMap(
-              title: 'SIT Tumkur region boundary',
+              title: 'SIT Tumkur region geometry preview',
               regionPoints: region.boundaryPoints,
               areaPoints: const [],
               gatePoints: const [],
@@ -123,15 +128,15 @@ class _BoundaryPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final road = Paint()
-      ..color = Colors.white.withAlpha(160)
-      ..strokeWidth = 18
-      ..strokeCap = StrokeCap.round;
-    canvas.drawLine(
-      Offset(size.width * 0.08, size.height * 0.72),
-      Offset(size.width * 0.92, size.height * 0.22),
-      road,
-    );
+    final gridPaint = Paint()
+      ..color = Colors.white.withAlpha(110)
+      ..strokeWidth = 1;
+    for (var x = size.width * 0.2; x < size.width; x += size.width * 0.2) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (var y = size.height * 0.25; y < size.height; y += size.height * 0.25) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
     _drawPolygon(
       canvas,
       size,

@@ -8,6 +8,16 @@ class _BookingPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final active = state.bookings
+        .where((booking) => booking.status == BookingStatus.active)
+        .toList();
+    final completed = state.bookings
+        .where((booking) => booking.status == BookingStatus.completed)
+        .toList();
+    final cancelled = state.bookings
+        .where((booking) => booking.status == BookingStatus.cancelled)
+        .toList();
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -21,24 +31,26 @@ class _BookingPanel extends StatelessWidget {
                 message:
                     'Bookings will appear here once drivers reserve slots.',
               )
-            else
-              for (final booking in state.bookings)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.qr_code_2),
-                  title: Text(booking.vehicleNumber),
-                  subtitle: Text(
-                    '${booking.id} • ${booking.status.name} • ${formatInr(booking.price)}',
-                  ),
-                  trailing: booking.status == BookingStatus.active
-                      ? IconButton(
-                          tooltip: 'Mark completed',
-                          onPressed: () => controller.markCompleted(booking),
-                          icon: const Icon(Icons.check_circle_outline),
-                        )
-                      : const Icon(Icons.done_all),
-                  onTap: () => _showBookingDetails(context, booking),
-                ),
+            else ...[
+              _BookingStatusGroup(
+                title: 'Active bookings',
+                bookings: active,
+                controller: controller,
+                onOpen: (booking) => _showBookingDetails(context, booking),
+              ),
+              _BookingStatusGroup(
+                title: 'Completed bookings',
+                bookings: completed,
+                controller: controller,
+                onOpen: (booking) => _showBookingDetails(context, booking),
+              ),
+              _BookingStatusGroup(
+                title: 'Cancelled bookings',
+                bookings: cancelled,
+                controller: controller,
+                onOpen: (booking) => _showBookingDetails(context, booking),
+              ),
+            ],
             const Divider(height: 28),
             Text(
               'Weekly/monthly income',
@@ -67,6 +79,58 @@ class _BookingPanel extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _BookingStatusGroup extends StatelessWidget {
+  const _BookingStatusGroup({
+    required this.title,
+    required this.bookings,
+    required this.controller,
+    required this.onOpen,
+  });
+
+  final String title;
+  final List<Booking> bookings;
+  final AdminAppController controller;
+  final ValueChanged<Booking> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return ExpansionTile(
+      initiallyExpanded: title == 'Active bookings',
+      tilePadding: EdgeInsets.zero,
+      title: Text(title),
+      subtitle: Text('${bookings.length} records'),
+      children: [
+        if (bookings.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('No records in this status.'),
+            ),
+          )
+        else
+          for (final booking in bookings)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.qr_code_2),
+              title: Text(booking.vehicleNumber),
+              subtitle: Text(
+                '${booking.id} - ${booking.status.name} - ${formatInr(booking.price)}',
+              ),
+              trailing: booking.status == BookingStatus.active
+                  ? IconButton(
+                      tooltip: 'Mark completed',
+                      onPressed: () => controller.markCompleted(booking),
+                      icon: const Icon(Icons.check_circle_outline),
+                    )
+                  : const Icon(Icons.done_all),
+              onTap: () => onOpen(booking),
+            ),
+      ],
     );
   }
 }
