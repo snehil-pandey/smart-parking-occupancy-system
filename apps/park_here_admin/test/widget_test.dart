@@ -49,7 +49,53 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('Dashboard'), findsWidgets);
     expect(find.text('Region Management'), findsOneWidget);
+    expect(find.text('Areas'), findsWidgets);
+    expect(find.text('Bookings'), findsWidgets);
+    expect(find.text('Issues'), findsWidgets);
+    expect(find.text('Profile'), findsWidgets);
+  });
+
+  testWidgets('admin shell switches to parking areas section', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          adminAuthProvider.overrideWithValue(LocalAuthService()),
+          adminParkingRepositoryProvider.overrideWithValue(
+            InMemoryParkingRepository(),
+          ),
+          adminBookingRepositoryProvider.overrideWithValue(
+            InMemoryBookingRepository(),
+          ),
+          adminImageRepositoryProvider.overrideWithValue(
+            InMemoryImageRepository(),
+          ),
+          adminRegionRepositoryProvider.overrideWithValue(
+            InMemoryRegionRepository(),
+          ),
+          adminIssueRepositoryProvider.overrideWithValue(
+            InMemoryIssueRepository(),
+          ),
+          adminFirebaseReadinessProvider.overrideWithValue(
+            const FirebaseReadiness(
+              isConfigured: true,
+              message: 'Test Firebase readiness.',
+            ),
+          ),
+          adminLocationServiceProvider.overrideWithValue(
+            const _TestAdminLocationService(),
+          ),
+        ],
+        child: const ParkHereAdminApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Areas').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Parking areas in SIT Tumkur'), findsOneWidget);
   });
 
   test('admin controller can run optimized image upload flow', () async {

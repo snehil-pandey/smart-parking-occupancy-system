@@ -234,3 +234,9 @@
 
 ### docs(admin): document admin app navigation structure
 - Documented the admin navigation shell, feature sections, responsive layout, visual direction, and current admin geometry preview limitation.
+
+### feat(admin-ui): add issues filters to admin section
+- Added area and status filters to the dedicated Issues section so administrators can triage received reports without leaving the focused tab.
+
+### docs: add root README pointer
+- Added a root `README.md` that points to the canonical documentation under `docs/README.md`.
