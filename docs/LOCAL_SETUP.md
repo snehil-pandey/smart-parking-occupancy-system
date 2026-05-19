@@ -460,6 +460,32 @@ Image upload fails:
 - Use smaller source images.
 - Keep Firestore image mode enabled unless Storage billing/config is ready.
 
+Admin Android build fails with Kotlin incremental cache root errors:
+
+- On Windows, Kotlin incremental compilation can sometimes mix cache paths from the Pub cache drive/root and the project drive/root. The typical error mentions `Could not close incremental caches`, `this and base files have different roots`, `package_info_plus`, or `image_picker_android`.
+- The admin app disables Kotlin incremental compilation in `apps/park_here_admin/android/gradle.properties`:
+
+```properties
+kotlin.incremental=false
+kotlin.incremental.useClasspathSnapshot=false
+```
+
+- Clean the local build state from the project root:
+
+```powershell
+cd apps\park_here_admin\android
+.\gradlew.bat --stop
+cd ..\..\..
+Remove-Item -Recurse -Force apps\park_here_admin\build -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force apps\park_here_admin\android\.gradle -ErrorAction SilentlyContinue
+cd apps\park_here_admin
+flutter clean
+flutter pub get
+flutter run -d <android-device-id>
+```
+
+- If the same root-mismatch error persists, clear the affected package folders from `%LOCALAPPDATA%\Pub\Cache\hosted\pub.dev` and run `flutter pub get` again. Do not downgrade packages first; treat this as a stale Kotlin/Pub cache problem unless a real compiler error remains after cleaning.
+
 Firestore asks for an index:
 
 - This usually appears as a `FAILED_PRECONDITION` error.

@@ -16,7 +16,7 @@ flowchart LR
   FirebaseRepos --> Firestore["Cloud Firestore"]
   FirebaseRepos --> Auth["Firebase Auth"]
   UserApp --> OSM["flutter_map + OpenStreetMap tiles"]
-  Shared --> Routing["RouteProvider + StraightLine/Dijkstra fallback"]
+  Shared --> Routing["RoutingService + OSRM + SIT road-graph fallback"]
   Shared --> Images["ImageRepository + Firestore image mode"]
   Shared --> QR["QR Payload + Active Ticket Services"]
   Shared --> Notifications["NotificationRepository"]

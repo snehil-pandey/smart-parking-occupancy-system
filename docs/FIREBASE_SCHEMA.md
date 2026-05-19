@@ -217,6 +217,10 @@ User-facing notification records for in-app Updates tab. Local device notificati
 | `status` | string | `pending`, `paid`, `failed`, `refunded` |
 | `createdAt` | timestamp/string | Creation time |
 
+## Routing Data
+
+Road routes are not persisted in Firestore. The user app requests road geometry through `OsrmRouteProvider`, caches recent route responses in local memory, and falls back to a small SIT Tumkur road graph if the routing service is unavailable. Parking gate metadata is stored on `/parking_areas/{areaId}.gatePoints`; route cache entries and polylines should not be written to Firestore unless a future backend adds server-side routing analytics.
+
 ## Security Direction
 
 - Users can read parking areas in supported regions and their own bookings.

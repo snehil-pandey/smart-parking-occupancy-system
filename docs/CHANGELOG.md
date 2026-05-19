@@ -217,3 +217,7 @@
 - Added OSRM road-network routing with GeoJSON route parsing, alternative route support, in-memory route caching, and SIT Tumkur road-graph fallback.
 - Updated user route selection to target nearest valid parking gates instead of parking area centers.
 - Updated map route rendering to highlight selected road geometry and fit the camera to the active route.
+
+### fix(android): stabilize Kotlin build cache on Windows
+- Disabled Kotlin incremental compilation for the admin Android app to avoid Windows cross-root incremental cache failures involving Pub cache plugins.
+- Documented the Gradle daemon stop, build folder cleanup, `flutter clean`, and `flutter pub get` recovery flow.
