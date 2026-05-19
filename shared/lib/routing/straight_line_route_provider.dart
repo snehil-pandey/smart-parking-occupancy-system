@@ -9,6 +9,7 @@ class StraightLineRouteProvider implements RouteProvider {
   Future<List<RouteOption>> findRoutes({
     required RoutePoint origin,
     required RoutePoint destination,
+    RouteProfile profile = RouteProfile.driving,
   }) async {
     final distance = _distanceKm(origin, destination);
     final duration = max(3, (distance / 22 * 60).round());
@@ -20,6 +21,8 @@ class StraightLineRouteProvider implements RouteProvider {
         distanceKm: double.parse(distance.toStringAsFixed(1)),
         durationMinutes: duration,
         isBest: true,
+        isFallback: true,
+        provider: 'straight-line-emergency',
       ),
       RouteOption(
         id: 'campus_inner',
@@ -37,6 +40,8 @@ class StraightLineRouteProvider implements RouteProvider {
         distanceKm: double.parse((distance * 1.18).toStringAsFixed(1)),
         durationMinutes: max(duration + 2, (duration * 1.2).round()),
         isBest: false,
+        isFallback: true,
+        provider: 'straight-line-emergency',
       ),
     ];
   }

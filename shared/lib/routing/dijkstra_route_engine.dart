@@ -23,6 +23,7 @@ class DijkstraRouteEngine implements RouteProvider {
   Future<List<RouteOption>> findRoutes({
     required RoutePoint origin,
     required RoutePoint destination,
+    RouteProfile profile = RouteProfile.driving,
   }) async {
     final nodes = {..._nodes, origin.id: origin, destination.id: destination};
     final edges = _withTemporaryEdges(origin, destination);
@@ -151,6 +152,8 @@ class DijkstraRouteEngine implements RouteProvider {
       distanceKm: double.parse(distanceKm.toStringAsFixed(2)),
       durationMinutes: max(3, (distanceKm / 18 * 60).round()),
       isBest: isBest,
+      isFallback: true,
+      provider: 'local-road-graph',
     );
   }
 
