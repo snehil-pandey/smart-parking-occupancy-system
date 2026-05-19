@@ -212,3 +212,8 @@
 - Replaced Home full reload actions with bounded realtime listener retry so map/search/filter state is preserved.
 - Made quick filters toggle back to the unfiltered view when the active chip is tapped again.
 - Added booking in-progress protection and a confirmation bottom sheet with ticket details after successful booking.
+
+### fix(routing): replace straight-line paths with road-aware routing
+- Added OSRM road-network routing with GeoJSON route parsing, alternative route support, in-memory route caching, and SIT Tumkur road-graph fallback.
+- Updated user route selection to target nearest valid parking gates instead of parking area centers.
+- Updated map route rendering to highlight selected road geometry and fit the camera to the active route.

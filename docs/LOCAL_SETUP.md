@@ -257,6 +257,18 @@ Search is routed through `PlaceSearchService`. The default implementation is `Lo
 
 If you later replace it with Google Places or OpenStreetMap/Nominatim, keep the same service interface and store API keys outside source control.
 
+## Road-Aware Routing
+
+The user app uses `OsrmRouteProvider` for road-following navigation polylines. Local development uses the public OSRM demo endpoint:
+
+```text
+https://router.project-osrm.org
+```
+
+No API key is required. The route provider requests full GeoJSON geometry and alternatives, then the map renders those road points. If OSRM is unavailable, the app falls back to a small SIT Tumkur weighted road graph so the UI does not draw fake direct lines through buildings.
+
+For production, configure a dedicated OSRM/OpenRouteService/GraphHopper endpoint with reliable quota and uptime. Keep provider URLs and API keys outside source control if you move to a keyed service.
+
 ## QR Tickets And Notifications
 
 QR images encode only an opaque id such as:
