@@ -203,3 +203,7 @@
 - Added separate user/admin launcher icon assets and `flutter_launcher_icons` config.
 - Generated Android, iOS, and web launcher icons for both apps.
 - Updated Android labels, iOS display names, web manifests, page titles, and local setup icon regeneration notes.
+
+### fix(android): enable desugaring for local notifications
+- Enabled Android core library desugaring in the user app for `flutter_local_notifications`.
+- Added the `desugar_jdk_libs` dependency and aligned Android/Kotlin JVM targets to Java 8 for the affected app.
