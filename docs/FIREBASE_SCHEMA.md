@@ -2,6 +2,8 @@
 
 The apps use Firebase-backed repositories in normal runtime. In-memory repositories are kept only for tests and explicit development overrides. Seed/demo records should be loaded through `/demo/seed_firebase_demo.py`, not from app-bundled runtime data.
 
+Runtime rule: neither Flutter app should load `DemoSeed`, hardcoded parking areas, random users, or local in-memory repositories in normal app execution. Empty Firebase collections must show empty states and prompt the admin to add data or run the demo seed script.
+
 ## `/users/{userId}`
 
 | Field | Type | Notes |
@@ -101,6 +103,18 @@ Gate point shape:
 | `longitude` | number | GPS longitude |
 | `type` | string | `entry`, `exit`, or `both` |
 | `createdAt` | timestamp/string | When the gate marker was created |
+
+Admin geometry editing rules:
+
+- `boundaryPoints` must contain at least three points before saving final area geometry.
+- `gatePoints` are optional but recommended because user routing targets the nearest valid gate before falling back to area center.
+- Gate `type` must be `entry`, `exit`, or `both`.
+- Admin editor drafts are local until Save; Save updates the `/parking_areas/{areaId}` document and Firestore streams refresh the UI.
+- Current admin map editing uses tap-to-select/tap-to-move for existing points. True draggable map markers can be added later when the admin app adopts the real OSM editor layer.
+- `totalSpaces` must be `>= 0`.
+- `availableSpaces` must be between `0` and `totalSpaces`.
+- `pricePerHour` must be between `0` and `100`.
+- MVP admin areas must belong to `region_sit_tumkur`.
 
 ## `/parking_area_images/{imageId}`
 

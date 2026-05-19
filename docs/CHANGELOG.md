@@ -240,3 +240,10 @@
 
 ### docs: add root README pointer
 - Added a root `README.md` that points to the canonical documentation under `docs/README.md`.
+
+### fix(admin-ui): repair layouts and add proper map geometry editing
+- Fixed narrow-screen dashboard stat card overflow and made parking area controls more responsive.
+- Added admin geometry modes for corner and gate editing, including select-on-map point creation, tap-to-select/tap-to-move adjustment, delete selected point, undo, clear, and Firebase save state.
+- Added gate list editing for name/type updates and gate removal.
+- Removed the hardcoded default polygon from runtime parking area creation so new areas start empty and must be marked by the admin or seeded through Firebase.
+- Added controller validation for area spaces, price range, SIT Tumkur region ownership, and minimum polygon corners before saving geometry.

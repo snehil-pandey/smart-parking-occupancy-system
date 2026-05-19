@@ -30,9 +30,15 @@ class _LocationsPanel extends StatelessWidget {
                     controller.selectLocation(location);
                   },
                   leading: const Icon(Icons.local_parking),
-                  title: Text(location.name),
+                  title: Text(
+                    location.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: Text(
                     '${location.availableSpaces}/${location.totalSpaces} spaces - ${formatParkingRate(location.pricePerHour)} - ${location.ratingAverage.toStringAsFixed(1)} rating',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   trailing: Icon(
                     location.isOpen ? Icons.lock_open : Icons.lock_outline,
@@ -80,6 +86,31 @@ class _AreaBoundaryEditor extends StatelessWidget {
           regionPoints: state.region.boundaryPoints,
           areaPoints: state.draftBoundaryPoints,
           gatePoints: state.draftGatePoints,
+          selectedGeometryPoint: state.selectedGeometryPoint,
+          onMapTap: controller.handleMapTap,
+          onCornerTap: controller.selectCornerPoint,
+          onGateTap: (index) {
+            controller.selectGatePoint(index);
+            _showGateSheet(context, index: index);
+          },
+        ),
+        const SizedBox(height: 8),
+        SegmentedButton<AdminGeometryMode>(
+          segments: const [
+            ButtonSegment(
+              value: AdminGeometryMode.corner,
+              icon: Icon(Icons.polyline_outlined),
+              label: Text('Corner mode'),
+            ),
+            ButtonSegment(
+              value: AdminGeometryMode.gate,
+              icon: Icon(Icons.door_front_door_outlined),
+              label: Text('Gate mode'),
+            ),
+          ],
+          selected: {state.geometryMode},
+          onSelectionChanged: (selection) =>
+              controller.changeGeometryMode(selection.first),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -107,6 +138,11 @@ class _AreaBoundaryEditor extends StatelessWidget {
                   size: 18,
                 ),
                 label: Text('GPS ${gps.accuracyMeters.toStringAsFixed(0)} m'),
+              ),
+            if (state.selectedGeometryPoint != null)
+              Chip(
+                avatar: const Icon(Icons.ads_click, size: 18),
+                label: Text('Selected ${state.selectedGeometryPoint!.label}'),
               ),
           ],
         ),
@@ -138,14 +174,19 @@ class _AreaBoundaryEditor extends StatelessWidget {
               label: const Text('Mark Current Position as Gate'),
             ),
             IconButton.filledTonal(
-              tooltip: 'Undo Corner',
-              onPressed: controller.undoLastCorner,
+              tooltip: 'Undo last geometry change',
+              onPressed: controller.undoLastGeometryChange,
               icon: const Icon(Icons.undo),
             ),
-            IconButton.filledTonal(
-              tooltip: 'Undo Gate',
-              onPressed: controller.undoLastGate,
-              icon: const Icon(Icons.undo_outlined),
+            OutlinedButton.icon(
+              onPressed: controller.deleteSelectedGeometryPoint,
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Delete Selected Point'),
+            ),
+            OutlinedButton.icon(
+              onPressed: controller.clearGeometrySelection,
+              icon: const Icon(Icons.deselect_outlined),
+              label: const Text('Clear Selection'),
             ),
             OutlinedButton.icon(
               onPressed: controller.clearCorners,
@@ -158,19 +199,28 @@ class _AreaBoundaryEditor extends StatelessWidget {
               label: const Text('Clear Gates'),
             ),
             FilledButton.icon(
-              onPressed: controller.saveAreaGeometry,
+              onPressed: state.isSavingGeometry
+                  ? null
+                  : controller.saveAreaGeometry,
               icon: const Icon(Icons.save_outlined),
-              label: const Text('Save Area Geometry'),
+              label: Text(
+                state.isSavingGeometry
+                    ? 'Saving Geometry...'
+                    : 'Save Area Geometry',
+              ),
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        _GateList(state: state, controller: controller, onEdit: _showGateSheet),
       ],
     );
   }
 
-  void _showGateSheet(BuildContext context) {
-    final name = TextEditingController(text: 'Main Gate');
-    var type = GatePointType.both;
+  void _showGateSheet(BuildContext context, {int? index}) {
+    final existing = index == null ? null : state.draftGatePoints[index];
+    final name = TextEditingController(text: existing?.name ?? 'Main Gate');
+    var type = existing?.type ?? GatePointType.both;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -250,14 +300,26 @@ class _AreaBoundaryEditor extends StatelessWidget {
                   const SizedBox(height: 14),
                   FilledButton.icon(
                     onPressed: () {
-                      controller.markCurrentPositionAsGate(
-                        name: name.text,
-                        type: type,
-                      );
+                      if (index == null) {
+                        controller.markCurrentPositionAsGate(
+                          name: name.text,
+                          type: type,
+                        );
+                      } else {
+                        controller.updateGatePoint(
+                          index: index,
+                          name: name.text,
+                          type: type,
+                        );
+                      }
                       Navigator.pop(context);
                     },
-                    icon: const Icon(Icons.my_location),
-                    label: const Text('Use current GPS for gate'),
+                    icon: Icon(
+                      index == null ? Icons.my_location : Icons.save_outlined,
+                    ),
+                    label: Text(
+                      index == null ? 'Use current GPS for gate' : 'Save gate',
+                    ),
                   ),
                 ],
               ),
@@ -265,6 +327,75 @@ class _AreaBoundaryEditor extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+class _GateList extends StatelessWidget {
+  const _GateList({
+    required this.state,
+    required this.controller,
+    required this.onEdit,
+  });
+
+  final AdminAppState state;
+  final AdminAppController controller;
+  final void Function(BuildContext context, {int? index}) onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    if (state.draftGatePoints.isEmpty) {
+      return Text(
+        'No gates marked yet. Gates are optional but recommended for routing.',
+        style: Theme.of(context).textTheme.bodySmall,
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Gate points', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 6),
+        for (var index = 0; index < state.draftGatePoints.length; index++)
+          Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              selected:
+                  state.selectedGeometryPoint?.kind ==
+                      AdminGeometryPointKind.gate &&
+                  state.selectedGeometryPoint?.index == index,
+              leading: const Icon(Icons.door_front_door_outlined),
+              title: Text(
+                state.draftGatePoints[index].name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                '${state.draftGatePoints[index].type.name} - '
+                '${state.draftGatePoints[index].latitude.toStringAsFixed(6)}, '
+                '${state.draftGatePoints[index].longitude.toStringAsFixed(6)}',
+              ),
+              onTap: () {
+                controller.selectGatePoint(index);
+                onEdit(context, index: index);
+              },
+              trailing: Wrap(
+                spacing: 4,
+                children: [
+                  IconButton(
+                    tooltip: 'Select gate',
+                    onPressed: () => controller.selectGatePoint(index),
+                    icon: const Icon(Icons.ads_click),
+                  ),
+                  IconButton(
+                    tooltip: 'Remove gate',
+                    onPressed: () => controller.removeGateAt(index),
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -436,7 +567,7 @@ class _AvailabilityEditorState extends State<_AvailabilityEditor> {
         _LabeledSlider(
           label: 'Total spaces',
           value: total,
-          min: 1,
+          min: 0,
           max: 200,
           onChanged: (value) => setState(() => total = value),
         ),
@@ -455,15 +586,18 @@ class _AvailabilityEditorState extends State<_AvailabilityEditor> {
           onChanged: (value) => setState(() => price = value),
         ),
         const SizedBox(height: 8),
-        FilledButton.icon(
-          onPressed: () => widget.controller.updateSelectedAvailability(
-            totalSpaces: total.round(),
-            availableSpaces: available.round(),
-            isOpen: isOpen,
-            pricePerHour: price.roundToDouble(),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FilledButton.icon(
+            onPressed: () => widget.controller.updateSelectedAvailability(
+              totalSpaces: total.round(),
+              availableSpaces: available.round(),
+              isOpen: isOpen,
+              pricePerHour: price.roundToDouble(),
+            ),
+            icon: const Icon(Icons.tune),
+            label: const Text('Update location'),
           ),
-          icon: const Icon(Icons.tune),
-          label: const Text('Update location'),
         ),
       ],
     );
@@ -487,21 +621,30 @@ class _LabeledSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(width: 118, child: Text(label)),
-        Expanded(
-          child: Slider(
-            min: min,
-            max: max <= min ? min + 1 : max,
-            divisions: (max - min).round().clamp(1, 200),
-            value: value.clamp(min, max <= min ? min + 1 : max),
-            label: value.round().toString(),
-            onChanged: onChanged,
-          ),
-        ),
-        SizedBox(width: 48, child: Text(value.round().toString())),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final slider = Slider(
+          min: min,
+          max: max <= min ? min + 1 : max,
+          divisions: (max - min).round().clamp(1, 200),
+          value: value.clamp(min, max <= min ? min + 1 : max),
+          label: value.round().toString(),
+          onChanged: onChanged,
+        );
+        if (constraints.maxWidth < 430) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [Text('$label: ${value.round()}'), slider],
+          );
+        }
+        return Row(
+          children: [
+            SizedBox(width: 118, child: Text(label)),
+            Expanded(child: slider),
+            SizedBox(width: 48, child: Text(value.round().toString())),
+          ],
+        );
+      },
     );
   }
 }

@@ -45,7 +45,34 @@ enum AdminSection { dashboard, region, parkingAreas, bookings, issues, profile }
 
 enum AdminAuthStatus { checking, signedOut, signedIn }
 
+enum AdminGeometryMode { corner, gate }
+
+enum AdminGeometryPointKind { corner, gate }
+
 const Object _unset = Object();
+
+class AdminGeometrySelection {
+  const AdminGeometrySelection({required this.kind, required this.index});
+
+  final AdminGeometryPointKind kind;
+  final int index;
+
+  String get label => kind == AdminGeometryPointKind.corner
+      ? 'Corner ${index + 1}'
+      : 'Gate ${index + 1}';
+}
+
+class AdminGeometrySnapshot {
+  const AdminGeometrySnapshot({
+    required this.boundaryPoints,
+    required this.gatePoints,
+    required this.message,
+  });
+
+  final List<GeoPointValue> boundaryPoints;
+  final List<GatePoint> gatePoints;
+  final String message;
+}
 
 class AdminGpsPosition {
   const AdminGpsPosition({
@@ -123,11 +150,15 @@ class AdminAppState {
     required this.selectedLocation,
     required this.draftBoundaryPoints,
     required this.draftGatePoints,
+    required this.geometryMode,
+    required this.geometryUndoStack,
+    required this.isSavingGeometry,
     required this.lastGpsPosition,
     required this.isLoading,
     required this.imageUploadProgress,
     required this.imageStatusMessage,
     required this.geometryStatusMessage,
+    this.selectedGeometryPoint,
     this.error,
   });
 
@@ -144,6 +175,10 @@ class AdminAppState {
       selectedLocation: null,
       draftBoundaryPoints: const [],
       draftGatePoints: const [],
+      geometryMode: AdminGeometryMode.corner,
+      selectedGeometryPoint: null,
+      geometryUndoStack: const [],
+      isSavingGeometry: false,
       lastGpsPosition: null,
       isLoading: true,
       imageUploadProgress: 0,
@@ -166,6 +201,10 @@ class AdminAppState {
       selectedLocation: null,
       draftBoundaryPoints: const [],
       draftGatePoints: const [],
+      geometryMode: AdminGeometryMode.corner,
+      selectedGeometryPoint: null,
+      geometryUndoStack: const [],
+      isSavingGeometry: false,
       lastGpsPosition: null,
       isLoading: false,
       imageUploadProgress: 0,
@@ -185,6 +224,10 @@ class AdminAppState {
   final ParkingLocation? selectedLocation;
   final List<GeoPointValue> draftBoundaryPoints;
   final List<GatePoint> draftGatePoints;
+  final AdminGeometryMode geometryMode;
+  final AdminGeometrySelection? selectedGeometryPoint;
+  final List<AdminGeometrySnapshot> geometryUndoStack;
+  final bool isSavingGeometry;
   final AdminGpsPosition? lastGpsPosition;
   final bool isLoading;
   final double imageUploadProgress;
@@ -239,6 +282,10 @@ class AdminAppState {
     ParkingLocation? selectedLocation,
     List<GeoPointValue>? draftBoundaryPoints,
     List<GatePoint>? draftGatePoints,
+    AdminGeometryMode? geometryMode,
+    Object? selectedGeometryPoint = _unset,
+    List<AdminGeometrySnapshot>? geometryUndoStack,
+    bool? isSavingGeometry,
     AdminGpsPosition? lastGpsPosition,
     bool? isLoading,
     double? imageUploadProgress,
@@ -258,6 +305,12 @@ class AdminAppState {
       selectedLocation: selectedLocation ?? this.selectedLocation,
       draftBoundaryPoints: draftBoundaryPoints ?? this.draftBoundaryPoints,
       draftGatePoints: draftGatePoints ?? this.draftGatePoints,
+      geometryMode: geometryMode ?? this.geometryMode,
+      selectedGeometryPoint: identical(selectedGeometryPoint, _unset)
+          ? this.selectedGeometryPoint
+          : selectedGeometryPoint as AdminGeometrySelection?,
+      geometryUndoStack: geometryUndoStack ?? this.geometryUndoStack,
+      isSavingGeometry: isSavingGeometry ?? this.isSavingGeometry,
       lastGpsPosition: lastGpsPosition ?? this.lastGpsPosition,
       isLoading: isLoading ?? this.isLoading,
       imageUploadProgress: imageUploadProgress ?? this.imageUploadProgress,
@@ -327,6 +380,8 @@ class AdminAppController extends StateNotifier<AdminAppState> {
         selectedLocation: selectedLocation,
         draftBoundaryPoints: selectedLocation?.boundaryPoints ?? const [],
         draftGatePoints: selectedLocation?.gatePoints ?? const [],
+        selectedGeometryPoint: null,
+        geometryUndoStack: const [],
         isLoading: false,
         error: null,
       );
@@ -410,6 +465,8 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       selectedLocation: location,
       draftBoundaryPoints: location.boundaryPoints,
       draftGatePoints: location.gatePoints,
+      selectedGeometryPoint: null,
+      geometryUndoStack: const [],
       geometryStatusMessage:
           'Loaded ${location.boundaryPoints.length} corners and ${location.gatePoints.length} gates.',
     );
@@ -470,6 +527,223 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     await updateSelectedAreaBoundary(updated);
   }
 
+  void changeGeometryMode(AdminGeometryMode mode) {
+    state = state.copyWith(
+      geometryMode: mode,
+      selectedGeometryPoint: null,
+      geometryStatusMessage: mode == AdminGeometryMode.corner
+          ? 'Tap the geometry preview to add corner points.'
+          : 'Tap the geometry preview to add gate points.',
+    );
+  }
+
+  void selectCornerPoint(int index) {
+    if (index < 0 || index >= state.draftBoundaryPoints.length) {
+      return;
+    }
+    state = state.copyWith(
+      selectedGeometryPoint: AdminGeometrySelection(
+        kind: AdminGeometryPointKind.corner,
+        index: index,
+      ),
+      geometryStatusMessage:
+          'Selected corner ${index + 1}. Tap another map position to move it.',
+      error: null,
+    );
+  }
+
+  void selectGatePoint(int index) {
+    if (index < 0 || index >= state.draftGatePoints.length) {
+      return;
+    }
+    state = state.copyWith(
+      selectedGeometryPoint: AdminGeometrySelection(
+        kind: AdminGeometryPointKind.gate,
+        index: index,
+      ),
+      geometryStatusMessage:
+          'Selected ${state.draftGatePoints[index].name}. Tap another map position to move it.',
+      error: null,
+    );
+  }
+
+  void clearGeometrySelection() {
+    state = state.copyWith(
+      selectedGeometryPoint: null,
+      geometryStatusMessage: 'Selection cleared.',
+    );
+  }
+
+  void handleMapTap(GeoPointValue point) {
+    if (state.selectedLocation == null) {
+      state = state.copyWith(error: 'Select a parking area first.');
+      return;
+    }
+    final selected = state.selectedGeometryPoint;
+    if (selected != null) {
+      moveSelectedGeometryPoint(point);
+      return;
+    }
+    if (state.geometryMode == AdminGeometryMode.corner) {
+      addCornerPoint(point);
+    } else {
+      addGatePoint(point);
+    }
+  }
+
+  void addCornerPoint(GeoPointValue point) {
+    _pushGeometryUndo('Undo add corner');
+    final updated = [...state.draftBoundaryPoints, point];
+    state = state.copyWith(
+      draftBoundaryPoints: updated,
+      selectedGeometryPoint: AdminGeometrySelection(
+        kind: AdminGeometryPointKind.corner,
+        index: updated.length - 1,
+      ),
+      geometryStatusMessage:
+          'Added corner ${updated.length}. Tap another point to move the selected corner, or clear selection to add more.',
+      error: null,
+    );
+  }
+
+  void addGatePoint(
+    GeoPointValue point, {
+    String name = 'Gate',
+    GatePointType type = GatePointType.both,
+  }) {
+    final location = state.selectedLocation;
+    if (location == null) {
+      state = state.copyWith(error: 'Select a parking area first.');
+      return;
+    }
+    _pushGeometryUndo('Undo add gate');
+    final gateIndex = state.draftGatePoints.length + 1;
+    final gate = GatePoint(
+      gateId: 'gate_${location.id}_${DateTime.now().millisecondsSinceEpoch}',
+      name: name.trim().isEmpty || name == 'Gate'
+          ? 'Gate $gateIndex'
+          : name.trim(),
+      latitude: point.latitude,
+      longitude: point.longitude,
+      type: type,
+      createdAt: DateTime.now(),
+    );
+    final updated = [...state.draftGatePoints, gate];
+    state = state.copyWith(
+      draftGatePoints: updated,
+      selectedGeometryPoint: AdminGeometrySelection(
+        kind: AdminGeometryPointKind.gate,
+        index: updated.length - 1,
+      ),
+      geometryStatusMessage:
+          'Added ${gate.name}. Select the gate below to rename/type it.',
+      error: null,
+    );
+  }
+
+  void moveSelectedGeometryPoint(GeoPointValue point) {
+    final selected = state.selectedGeometryPoint;
+    if (selected == null) {
+      state = state.copyWith(error: 'Select a corner or gate first.');
+      return;
+    }
+    if (selected.kind == AdminGeometryPointKind.corner) {
+      if (selected.index >= state.draftBoundaryPoints.length) {
+        state = state.copyWith(selectedGeometryPoint: null);
+        return;
+      }
+      _pushGeometryUndo('Undo move corner');
+      final updated = [...state.draftBoundaryPoints];
+      updated[selected.index] = point;
+      state = state.copyWith(
+        draftBoundaryPoints: updated,
+        geometryStatusMessage: 'Moved corner ${selected.index + 1}.',
+        error: null,
+      );
+      return;
+    }
+    if (selected.index >= state.draftGatePoints.length) {
+      state = state.copyWith(selectedGeometryPoint: null);
+      return;
+    }
+    _pushGeometryUndo('Undo move gate');
+    final updated = [...state.draftGatePoints];
+    final gate = updated[selected.index];
+    updated[selected.index] = gate.copyWith(
+      latitude: point.latitude,
+      longitude: point.longitude,
+    );
+    state = state.copyWith(
+      draftGatePoints: updated,
+      geometryStatusMessage: 'Moved ${gate.name}.',
+      error: null,
+    );
+  }
+
+  void deleteSelectedGeometryPoint() {
+    final selected = state.selectedGeometryPoint;
+    if (selected == null) {
+      state = state.copyWith(error: 'Select a point to delete.');
+      return;
+    }
+    if (selected.kind == AdminGeometryPointKind.corner) {
+      if (selected.index >= state.draftBoundaryPoints.length) {
+        state = state.copyWith(selectedGeometryPoint: null);
+        return;
+      }
+      _pushGeometryUndo('Undo delete corner');
+      final updated = [...state.draftBoundaryPoints]..removeAt(selected.index);
+      state = state.copyWith(
+        draftBoundaryPoints: updated,
+        selectedGeometryPoint: null,
+        geometryStatusMessage: 'Deleted corner ${selected.index + 1}.',
+        error: null,
+      );
+      return;
+    }
+    removeGateAt(selected.index);
+  }
+
+  void removeGateAt(int index) {
+    if (index < 0 || index >= state.draftGatePoints.length) {
+      return;
+    }
+    _pushGeometryUndo('Undo delete gate');
+    final gate = state.draftGatePoints[index];
+    final updated = [...state.draftGatePoints]..removeAt(index);
+    state = state.copyWith(
+      draftGatePoints: updated,
+      selectedGeometryPoint: null,
+      geometryStatusMessage: 'Removed ${gate.name}.',
+      error: null,
+    );
+  }
+
+  void updateGatePoint({
+    required int index,
+    required String name,
+    required GatePointType type,
+  }) {
+    if (index < 0 || index >= state.draftGatePoints.length) {
+      return;
+    }
+    _pushGeometryUndo('Undo edit gate');
+    final updated = [...state.draftGatePoints];
+    updated[index] = updated[index].copyWith(
+      name: name.trim().isEmpty ? updated[index].name : name.trim(),
+      type: type,
+    );
+    state = state.copyWith(
+      draftGatePoints: updated,
+      selectedGeometryPoint: AdminGeometrySelection(
+        kind: AdminGeometryPointKind.gate,
+        index: index,
+      ),
+      geometryStatusMessage: 'Updated ${updated[index].name}.',
+      error: null,
+    );
+  }
+
   Future<void> markCurrentPositionAsCorner() async {
     final location = state.selectedLocation;
     if (location == null) {
@@ -477,9 +751,14 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       return;
     }
     final position = await _locationService.currentPosition();
+    _pushGeometryUndo('Undo GPS corner');
     final updated = [...state.draftBoundaryPoints, position.toGeoPoint()];
     state = state.copyWith(
       draftBoundaryPoints: updated,
+      selectedGeometryPoint: AdminGeometrySelection(
+        kind: AdminGeometryPointKind.corner,
+        index: updated.length - 1,
+      ),
       lastGpsPosition: position,
       geometryStatusMessage:
           'Added corner ${updated.length}. ${position.message}',
@@ -499,6 +778,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       return;
     }
     final position = await _locationService.currentPosition();
+    _pushGeometryUndo('Undo GPS gate');
     final gateIndex = state.draftGatePoints.length + 1;
     final gate = GatePoint(
       gateId: 'gate_${location.id}_${DateTime.now().millisecondsSinceEpoch}',
@@ -511,6 +791,10 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     final updated = [...state.draftGatePoints, gate];
     state = state.copyWith(
       draftGatePoints: updated,
+      selectedGeometryPoint: AdminGeometrySelection(
+        kind: AdminGeometryPointKind.gate,
+        index: updated.length - 1,
+      ),
       lastGpsPosition: position,
       geometryStatusMessage: 'Added ${gate.name}. ${position.message}',
       error: position.isFallback
@@ -523,11 +807,13 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     if (state.draftBoundaryPoints.isEmpty) {
       return;
     }
+    _pushGeometryUndo('Undo remove corner');
     final updated = state.draftBoundaryPoints
         .take(state.draftBoundaryPoints.length - 1)
         .toList();
     state = state.copyWith(
       draftBoundaryPoints: updated,
+      selectedGeometryPoint: null,
       geometryStatusMessage: 'Removed last corner.',
     );
   }
@@ -536,26 +822,73 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     if (state.draftGatePoints.isEmpty) {
       return;
     }
+    _pushGeometryUndo('Undo remove gate');
     final updated = state.draftGatePoints
         .take(state.draftGatePoints.length - 1)
         .toList();
     state = state.copyWith(
       draftGatePoints: updated,
+      selectedGeometryPoint: null,
       geometryStatusMessage: 'Removed last gate.',
     );
   }
 
   void clearCorners() {
+    if (state.draftBoundaryPoints.isEmpty) {
+      return;
+    }
+    _pushGeometryUndo('Undo clear corners');
     state = state.copyWith(
       draftBoundaryPoints: const [],
+      selectedGeometryPoint: null,
       geometryStatusMessage: 'Cleared draft corner points.',
     );
   }
 
   void clearGates() {
+    if (state.draftGatePoints.isEmpty) {
+      return;
+    }
+    _pushGeometryUndo('Undo clear gates');
     state = state.copyWith(
       draftGatePoints: const [],
+      selectedGeometryPoint: null,
       geometryStatusMessage: 'Cleared draft gate points.',
+    );
+  }
+
+  void undoLastGeometryChange() {
+    if (state.geometryUndoStack.isEmpty) {
+      state = state.copyWith(geometryStatusMessage: 'Nothing to undo.');
+      return;
+    }
+    final stack = [...state.geometryUndoStack];
+    final snapshot = stack.removeLast();
+    state = state.copyWith(
+      draftBoundaryPoints: snapshot.boundaryPoints,
+      draftGatePoints: snapshot.gatePoints,
+      selectedGeometryPoint: null,
+      geometryUndoStack: stack,
+      geometryStatusMessage: snapshot.message,
+      error: null,
+    );
+  }
+
+  void _pushGeometryUndo(String message) {
+    final next = [
+      ...state.geometryUndoStack,
+      AdminGeometrySnapshot(
+        boundaryPoints: List<GeoPointValue>.unmodifiable(
+          state.draftBoundaryPoints,
+        ),
+        gatePoints: List<GatePoint>.unmodifiable(state.draftGatePoints),
+        message: message,
+      ),
+    ];
+    state = state.copyWith(
+      geometryUndoStack: next.length > 20
+          ? next.sublist(next.length - 20)
+          : next,
     );
   }
 
@@ -565,35 +898,60 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       state = state.copyWith(error: 'Select a parking area first.');
       return;
     }
+    final validationError = _validateAreaForSave(location);
+    if (validationError != null) {
+      state = state.copyWith(error: validationError);
+      return;
+    }
     if (state.draftBoundaryPoints.length < 3) {
       state = state.copyWith(
         error: 'Mark at least 3 corner points before saving geometry.',
       );
       return;
     }
-    final updated = location.copyWith(
-      boundaryPoints: state.draftBoundaryPoints,
-      gatePoints: state.draftGatePoints,
-      latitude:
-          state.draftBoundaryPoints
-              .map((point) => point.latitude)
-              .reduce((a, b) => a + b) /
-          state.draftBoundaryPoints.length,
-      longitude:
-          state.draftBoundaryPoints
-              .map((point) => point.longitude)
-              .reduce((a, b) => a + b) /
-          state.draftBoundaryPoints.length,
-      updatedAt: DateTime.now(),
-    );
-    await _parkingRepository.upsert(updated);
-    state = state.copyWith(
-      selectedLocation: updated,
-      geometryStatusMessage:
-          'Saved ${updated.boundaryPoints.length} corners and ${updated.gatePoints.length} gates.',
-      error: null,
-    );
-    await load();
+    state = state.copyWith(isSavingGeometry: true, error: null);
+    try {
+      final updated = location.copyWith(
+        boundaryPoints: state.draftBoundaryPoints,
+        gatePoints: state.draftGatePoints,
+        latitude:
+            state.draftBoundaryPoints
+                .map((point) => point.latitude)
+                .reduce((a, b) => a + b) /
+            state.draftBoundaryPoints.length,
+        longitude:
+            state.draftBoundaryPoints
+                .map((point) => point.longitude)
+                .reduce((a, b) => a + b) /
+            state.draftBoundaryPoints.length,
+        updatedAt: DateTime.now(),
+      );
+      await _parkingRepository.upsert(updated);
+      state = state.copyWith(
+        selectedLocation: updated,
+        isSavingGeometry: false,
+        selectedGeometryPoint: null,
+        geometryUndoStack: const [],
+        geometryStatusMessage:
+            'Saved ${updated.boundaryPoints.length} corners and ${updated.gatePoints.length} gates.',
+        error: null,
+      );
+      await load();
+      final refreshed = await _parkingRepository.findById(updated.id);
+      if (refreshed != null) {
+        state = state.copyWith(
+          selectedLocation: refreshed,
+          draftBoundaryPoints: refreshed.boundaryPoints,
+          draftGatePoints: refreshed.gatePoints,
+          isSavingGeometry: false,
+        );
+      }
+    } on Object catch (error) {
+      state = state.copyWith(
+        isSavingGeometry: false,
+        error: FirebaseErrorMessages.friendlyMessage(error),
+      );
+    }
   }
 
   Future<void> registerLocation({
@@ -608,6 +966,14 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     required String openingTime,
     required String closingTime,
   }) async {
+    final spaceError = _validateSpaces(
+      totalSpaces: totalSpaces,
+      availableSpaces: availableSpaces,
+    );
+    if (spaceError != null) {
+      state = state.copyWith(error: spaceError);
+      return;
+    }
     if (!ParkingLocation.isValidPrice(pricePerHour)) {
       state = state.copyWith(
         error: 'Price must be between Rs. 0 and Rs. 100 per hour.',
@@ -622,17 +988,12 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       name: name,
       description: 'New parking area inside ${state.region.name}.',
       address: address,
-      boundaryPoints: const [
-        GeoPointValue(latitude: 13.3287, longitude: 77.1232),
-        GeoPointValue(latitude: 13.3287, longitude: 77.1239),
-        GeoPointValue(latitude: 13.3280, longitude: 77.1239),
-        GeoPointValue(latitude: 13.3280, longitude: 77.1232),
-      ],
+      boundaryPoints: const [],
       gatePoints: const [],
       latitude: latitude,
       longitude: longitude,
       totalSpaces: totalSpaces,
-      availableSpaces: availableSpaces.clamp(0, totalSpaces),
+      availableSpaces: availableSpaces,
       pricePerHour: pricePerHour,
       vehicleTypes: vehicleTypes,
       thumbnailRefs: const [],
@@ -659,6 +1020,14 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     if (location == null) {
       return;
     }
+    final spaceError = _validateSpaces(
+      totalSpaces: totalSpaces,
+      availableSpaces: availableSpaces,
+    );
+    if (spaceError != null) {
+      state = state.copyWith(error: spaceError);
+      return;
+    }
     if (!ParkingLocation.isValidPrice(pricePerHour)) {
       state = state.copyWith(
         error: 'Price must be between Rs. 0 and Rs. 100 per hour.',
@@ -678,6 +1047,35 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       state = state.copyWith(selectedLocation: refreshed);
       await _loadSelectedImages();
     }
+  }
+
+  String? _validateSpaces({
+    required int totalSpaces,
+    required int availableSpaces,
+  }) {
+    if (totalSpaces < 0) {
+      return 'Total spaces cannot be negative.';
+    }
+    if (availableSpaces < 0) {
+      return 'Available spaces cannot be negative.';
+    }
+    if (availableSpaces > totalSpaces) {
+      return 'Available spaces must be between 0 and total spaces.';
+    }
+    return null;
+  }
+
+  String? _validateAreaForSave(ParkingLocation location) {
+    if (location.regionId != state.region.regionId) {
+      return 'Parking area must belong to the SIT Tumkur region.';
+    }
+    if (!ParkingLocation.isValidPrice(location.pricePerHour)) {
+      return 'Price must be between Rs. 0 and Rs. 100 per hour.';
+    }
+    return _validateSpaces(
+      totalSpaces: location.totalSpaces,
+      availableSpaces: location.availableSpaces,
+    );
   }
 
   Future<void> markCompleted(Booking booking) async {

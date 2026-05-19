@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui' show Size;
 
 // This is a basic Flutter widget test.
 //
@@ -98,6 +99,55 @@ void main() {
     expect(find.text('Parking areas in SIT Tumkur'), findsOneWidget);
   });
 
+  testWidgets('admin parking area section fits narrow mobile width', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          adminAuthProvider.overrideWithValue(LocalAuthService()),
+          adminParkingRepositoryProvider.overrideWithValue(
+            InMemoryParkingRepository(),
+          ),
+          adminBookingRepositoryProvider.overrideWithValue(
+            InMemoryBookingRepository(),
+          ),
+          adminImageRepositoryProvider.overrideWithValue(
+            InMemoryImageRepository(),
+          ),
+          adminRegionRepositoryProvider.overrideWithValue(
+            InMemoryRegionRepository(),
+          ),
+          adminIssueRepositoryProvider.overrideWithValue(
+            InMemoryIssueRepository(),
+          ),
+          adminFirebaseReadinessProvider.overrideWithValue(
+            const FirebaseReadiness(
+              isConfigured: true,
+              message: 'Test Firebase readiness.',
+            ),
+          ),
+          adminLocationServiceProvider.overrideWithValue(
+            const _TestAdminLocationService(),
+          ),
+        ],
+        child: const ParkHereAdminApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Areas').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Parking areas in SIT Tumkur'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   test('admin controller can run optimized image upload flow', () async {
     final auth = LocalAuthService();
     final controller = AdminAppController(
@@ -150,6 +200,75 @@ void main() {
     expect(controller.state.draftBoundaryPoints, hasLength(initialCorners + 1));
     expect(controller.state.draftGatePoints, hasLength(initialGates + 1));
     expect(controller.state.draftGatePoints.last.name, 'Main Gate');
+  });
+
+  test('admin controller edits geometry from map taps and undo', () async {
+    final controller = AdminAppController(
+      auth: LocalAuthService(),
+      parkingRepository: InMemoryParkingRepository(),
+      bookingRepository: InMemoryBookingRepository(),
+      imageRepository: InMemoryImageRepository(seed: const []),
+      regionRepository: InMemoryRegionRepository(),
+      issueRepository: InMemoryIssueRepository(),
+      locationService: const _TestAdminLocationService(),
+    );
+
+    await controller.load();
+    final initialCorners = controller.state.draftBoundaryPoints.length;
+    controller.handleMapTap(
+      const GeoPointValue(latitude: 13.3284, longitude: 77.1258),
+    );
+
+    expect(controller.state.draftBoundaryPoints, hasLength(initialCorners + 1));
+    expect(
+      controller.state.selectedGeometryPoint?.kind,
+      AdminGeometryPointKind.corner,
+    );
+
+    controller.moveSelectedGeometryPoint(
+      const GeoPointValue(latitude: 13.3285, longitude: 77.1259),
+    );
+    expect(controller.state.draftBoundaryPoints.last.latitude, 13.3285);
+
+    controller.changeGeometryMode(AdminGeometryMode.gate);
+    controller.clearGeometrySelection();
+    controller.handleMapTap(
+      const GeoPointValue(latitude: 13.3286, longitude: 77.1260),
+    );
+    expect(controller.state.draftGatePoints, isNotEmpty);
+
+    controller.updateGatePoint(
+      index: controller.state.draftGatePoints.length - 1,
+      name: 'Student Gate',
+      type: GatePointType.entry,
+    );
+    expect(controller.state.draftGatePoints.last.name, 'Student Gate');
+    expect(controller.state.draftGatePoints.last.type, GatePointType.entry);
+
+    controller.undoLastGeometryChange();
+    expect(controller.state.draftGatePoints.last.name, isNot('Student Gate'));
+  });
+
+  test('admin controller validates area spaces before update', () async {
+    final controller = AdminAppController(
+      auth: LocalAuthService(),
+      parkingRepository: InMemoryParkingRepository(),
+      bookingRepository: InMemoryBookingRepository(),
+      imageRepository: InMemoryImageRepository(seed: const []),
+      regionRepository: InMemoryRegionRepository(),
+      issueRepository: InMemoryIssueRepository(),
+      locationService: const _TestAdminLocationService(),
+    );
+
+    await controller.load();
+    await controller.updateSelectedAvailability(
+      totalSpaces: 3,
+      availableSpaces: 4,
+      isOpen: true,
+      pricePerHour: 20,
+    );
+
+    expect(controller.state.error, contains('Available spaces'));
   });
 }
 

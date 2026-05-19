@@ -225,17 +225,27 @@ Cancellation uses the booking repository transaction path. It marks the booking 
 
 ```mermaid
 flowchart TD
-  Admin["Admin stands at real point"] --> Mode["Choose Corner or Gate"]
-  Mode --> GPS["Read current GPS + accuracy"]
-  GPS --> Draft["Add to draft boundaryPoints/gatePoints"]
-  Draft --> Review["Map shows numbered corners and gate markers"]
+  Admin["Admin opens Parking Areas"] --> Mode["Choose Corner or Gate mode"]
+  Mode --> Tap["Select On Map: tap preview to add point"]
+  Mode --> GPS["GPS: stand at point and mark current position"]
+  Tap --> Draft["Update draft boundaryPoints/gatePoints immediately"]
+  GPS --> Draft
+  Draft --> Select["Tap corner/gate pin to select"]
+  Select --> Move["Tap another map position to move selected point"]
+  Select --> EditGate["Edit gate name/type or delete point"]
+  Move --> Review["Preview numbered corners and distinct gate markers"]
+  EditGate --> Review
   Review --> Save["Save Area Geometry"]
   Save --> Firestore["/parking_areas/{areaId}"]
 ```
 
 Poor GPS accuracy is shown in the Admin app. The seeded SIT Tumkur coordinates are approximate and should be corrected using this flow before real operation.
 
-The admin geometry surface is currently a lightweight preview of saved polygons, numbered corner points, and gate points. It is not wired to the real `flutter_map` OpenStreetMap tile stack yet. The user app uses real OSM tiles; admin can safely keep editing Firebase geometry through GPS controls until an OSM editor is added.
+The admin geometry surface is currently a lightweight preview of saved polygons, numbered corner points, and gate points. It is not wired to the real `flutter_map` OpenStreetMap tile stack yet. The user app uses real OSM tiles; admin can safely keep editing Firebase geometry through GPS controls and select-on-map mode until an OSM editor is added.
+
+Because the admin preview does not use draggable map markers yet, point adjustment uses an explicit fallback interaction: tap an existing corner or gate to select it, then tap the desired position to move it. This is intentionally documented as tap-to-select/tap-to-move rather than true dragging.
+
+Before saving geometry, the controller validates that the selected area belongs to `region_sit_tumkur`, has at least three polygon corners, uses a price within `0..100`, and has `availableSpaces` between `0` and `totalSpaces`. Draft edits remain local until Save writes the updated area document to Firebase, after which the Firestore stream refreshes the selected area.
 
 ## Firestore-Only Image Flow
 
