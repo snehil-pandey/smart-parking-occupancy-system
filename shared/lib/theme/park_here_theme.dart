@@ -31,22 +31,82 @@ class ParkHereTheme {
   }
 
   static ThemeData adminTheme() {
+    const adminSurface = Color(0xFFFFFBED);
+    const adminPrimary = Color(0xFF1C1B17);
+    const adminAccent = Color(0xFFFFC928);
+    const adminSuccess = Color(0xFF2E7D32);
     return ThemeData(
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: adminBlue,
-        primary: adminBlue,
-        secondary: mint,
+        seedColor: adminAccent,
+        primary: adminPrimary,
+        secondary: adminAccent,
+        tertiary: adminSuccess,
         surface: Colors.white,
+        error: const Color(0xFFB3261E),
       ),
-      scaffoldBackgroundColor: const Color(0xFFF6F8F7),
+      scaffoldBackgroundColor: adminSurface,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: adminSurface,
+        foregroundColor: adminPrimary,
+        elevation: 0,
+        centerTitle: false,
+      ),
       cardTheme: const CardThemeData(
         color: Colors.white,
-        elevation: 0,
+        elevation: 1,
+        shadowColor: Color(0x1A000000),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(8)),
-          side: BorderSide(color: Color(0xFFE1E7E4)),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          side: BorderSide(color: Color(0xFFE8DFC1)),
         ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: Colors.white,
+        indicatorColor: adminAccent.withAlpha(80),
+        labelTextStyle: WidgetStateProperty.all(
+          const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ),
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: Colors.white,
+        selectedIconTheme: const IconThemeData(color: adminPrimary),
+        selectedLabelTextStyle: const TextStyle(
+          color: adminPrimary,
+          fontWeight: FontWeight.w700,
+        ),
+        indicatorColor: adminAccent.withAlpha(90),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: adminPrimary,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(0, 46),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: adminPrimary,
+          side: const BorderSide(color: Color(0xFFDAC36A)),
+          minimumSize: const Size(0, 44),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: const Color(0xFFFFF6D5),
+        selectedColor: adminAccent.withAlpha(110),
+        side: const BorderSide(color: Color(0xFFE8D58A)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
