@@ -207,3 +207,8 @@
 ### fix(android): enable desugaring for local notifications
 - Enabled Android core library desugaring in the user app for `flutter_local_notifications`.
 - Added the `desugar_jdk_libs` dependency and aligned Android/Kotlin JVM targets to Java 8 for the affected app.
+
+### fix(user): improve realtime map updates filters and booking confirmation
+- Replaced Home full reload actions with bounded realtime listener retry so map/search/filter state is preserved.
+- Made quick filters toggle back to the unfiltered view when the active chip is tapped again.
+- Added booking in-progress protection and a confirmation bottom sheet with ticket details after successful booking.

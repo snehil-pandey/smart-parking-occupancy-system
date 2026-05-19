@@ -133,11 +133,19 @@ class _HomeSearchHeaderState extends State<_HomeSearchHeader> {
                       )
                     else
                       IconButton(
-                        tooltip: 'Refresh Firebase data',
-                        onPressed: () {
-                          widget.controller.load();
-                        },
-                        icon: const Icon(Icons.refresh),
+                        tooltip: 'Retry live updates',
+                        onPressed: widget.state.isRefreshingData
+                            ? null
+                            : widget.controller.retryRealtime,
+                        icon: widget.state.isRefreshingData
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.sync),
                       ),
                   ],
                 ),
@@ -589,12 +597,27 @@ class _ParkingDiscoverySheet extends StatelessWidget {
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
-                onPressed: () {
-                  controller.load();
-                },
-                icon: const Icon(Icons.refresh),
-                label: const Text('Refresh'),
+                onPressed: state.isRefreshingData
+                    ? null
+                    : controller.retryRealtime,
+                icon: state.isRefreshingData
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.sync),
+                label: Text(
+                  state.isRefreshingData ? 'Retrying live data' : 'Retry',
+                ),
               ),
+            ),
+          ],
+          if (state.isRefreshingData && state.error == null) ...[
+            const SizedBox(height: 10),
+            const StatusStrip(
+              message: 'Reconnecting to live parking updates...',
+              isError: false,
             ),
           ],
           if (state.position != null) ...[
@@ -835,10 +858,24 @@ class _SelectedAreaSummary extends StatelessWidget {
                       foregroundColor: ParkHereTheme.black,
                     ),
                     onPressed: location.isBookable
-                        ? controller.createBooking
+                        ? state.isBookingInProgress
+                              ? null
+                              : controller.createBooking
                         : null,
-                    icon: const Icon(Icons.qr_code_2),
-                    label: Text(location.isBookable ? 'Book' : 'Unavailable'),
+                    icon: state.isBookingInProgress
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.qr_code_2),
+                    label: Text(
+                      state.isBookingInProgress
+                          ? 'Booking...'
+                          : location.isBookable
+                          ? 'Book'
+                          : 'Unavailable',
+                    ),
                   ),
                 ),
               ],
@@ -972,10 +1009,24 @@ class ParkingAreaDetailScreen extends ConsumerWidget {
           Text('${state.durationHours} hours - Total ${formatInr(total)}'),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: location.isBookable ? controller.createBooking : null,
-            icon: const Icon(Icons.qr_code_2),
+            onPressed: location.isBookable
+                ? state.isBookingInProgress
+                      ? null
+                      : controller.createBooking
+                : null,
+            icon: state.isBookingInProgress
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.qr_code_2),
             label: Text(
-              location.isBookable ? 'Book now' : location.availabilityLabel,
+              state.isBookingInProgress
+                  ? 'Booking...'
+                  : location.isBookable
+                  ? 'Book now'
+                  : location.availabilityLabel,
             ),
           ),
           const SizedBox(height: 10),

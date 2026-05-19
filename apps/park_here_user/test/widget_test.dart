@@ -70,6 +70,25 @@ void main() {
       'available_far',
     ]);
   });
+
+  test('single-select parking filters toggle back to all', () {
+    expect(
+      toggleParkingFilter(ParkingFilter.all, ParkingFilter.free),
+      ParkingFilter.free,
+    );
+    expect(
+      toggleParkingFilter(ParkingFilter.free, ParkingFilter.free),
+      ParkingFilter.all,
+    );
+    expect(
+      toggleParkingFilter(ParkingFilter.topRated, ParkingFilter.nearest),
+      ParkingFilter.nearest,
+    );
+    expect(
+      toggleParkingFilter(ParkingFilter.nearest, ParkingFilter.all),
+      ParkingFilter.all,
+    );
+  });
 }
 
 class _TestLocationService implements UserLocationService {

@@ -10,11 +10,31 @@ import 'features/user_profile_tab.dart';
 import 'user_app_controller.dart';
 import 'widgets/user_status_strip.dart';
 
-class UserHomeScreen extends ConsumerWidget {
+class UserHomeScreen extends ConsumerStatefulWidget {
   const UserHomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<UserHomeScreen> createState() => _UserHomeScreenState();
+}
+
+class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<UserAppState>(userAppControllerProvider, (previous, next) {
+      final confirmation = next.bookingConfirmation;
+      if (confirmation == null ||
+          previous?.bookingConfirmation?.booking.id ==
+              confirmation.booking.id) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _showBookingConfirmation(confirmation);
+      });
+    });
+
     final firebase = ref.watch(firebaseReadinessProvider);
     if (!firebase.isConfigured) {
       return FirebaseSetupErrorScreen(message: firebase.message);
@@ -86,6 +106,173 @@ class UserHomeScreen extends ConsumerWidget {
       ),
     );
   }
+
+  Future<void> _showBookingConfirmation(
+    UserBookingConfirmation confirmation,
+  ) async {
+    final controller = ref.read(userAppControllerProvider.notifier);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => _BookingConfirmationSheet(
+        confirmation: confirmation,
+        onViewTicket: () {
+          Navigator.of(context).pop();
+          controller.clearBookingConfirmation();
+          controller.changeTab(UserTab.bookings);
+        },
+        onViewDetails: () {
+          Navigator.of(context).pop();
+          controller.clearBookingConfirmation();
+          controller.changeTab(UserTab.bookings);
+        },
+      ),
+    );
+    controller.clearBookingConfirmation();
+  }
+}
+
+class _BookingConfirmationSheet extends StatelessWidget {
+  const _BookingConfirmationSheet({
+    required this.confirmation,
+    required this.onViewTicket,
+    required this.onViewDetails,
+  });
+
+  final UserBookingConfirmation confirmation;
+  final VoidCallback onViewTicket;
+  final VoidCallback onViewDetails;
+
+  @override
+  Widget build(BuildContext context) {
+    final booking = confirmation.booking;
+    final location = confirmation.location;
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          8,
+          20,
+          20 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const CircleAvatar(
+                  backgroundColor: Color(0xFF1B5E20),
+                  foregroundColor: Colors.white,
+                  child: Icon(Icons.check),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Booking confirmed',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(location.name, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 10),
+            _ConfirmationRow(
+              label: 'Ticket',
+              value: confirmation.shortTicketId,
+            ),
+            _ConfirmationRow(
+              label: 'Booking ID',
+              value: booking.id.length <= 18
+                  ? booking.id
+                  : '${booking.id.substring(0, 18)}...',
+            ),
+            _ConfirmationRow(
+              label: 'Valid from',
+              value: _formatTicketTime(booking.startTime),
+            ),
+            _ConfirmationRow(
+              label: 'Valid until',
+              value: _formatTicketTime(booking.endTime),
+            ),
+            _ConfirmationRow(label: 'Price', value: formatInr(booking.price)),
+            const SizedBox(height: 8),
+            const StatusStrip(
+              message: 'QR ticket is ready in the Bookings tab.',
+              isError: false,
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: onViewTicket,
+                    icon: const Icon(Icons.qr_code_2),
+                    label: const Text('View Ticket'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onViewDetails,
+                    icon: const Icon(Icons.confirmation_number_outlined),
+                    label: const Text('View Booking Details'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ConfirmationRow extends StatelessWidget {
+  const _ConfirmationRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 92,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.black54,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatTicketTime(DateTime value) {
+  final date = '${value.day}/${value.month}/${value.year}';
+  final time =
+      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+  return '$date, $time';
 }
 
 class FirebaseSetupErrorScreen extends StatelessWidget {

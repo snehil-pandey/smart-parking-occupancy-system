@@ -57,7 +57,30 @@ enum UserTab { home, bookings, explore, notifications, profile }
 
 enum ParkingFilter { all, openNow, free, nearest, topRated }
 
+ParkingFilter toggleParkingFilter(ParkingFilter current, ParkingFilter tapped) {
+  if (tapped == ParkingFilter.all || current == tapped) {
+    return ParkingFilter.all;
+  }
+  return tapped;
+}
+
 const Object _unset = Object();
+
+class UserBookingConfirmation {
+  const UserBookingConfirmation({
+    required this.booking,
+    required this.location,
+    required this.ticket,
+  });
+
+  final Booking booking;
+  final ParkingLocation location;
+  final ActiveQrTicket ticket;
+
+  String get shortTicketId => ticket.qrId.length <= 14
+      ? ticket.qrId
+      : '${ticket.qrId.substring(0, 14)}...';
+}
 
 class UserPosition {
   const UserPosition({
@@ -199,6 +222,9 @@ class UserAppState {
     required this.currentTab,
     required this.durationHours,
     required this.isLoading,
+    required this.isRefreshingData,
+    required this.isBookingInProgress,
+    this.bookingConfirmation,
     this.actionMessage,
     this.error,
   });
@@ -224,6 +250,8 @@ class UserAppState {
       currentTab: UserTab.home,
       durationHours: 2,
       isLoading: true,
+      isRefreshingData: false,
+      isBookingInProgress: false,
     );
   }
 
@@ -248,6 +276,8 @@ class UserAppState {
       currentTab: UserTab.home,
       durationHours: 2,
       isLoading: false,
+      isRefreshingData: false,
+      isBookingInProgress: false,
     );
   }
 
@@ -270,6 +300,9 @@ class UserAppState {
   final UserTab currentTab;
   final int durationHours;
   final bool isLoading;
+  final bool isRefreshingData;
+  final bool isBookingInProgress;
+  final UserBookingConfirmation? bookingConfirmation;
   final String? actionMessage;
   final String? error;
 
@@ -360,6 +393,10 @@ class UserAppState {
     UserTab? currentTab,
     int? durationHours,
     bool? isLoading,
+    bool? isRefreshingData,
+    bool? isBookingInProgress,
+    UserBookingConfirmation? bookingConfirmation,
+    bool clearBookingConfirmation = false,
     String? actionMessage,
     Object? error = _unset,
   }) {
@@ -389,6 +426,11 @@ class UserAppState {
       currentTab: currentTab ?? this.currentTab,
       durationHours: durationHours ?? this.durationHours,
       isLoading: isLoading ?? this.isLoading,
+      isRefreshingData: isRefreshingData ?? this.isRefreshingData,
+      isBookingInProgress: isBookingInProgress ?? this.isBookingInProgress,
+      bookingConfirmation: clearBookingConfirmation
+          ? null
+          : bookingConfirmation ?? this.bookingConfirmation,
       actionMessage: actionMessage,
       error: identical(error, _unset) ? this.error : error?.toString(),
     );
@@ -442,6 +484,7 @@ class UserAppController extends StateNotifier<UserAppState> {
   StreamSubscription<List<ParkingLocation>>? _parkingSubscription;
   StreamSubscription<List<Booking>>? _bookingSubscription;
   StreamSubscription<ActiveQrTicket?>? _activeQrSubscription;
+  String? _activeQrBookingId;
   StreamSubscription<List<ParkingReview>>? _reviewSubscription;
   StreamSubscription<List<AppNotification>>? _notificationSubscription;
   Timer? _searchDebounce;
@@ -595,7 +638,11 @@ class UserAppController extends StateNotifier<UserAppState> {
   }
 
   void changeFilter(ParkingFilter filter) {
-    state = state.copyWith(parkingFilter: filter);
+    // Single-select chips behave like toggles: tapping the active chip clears
+    // back to the unfiltered view while realtime data keeps streaming in.
+    state = state.copyWith(
+      parkingFilter: toggleParkingFilter(state.parkingFilter, filter),
+    );
   }
 
   void updateSearchQuery(String query) {
@@ -673,7 +720,28 @@ class UserAppController extends StateNotifier<UserAppState> {
     state = state.copyWith(durationHours: hours.clamp(1, 12));
   }
 
+  void clearBookingConfirmation() {
+    state = state.copyWith(clearBookingConfirmation: true);
+  }
+
+  Future<void> retryRealtime() async {
+    final user = state.user;
+    if (user == null) {
+      await load();
+      return;
+    }
+    state = state.copyWith(isRefreshingData: true, error: null);
+    await _resetRealtimeSubscriptions();
+    _startParkingUpdates();
+    _startBookingUpdates(user.id);
+    _startNotificationUpdates(user.id);
+    state = state.copyWith(isRefreshingData: false);
+  }
+
   Future<void> createBooking() async {
+    if (state.isBookingInProgress) {
+      return;
+    }
     final location = state.selectedLocation;
     final user = state.user;
     if (location == null) {
@@ -689,12 +757,26 @@ class UserAppController extends StateNotifier<UserAppState> {
       return;
     }
 
+    state = state.copyWith(
+      isBookingInProgress: true,
+      clearBookingConfirmation: true,
+      error: null,
+    );
     final now = DateTime.now();
     late final ParkingLocation reservedLocation;
     try {
       reservedLocation = await _parkingRepository.reserveSlot(location.id);
     } on StateError catch (error) {
-      state = state.copyWith(error: error.message);
+      final message = error.message.contains('no available slots')
+          ? 'Parking just became full. Please choose another area.'
+          : error.message;
+      state = state.copyWith(isBookingInProgress: false, error: message);
+      return;
+    } on Object catch (error) {
+      state = state.copyWith(
+        isBookingInProgress: false,
+        error: FirebaseErrorMessages.friendlyMessage(error),
+      );
       return;
     }
     final bookingId = 'book_${now.millisecondsSinceEpoch}';
@@ -717,26 +799,86 @@ class UserAppController extends StateNotifier<UserAppState> {
       createdAt: now,
       updatedAt: now,
     );
-    await _bookingRepository.createBooking(booking);
-    await _bookingRepository.createActiveQrTicket(booking);
-    await _notificationRepository.upsert(
-      AppNotification(
-        notificationId: 'notif_booking_$bookingId',
-        userId: user.id,
-        type: AppNotificationType.bookingConfirmed,
-        title: 'Booking confirmed',
-        message: '${reservedLocation.name} is reserved until ${_clock(end)}.',
-        relatedBookingId: bookingId,
-        relatedAreaId: reservedLocation.id,
-        read: false,
-        createdAt: now,
-      ),
-    );
-    await load();
-    final refreshed = await _parkingRepository.findById(reservedLocation.id);
-    if (refreshed != null) {
-      await selectLocation(refreshed);
+    try {
+      await _bookingRepository.createBooking(booking);
+      final ticket = await _bookingRepository.createActiveQrTicket(booking);
+      await _notificationRepository.upsert(
+        AppNotification(
+          notificationId: 'notif_booking_$bookingId',
+          userId: user.id,
+          type: AppNotificationType.bookingConfirmed,
+          title: 'Booking confirmed',
+          message: '${reservedLocation.name} is reserved until ${_clock(end)}.',
+          relatedBookingId: bookingId,
+          relatedAreaId: reservedLocation.id,
+          read: false,
+          createdAt: now,
+        ),
+      );
+      final locations = state.locations
+          .map(
+            (item) => item.id == reservedLocation.id ? reservedLocation : item,
+          )
+          .toList();
+      state = state.copyWith(
+        locations: locations,
+        selectedLocation: reservedLocation,
+        bookings: _mergeBooking(state.bookings, booking),
+        activeQrTicket: ticket,
+        isBookingInProgress: false,
+        actionMessage: 'Booking confirmed for ${reservedLocation.name}.',
+        bookingConfirmation: UserBookingConfirmation(
+          booking: booking,
+          location: reservedLocation,
+          ticket: ticket,
+        ),
+      );
+      _startActiveQrUpdates(booking.id);
+      await _refreshRoutesForSelected(reservedLocation);
+      _syncQrExpiryNotifications(ticket);
+    } on Object catch (error) {
+      state = state.copyWith(
+        isBookingInProgress: false,
+        error: FirebaseErrorMessages.friendlyMessage(error),
+      );
     }
+  }
+
+  List<Booking> _mergeBooking(List<Booking> current, Booking booking) {
+    final withoutExisting = current
+        .where((item) => item.id != booking.id)
+        .toList();
+    return [booking, ...withoutExisting]
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  Future<void> _refreshRoutesForSelected(ParkingLocation location) async {
+    final destination = RoutePoint(
+      id: location.id,
+      label: location.name,
+      latitude: location.latitude,
+      longitude: location.longitude,
+    );
+    final routes = await _routeProvider.findRoutes(
+      origin:
+          state.position?.toRoutePoint() ??
+          const UserPosition(
+            latitude: 13.3281211,
+            longitude: 77.1256930,
+            isFallback: true,
+            message: 'Using SIT Tumkur fallback location.',
+          ).toRoutePoint(),
+      destination: destination,
+    );
+    state = state.copyWith(routes: routes);
+  }
+
+  ParkingLocation? _updatedSelectedFrom(List<ParkingLocation> locations) {
+    final selectedId = state.selectedLocation?.id;
+    if (selectedId == null) {
+      return null;
+    }
+    return locations.where((location) => location.id == selectedId).firstOrNull;
   }
 
   Future<void> cancelActiveBooking({String? reason}) async {
@@ -771,7 +913,6 @@ class UserAppController extends StateNotifier<UserAppState> {
         ),
       );
       await _qrExpiryNotificationService.cancelScheduled();
-      await load();
     } on Object catch (error) {
       state = state.copyWith(error: error.toString());
     }
@@ -858,9 +999,14 @@ class UserAppController extends StateNotifier<UserAppState> {
   }
 
   Future<void> _loadThumbnails(List<ParkingLocation> locations) async {
-    final thumbnails = <String, ParkingAreaImage>{};
+    final activeAreaIds = locations.map((location) => location.id).toSet();
+    final thumbnails = Map<String, ParkingAreaImage>.from(state.thumbnailByArea)
+      ..removeWhere((areaId, _) => !activeAreaIds.contains(areaId));
     try {
       for (final location in locations) {
+        if (thumbnails.containsKey(location.id)) {
+          continue;
+        }
         final cached = _imageCache.getMany(location.thumbnailRefs).firstOrNull;
         if (cached != null) {
           thumbnails[location.id] = cached;
@@ -930,7 +1076,7 @@ class UserAppController extends StateNotifier<UserAppState> {
       state = state.copyWith(position: position);
       final selected = state.selectedLocation;
       if (selected != null) {
-        await selectLocation(selected);
+        await _refreshRoutesForSelected(selected);
       }
     });
   }
@@ -940,7 +1086,21 @@ class UserAppController extends StateNotifier<UserAppState> {
         .watchByRegion('region_sit_tumkur', limit: 30)
         .listen(
           (locations) async {
-            state = state.copyWith(locations: locations);
+            final updatedSelected = _updatedSelectedFrom(locations);
+            // Firestore streams update the lightweight area list in place.
+            // Search, filters, selected area, tab, and sheet position stay in
+            // local state so realtime snapshots do not wipe the Home UX.
+            state = state.copyWith(
+              locations: locations,
+              selectedLocation: updatedSelected,
+              clearSelectedLocation:
+                  state.selectedLocation != null && updatedSelected == null,
+              isLoading: false,
+              error: null,
+            );
+            if (updatedSelected != null) {
+              await _refreshRoutesForSelected(updatedSelected);
+            }
             await _loadThumbnails(locations);
           },
           onError: (Object error) {
@@ -992,8 +1152,14 @@ class UserAppController extends StateNotifier<UserAppState> {
   }
 
   void _startActiveQrUpdates(String? bookingId) {
+    if (bookingId != null &&
+        _activeQrBookingId == bookingId &&
+        _activeQrSubscription != null) {
+      return;
+    }
     _activeQrSubscription?.cancel();
     _activeQrSubscription = null;
+    _activeQrBookingId = bookingId;
     if (bookingId == null) {
       state = state.copyWith(clearActiveQrTicket: true);
       return;
@@ -1135,6 +1301,7 @@ class UserAppController extends StateNotifier<UserAppState> {
     _parkingSubscription = null;
     _bookingSubscription = null;
     _activeQrSubscription = null;
+    _activeQrBookingId = null;
     _reviewSubscription = null;
     _notificationSubscription = null;
   }

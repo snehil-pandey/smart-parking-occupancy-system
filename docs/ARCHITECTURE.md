@@ -131,6 +131,10 @@ flowchart TD
 
 Bounded listeners are used only where live updates matter. Image payloads are lazy-loaded, not streamed as entire collections.
 
+The user Home screen treats Firestore streams as the live data path after login. Parking area snapshots replace only the lightweight area list, keep the selected area by id when it still exists, and preserve search text, filter chips, current tab, and bottom-sheet context. The retry control restarts bounded listeners without calling the global app load path, so an index/network retry does not wipe the map or navigation state.
+
+Booking creation updates Firestore first, then writes an optimistic local booking/active QR state for immediate confirmation. The regular bookings, active QR, and parking area listeners remain the source of truth and reconcile the UI as soon as Firestore emits the next snapshots.
+
 ## Booking And QR Flow
 
 ```mermaid
