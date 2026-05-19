@@ -221,3 +221,16 @@
 ### fix(android): stabilize Kotlin build cache on Windows
 - Disabled Kotlin incremental compilation for the admin Android app to avoid Windows cross-root incremental cache failures involving Pub cache plugins.
 - Documented the Gradle daemon stop, build folder cleanup, `flutter clean`, and `flutter pub get` recovery flow.
+
+### refactor(admin-ui): separate admin app into focused sections
+- Split the admin screen internals into feature sections for auth, dashboard, region, parking areas, bookings, issues, and shared widgets while preserving the existing Firebase-backed controller.
+
+### feat(admin-ui): add responsive admin navigation shell
+- Added a mobile bottom navigation and tablet/web navigation rail for Dashboard, Region, Areas, Bookings, Issues, and Profile.
+- Dashboard now shows focused operational summaries and quick actions; bookings and issues are separated into their own workflows.
+
+### feat(admin-theme): apply Namma Yatri inspired admin styling
+- Updated admin theme tokens toward warm yellow, black text, off-white surfaces, rounded cards, simple chips, and operational button styling.
+
+### docs(admin): document admin app navigation structure
+- Documented the admin navigation shell, feature sections, responsive layout, visual direction, and current admin geometry preview limitation.

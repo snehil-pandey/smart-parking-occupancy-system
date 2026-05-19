@@ -100,6 +100,27 @@ flowchart TD
   Bookings --> Complete["Complete booking or consume QR"]
 ```
 
+## Admin App Navigation
+
+The admin app is now separated into focused operational sections instead of one dense dashboard. The shell uses bottom navigation on mobile and a `NavigationRail` on tablet/web widths. Section selection lives in `AdminAppState.section`, so Firestore stream updates do not reset the selected tab.
+
+```mermaid
+flowchart LR
+  Shell["AdminNavigationShell"] --> Dashboard["Dashboard: income, bookings, slots, issues, quick actions"]
+  Shell --> Region["Region: SIT Tumkur metadata and boundary preview"]
+  Shell --> Areas["Parking Areas: list, availability, geometry, images"]
+  Shell --> Bookings["Bookings: active, completed, cancelled"]
+  Shell --> Issues["Issues: filters and status updates"]
+  Shell --> Profile["Profile / Settings: business info, Firebase status, logout"]
+  Dashboard --> Controller["AdminAppController"]
+  Areas --> Controller
+  Bookings --> Controller
+  Issues --> Controller
+  Controller --> Firebase["Firebase Auth + Firestore streams"]
+```
+
+Visual direction is practical and Namma-Yatri-inspired: warm yellow accents, black text, off-white app background, green for available/open states, grey for inactive/closed states, and simple cards/chips. The admin app remains operational rather than decorative.
+
 ## Region To Parking Area Flow
 
 SIT Tumkur is the current main region. Admins manage that region boundary, then publish bookable parking areas inside it. Users only see parking areas; the region is not a selectable parking object.
@@ -213,6 +234,8 @@ flowchart TD
 ```
 
 Poor GPS accuracy is shown in the Admin app. The seeded SIT Tumkur coordinates are approximate and should be corrected using this flow before real operation.
+
+The admin geometry surface is currently a lightweight preview of saved polygons, numbered corner points, and gate points. It is not wired to the real `flutter_map` OpenStreetMap tile stack yet. The user app uses real OSM tiles; admin can safely keep editing Firebase geometry through GPS controls until an OSM editor is added.
 
 ## Firestore-Only Image Flow
 
