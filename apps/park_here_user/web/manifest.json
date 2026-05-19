@@ -1,11 +1,11 @@
 {
-    "name": "park_here_user",
-    "short_name": "park_here_user",
+    "name": "Park Here",
+    "short_name": "Park Here",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFFFFF",
+    "theme_color": "#F7C948",
+    "description": "Park Here parking discovery and booking app.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

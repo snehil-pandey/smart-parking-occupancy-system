@@ -198,3 +198,8 @@
 
 ### perf(cache): add Firebase-first client caching strategy
 - Enabled Firestore offline persistence in the user app and documented Riverpod session cache, image payload cache, lazy image reads, and why Redis is not used in a Flutter-only Firebase app.
+
+### chore(app): apply launcher icons and display names
+- Added separate user/admin launcher icon assets and `flutter_launcher_icons` config.
+- Generated Android, iOS, and web launcher icons for both apps.
+- Updated Android labels, iOS display names, web manifests, page titles, and local setup icon regeneration notes.

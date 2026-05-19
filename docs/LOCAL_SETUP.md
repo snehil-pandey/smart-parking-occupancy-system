@@ -41,6 +41,31 @@ flutter pub get
 flutter run -d chrome
 ```
 
+## Launcher Icons And Display Names
+
+Both apps keep separate launcher icon sources so branding does not cross over:
+
+| App | Display name | Source asset |
+| --- | --- | --- |
+| User | `Park Here` | `apps/park_here_user/assets/icons/app_icon.png` |
+| Admin | `Park Here: Admin` | `apps/park_here_admin/assets/icons/app_icon.png` |
+
+After replacing either icon asset, regenerate platform launchers from that app folder:
+
+```bash
+cd apps/park_here_user
+flutter pub get
+dart run flutter_launcher_icons
+```
+
+```bash
+cd apps/park_here_admin
+flutter pub get
+dart run flutter_launcher_icons
+```
+
+This updates Android mipmaps/adaptive icons, iOS `AppIcon.appiconset`, web icons, and favicon files. Android labels, iOS `CFBundleDisplayName`, and web manifest/title values are tracked in platform metadata.
+
 ## Firebase Project Setup
 
 Use one Firebase project for the MVP unless you need separate staging and production projects.

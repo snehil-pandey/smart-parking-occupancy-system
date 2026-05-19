@@ -1,11 +1,11 @@
 {
-    "name": "park_here_admin",
-    "short_name": "park_here_admin",
+    "name": "Park Here: Admin",
+    "short_name": "Park Here: Admin",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#111827",
+    "theme_color": "#111827",
+    "description": "Park Here location administrator app.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
