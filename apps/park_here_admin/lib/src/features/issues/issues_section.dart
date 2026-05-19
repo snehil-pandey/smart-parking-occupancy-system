@@ -11,8 +11,10 @@ class _IssuesPanel extends StatefulWidget {
 }
 
 class _IssuesPanelState extends State<_IssuesPanel> {
-  String? _areaId;
-  IssueStatus? _status;
+  static const _all = 'all';
+
+  String _areaFilter = _all;
+  String _statusFilter = _all;
 
   @override
   Widget build(BuildContext context) {
@@ -20,8 +22,9 @@ class _IssuesPanelState extends State<_IssuesPanel> {
       for (final location in widget.state.locations) location.id: location.name,
     };
     final visibleIssues = widget.state.issues.where((issue) {
-      final areaMatches = _areaId == null || issue.areaId == _areaId;
-      final statusMatches = _status == null || issue.status == _status;
+      final areaMatches = _areaFilter == _all || issue.areaId == _areaFilter;
+      final statusMatches =
+          _statusFilter == _all || issue.status.name == _statusFilter;
       return areaMatches && statusMatches;
     }).toList();
 
@@ -40,12 +43,13 @@ class _IssuesPanelState extends State<_IssuesPanel> {
               spacing: 10,
               runSpacing: 10,
               children: [
-                DropdownMenu<String?>(
-                  initialSelection: _areaId,
+                DropdownMenu<String>(
+                  initialSelection: _areaFilter,
                   label: const Text('Area filter'),
-                  onSelected: (value) => setState(() => _areaId = value),
+                  onSelected: (value) =>
+                      setState(() => _areaFilter = value ?? _all),
                   dropdownMenuEntries: [
-                    const DropdownMenuEntry(value: null, label: 'All areas'),
+                    const DropdownMenuEntry(value: _all, label: 'All areas'),
                     for (final location in widget.state.locations)
                       DropdownMenuEntry(
                         value: location.id,
@@ -53,14 +57,18 @@ class _IssuesPanelState extends State<_IssuesPanel> {
                       ),
                   ],
                 ),
-                DropdownMenu<IssueStatus?>(
-                  initialSelection: _status,
+                DropdownMenu<String>(
+                  initialSelection: _statusFilter,
                   label: const Text('Status'),
-                  onSelected: (value) => setState(() => _status = value),
+                  onSelected: (value) =>
+                      setState(() => _statusFilter = value ?? _all),
                   dropdownMenuEntries: [
-                    const DropdownMenuEntry(value: null, label: 'All statuses'),
+                    const DropdownMenuEntry(value: _all, label: 'All statuses'),
                     for (final status in IssueStatus.values)
-                      DropdownMenuEntry(value: status, label: status.label),
+                      DropdownMenuEntry(
+                        value: status.name,
+                        label: status.label,
+                      ),
                   ],
                 ),
               ],
