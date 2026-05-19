@@ -29,6 +29,7 @@ void main() {
           notificationRepositoryProvider.overrideWithValue(
             _TestNotificationRepository(),
           ),
+          routeProvider.overrideWithValue(SitTumkurRoadGraphRouteProvider()),
           firebaseReadinessProvider.overrideWithValue(
             const FirebaseReadiness(
               isConfigured: true,

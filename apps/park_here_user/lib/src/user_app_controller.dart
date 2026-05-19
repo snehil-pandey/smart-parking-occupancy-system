@@ -35,7 +35,7 @@ final notificationRepositoryProvider = Provider<NotificationRepository>(
   (ref) => FirebaseNotificationRepository(),
 );
 final routeProvider = Provider<RouteProvider>(
-  (ref) => const StraightLineRouteProvider(),
+  (ref) => OsrmRouteProvider(fallback: SitTumkurRoadGraphRouteProvider()),
 );
 final firebaseReadinessProvider = Provider<FirebaseReadiness>(
   (ref) => const FirebaseReadinessService().check(),
@@ -208,6 +208,7 @@ class UserAppState {
     required this.locations,
     required this.bookings,
     required this.routes,
+    required this.selectedRouteId,
     required this.thumbnailByArea,
     required this.previewImages,
     required this.selectedReviews,
@@ -236,6 +237,7 @@ class UserAppState {
       locations: const [],
       bookings: const [],
       routes: const [],
+      selectedRouteId: null,
       thumbnailByArea: const {},
       previewImages: const [],
       selectedReviews: const [],
@@ -262,6 +264,7 @@ class UserAppState {
       locations: const [],
       bookings: const [],
       routes: const [],
+      selectedRouteId: null,
       thumbnailByArea: const {},
       previewImages: const [],
       selectedReviews: const [],
@@ -286,6 +289,7 @@ class UserAppState {
   final List<ParkingLocation> locations;
   final List<Booking> bookings;
   final List<RouteOption> routes;
+  final String? selectedRouteId;
   final Map<String, ParkingAreaImage> thumbnailByArea;
   final List<ParkingAreaImage> previewImages;
   final List<ParkingReview> selectedReviews;
@@ -333,6 +337,11 @@ class UserAppState {
     return filtered;
   }
 
+  RouteOption? get selectedRoute =>
+      routes.where((route) => route.id == selectedRouteId).firstOrNull ??
+      routes.where((route) => route.isBest).firstOrNull ??
+      routes.firstOrNull;
+
   List<ParkingLocation> get topRatedLocations =>
       [...locations]
         ..sort((a, b) => b.ratingAverage.compareTo(a.ratingAverage));
@@ -376,6 +385,8 @@ class UserAppState {
     List<ParkingLocation>? locations,
     List<Booking>? bookings,
     List<RouteOption>? routes,
+    String? selectedRouteId,
+    bool clearSelectedRoute = false,
     Map<String, ParkingAreaImage>? thumbnailByArea,
     List<ParkingAreaImage>? previewImages,
     List<ParkingReview>? selectedReviews,
@@ -406,6 +417,9 @@ class UserAppState {
       locations: locations ?? this.locations,
       bookings: bookings ?? this.bookings,
       routes: routes ?? this.routes,
+      selectedRouteId: clearSelectedRoute
+          ? null
+          : selectedRouteId ?? this.selectedRouteId,
       thumbnailByArea: thumbnailByArea ?? this.thumbnailByArea,
       previewImages: previewImages ?? this.previewImages,
       selectedReviews: selectedReviews ?? this.selectedReviews,
@@ -480,6 +494,7 @@ class UserAppController extends StateNotifier<UserAppState> {
   final QrPayloadService _qrPayloadService;
   final PlaceSearchService _placeSearchService;
   final QrExpiryNotificationService _qrExpiryNotificationService;
+  final ParkingGateSelector _gateSelector = const ParkingGateSelector();
   StreamSubscription<UserPosition>? _positionSubscription;
   StreamSubscription<List<ParkingLocation>>? _parkingSubscription;
   StreamSubscription<List<Booking>>? _bookingSubscription;
@@ -605,32 +620,23 @@ class UserAppController extends StateNotifier<UserAppState> {
   }
 
   Future<void> selectLocation(ParkingLocation location) async {
-    final destination = RoutePoint(
-      id: location.id,
-      label: location.name,
-      latitude: location.latitude,
-      longitude: location.longitude,
-    );
-    final routes = await _routeProvider.findRoutes(
-      origin:
-          state.position?.toRoutePoint() ??
-          const UserPosition(
-            latitude: 13.3281211,
-            longitude: 77.1256930,
-            isFallback: true,
-            message: 'Using SIT Tumkur fallback location.',
-          ).toRoutePoint(),
-      destination: destination,
-    );
     state = state.copyWith(
       selectedLocation: location,
       clearSelectedPlace: true,
-      routes: routes,
       currentTab: UserTab.home,
     );
+    await _refreshRoutesForSelected(location);
     await _loadPreviewImages(location);
     await _loadReviews(location.id);
     _startReviewUpdates(location.id);
+  }
+
+  void selectRoute(String routeId) {
+    final selected = state.routes.where((route) => route.id == routeId);
+    if (selected.isEmpty) {
+      return;
+    }
+    state = state.copyWith(selectedRouteId: routeId);
   }
 
   void changeTab(UserTab tab) {
@@ -853,24 +859,35 @@ class UserAppController extends StateNotifier<UserAppState> {
   }
 
   Future<void> _refreshRoutesForSelected(ParkingLocation location) async {
-    final destination = RoutePoint(
-      id: location.id,
-      label: location.name,
-      latitude: location.latitude,
-      longitude: location.longitude,
+    final origin =
+        state.position?.toRoutePoint() ??
+        const UserPosition(
+          latitude: 13.3281211,
+          longitude: 77.1256930,
+          isFallback: true,
+          message: 'Using SIT Tumkur fallback location.',
+        ).toRoutePoint();
+    final destination = _gateSelector.destinationFor(
+      origin: origin,
+      location: location,
     );
-    final routes = await _routeProvider.findRoutes(
-      origin:
-          state.position?.toRoutePoint() ??
-          const UserPosition(
-            latitude: 13.3281211,
-            longitude: 77.1256930,
-            isFallback: true,
-            message: 'Using SIT Tumkur fallback location.',
-          ).toRoutePoint(),
-      destination: destination,
-    );
-    state = state.copyWith(routes: routes);
+    try {
+      final routes = await _routeProvider.findRoutes(
+        origin: origin,
+        destination: destination,
+      );
+      state = state.copyWith(
+        routes: routes,
+        selectedRouteId: routes.firstOrNull?.id,
+        clearSelectedRoute: routes.isEmpty,
+      );
+    } on Object catch (error) {
+      state = state.copyWith(
+        routes: const [],
+        clearSelectedRoute: true,
+        error: FirebaseErrorMessages.friendlyMessage(error),
+      );
+    }
   }
 
   ParkingLocation? _updatedSelectedFrom(List<ParkingLocation> locations) {

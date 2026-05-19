@@ -24,6 +24,7 @@ class UserHomeTab extends StatelessWidget {
             selectedLocation: state.selectedLocation,
             selectedPlace: state.selectedPlace,
             routes: state.routes,
+            selectedRouteId: state.selectedRoute?.id,
             position: state.position,
             onSelect: controller.selectLocation,
           ),
@@ -229,6 +230,7 @@ class InteractiveParkingMap extends StatefulWidget {
     required this.selectedLocation,
     required this.selectedPlace,
     required this.routes,
+    required this.selectedRouteId,
     required this.position,
     required this.onSelect,
     super.key,
@@ -238,6 +240,7 @@ class InteractiveParkingMap extends StatefulWidget {
   final ParkingLocation? selectedLocation;
   final PlaceSearchResult? selectedPlace;
   final List<RouteOption> routes;
+  final String? selectedRouteId;
   final UserPosition? position;
   final ValueChanged<ParkingLocation> onSelect;
 
@@ -274,7 +277,9 @@ class _InteractiveParkingMapState extends State<InteractiveParkingMap>
   void didUpdateWidget(covariant InteractiveParkingMap oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.selectedLocation?.id != oldWidget.selectedLocation?.id ||
-        widget.selectedPlace?.id != oldWidget.selectedPlace?.id) {
+        widget.selectedPlace?.id != oldWidget.selectedPlace?.id ||
+        _routeSignature(selectedRoute) !=
+            _routeSignature(_selectedRouteFor(oldWidget))) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _focusSelected());
     }
   }
@@ -376,8 +381,10 @@ class _InteractiveParkingMapState extends State<InteractiveParkingMap>
                   const SizedBox(width: 6),
                   Text(
                     widget.routes.isEmpty
-                        ? 'OSM map - fallback routing'
-                        : '${widget.routes.length} route options',
+                        ? 'Road route unavailable'
+                        : selectedRoute?.isFallback == true
+                        ? 'Fallback campus road graph'
+                        : '${widget.routes.length} road route option${widget.routes.length == 1 ? '' : 's'}',
                   ),
                 ],
               ),
@@ -415,8 +422,10 @@ class _InteractiveParkingMapState extends State<InteractiveParkingMap>
         points: route.points
             .map((point) => LatLng(point.latitude, point.longitude))
             .toList(),
-        color: route.isBest ? ParkHereTheme.black : const Color(0xFF5C6BC0),
-        strokeWidth: route.isBest ? 5 : 3,
+        color: route.id == selectedRoute?.id
+            ? ParkHereTheme.black
+            : const Color(0xFF5C6BC0).withAlpha(150),
+        strokeWidth: route.id == selectedRoute?.id ? 5 : 3,
       ),
   ];
 
@@ -487,6 +496,11 @@ class _InteractiveParkingMapState extends State<InteractiveParkingMap>
   }
 
   void _focusSelected() {
+    final route = selectedRoute;
+    if (route != null && route.points.length >= 2) {
+      _fitRoute(route);
+      return;
+    }
     final selected = widget.selectedLocation;
     if (selected != null) {
       _animateTo(_latLngForLocation(selected), zoom: 18);
@@ -513,6 +527,21 @@ class _InteractiveParkingMapState extends State<InteractiveParkingMap>
     _animationController.forward(from: 0);
   }
 
+  void _fitRoute(RouteOption route) {
+    final points = route.points
+        .map((point) => LatLng(point.latitude, point.longitude))
+        .toList();
+    if (points.length < 2) {
+      return;
+    }
+    _mapController.fitCamera(
+      CameraFit.bounds(
+        bounds: LatLngBounds.fromPoints(points),
+        padding: const EdgeInsets.fromLTRB(42, 180, 42, 260),
+      ),
+    );
+  }
+
   LatLng _latLngForLocation(ParkingLocation location) =>
       LatLng(location.latitude, location.longitude);
 
@@ -531,6 +560,27 @@ class _InteractiveParkingMapState extends State<InteractiveParkingMap>
       return LatLng(place.latitude, place.longitude);
     }
     return null;
+  }
+
+  RouteOption? get selectedRoute =>
+      widget.routes
+          .where((route) => route.id == widget.selectedRouteId)
+          .firstOrNull ??
+      widget.routes.where((route) => route.isBest).firstOrNull ??
+      widget.routes.firstOrNull;
+
+  RouteOption? _selectedRouteFor(InteractiveParkingMap value) =>
+      value.routes
+          .where((route) => route.id == value.selectedRouteId)
+          .firstOrNull ??
+      value.routes.where((route) => route.isBest).firstOrNull ??
+      value.routes.firstOrNull;
+
+  String _routeSignature(RouteOption? route) {
+    if (route == null) {
+      return '';
+    }
+    return '${route.id}:${route.points.length}:${route.distanceKm}:${route.durationMinutes}';
   }
 }
 
@@ -781,7 +831,7 @@ class _SelectedAreaSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final location = state.selectedLocation!;
-    final best = state.routes.where((route) => route.isBest).firstOrNull;
+    final best = state.selectedRoute;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: ParkHereTheme.black,
@@ -975,11 +1025,19 @@ class ParkingAreaDetailScreen extends ConsumerWidget {
             for (final route in state.routes)
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: Icon(route.isBest ? Icons.bolt : Icons.alt_route),
+                selected: route.id == state.selectedRoute?.id,
+                leading: Icon(
+                  route.id == state.selectedRoute?.id
+                      ? Icons.bolt
+                      : Icons.alt_route,
+                ),
                 title: Text(route.name),
                 subtitle: Text(
-                  '${route.distanceKm} km - ${route.durationMinutes} min',
+                  '${route.distanceKm} km - ${route.durationMinutes} min'
+                  '${route.destinationLabel == null ? '' : ' to ${route.destinationLabel}'}'
+                  '${route.isFallback ? ' - fallback' : ''}',
                 ),
+                onTap: () => controller.selectRoute(route.id),
               ),
           ],
           if (location.gatePoints.isNotEmpty) ...[
