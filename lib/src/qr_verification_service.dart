@@ -187,7 +187,11 @@ class QrVerificationService {
         }
 
         final now = Timestamp.fromDate(DateTime.now());
-        transaction.update(ticketRef, {'status': ActiveQrStatus.used.name});
+        transaction.update(ticketRef, {
+          'status': ActiveQrStatus.used.name,
+          'usedAt': now,
+          'scannerMode': 'android_fallback',
+        });
         transaction.update(bookingRef, {
           'status': BookingStatus.completed.name,
           'qrUsedAt': now,
