@@ -16,8 +16,12 @@ class _LocationsPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Parking areas in SIT Tumkur',
+              'Parking areas in ${state.region.name}',
               style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Areas and gates must stay inside your controlled region.',
             ),
             const SizedBox(height: 10),
             if (state.locations.isEmpty)
@@ -48,6 +52,8 @@ class _LocationsPanel extends StatelessWidget {
               const Divider(height: 28),
               _AreaBoundaryEditor(state: state, controller: controller),
               const Divider(height: 28),
+              _AreaDetailsEditor(location: selected, controller: controller),
+              const Divider(height: 28),
               _AvailabilityEditor(location: selected, controller: controller),
               const Divider(height: 28),
               _ImageManager(state: state, controller: controller),
@@ -72,16 +78,11 @@ class _AreaBoundaryEditor extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Area geometry preview',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        Text('Area geometry', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 4),
-        const Text(
-          'Admin OSM tiles are not wired yet; this preview shows saved polygons and GPS gate points only.',
-        ),
+        const Text('Use point modes to add or move corners and gates.'),
         const SizedBox(height: 8),
-        _MiniBoundaryMap(
+        _AdminOsmGeometryMap(
           title: location.name,
           regionPoints: state.region.boundaryPoints,
           areaPoints: state.draftBoundaryPoints,
@@ -95,22 +96,39 @@ class _AreaBoundaryEditor extends StatelessWidget {
           },
         ),
         const SizedBox(height: 8),
-        SegmentedButton<AdminGeometryMode>(
-          segments: const [
-            ButtonSegment(
-              value: AdminGeometryMode.corner,
-              icon: Icon(Icons.polyline_outlined),
-              label: Text('Corner mode'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _GeometryModeChip(
+              mode: AdminGeometryMode.addCorner,
+              current: state.geometryMode,
+              icon: Icons.polyline_outlined,
+              label: 'Add Corner',
+              onSelected: controller.changeGeometryMode,
             ),
-            ButtonSegment(
-              value: AdminGeometryMode.gate,
-              icon: Icon(Icons.door_front_door_outlined),
-              label: Text('Gate mode'),
+            _GeometryModeChip(
+              mode: AdminGeometryMode.moveCorner,
+              current: state.geometryMode,
+              icon: Icons.open_with_outlined,
+              label: 'Move Corner',
+              onSelected: controller.changeGeometryMode,
+            ),
+            _GeometryModeChip(
+              mode: AdminGeometryMode.addGate,
+              current: state.geometryMode,
+              icon: Icons.door_front_door_outlined,
+              label: 'Add Gate',
+              onSelected: controller.changeGeometryMode,
+            ),
+            _GeometryModeChip(
+              mode: AdminGeometryMode.moveGate,
+              current: state.geometryMode,
+              icon: Icons.move_down_outlined,
+              label: 'Move Gate',
+              onSelected: controller.changeGeometryMode,
             ),
           ],
-          selected: {state.geometryMode},
-          onSelectionChanged: (selection) =>
-              controller.changeGeometryMode(selection.first),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -166,12 +184,12 @@ class _AreaBoundaryEditor extends StatelessWidget {
             FilledButton.icon(
               onPressed: controller.markCurrentPositionAsCorner,
               icon: const Icon(Icons.add_location_alt_outlined),
-              label: const Text('Mark Current Position as Corner'),
+              label: const Text('Use Current GPS as Corner'),
             ),
             OutlinedButton.icon(
               onPressed: () => _showGateSheet(context),
               icon: const Icon(Icons.door_front_door_outlined),
-              label: const Text('Mark Current Position as Gate'),
+              label: const Text('Use Current GPS as Gate'),
             ),
             IconButton.filledTonal(
               tooltip: 'Undo last geometry change',
@@ -395,6 +413,119 @@ class _GateList extends StatelessWidget {
               ),
             ),
           ),
+      ],
+    );
+  }
+}
+
+class _GeometryModeChip extends StatelessWidget {
+  const _GeometryModeChip({
+    required this.mode,
+    required this.current,
+    required this.icon,
+    required this.label,
+    required this.onSelected,
+  });
+
+  final AdminGeometryMode mode;
+  final AdminGeometryMode current;
+  final IconData icon;
+  final String label;
+  final ValueChanged<AdminGeometryMode> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = mode == current;
+    return FilterChip(
+      avatar: Icon(icon, size: 18),
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onSelected(mode),
+    );
+  }
+}
+
+class _AreaDetailsEditor extends StatefulWidget {
+  const _AreaDetailsEditor({required this.location, required this.controller});
+
+  final ParkingLocation location;
+  final AdminAppController controller;
+
+  @override
+  State<_AreaDetailsEditor> createState() => _AreaDetailsEditorState();
+}
+
+class _AreaDetailsEditorState extends State<_AreaDetailsEditor> {
+  late final TextEditingController name = TextEditingController(
+    text: widget.location.name,
+  );
+  late final TextEditingController description = TextEditingController(
+    text: widget.location.description,
+  );
+  late final TextEditingController address = TextEditingController(
+    text: widget.location.address,
+  );
+
+  @override
+  void didUpdateWidget(covariant _AreaDetailsEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.location.id != widget.location.id) {
+      name.text = widget.location.name;
+      description.text = widget.location.description;
+      address.text = widget.location.address;
+    }
+  }
+
+  @override
+  void dispose() {
+    name.dispose();
+    description.dispose();
+    address.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Area details', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 10),
+        TextField(
+          controller: name,
+          decoration: const InputDecoration(
+            labelText: 'Name',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: description,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Description',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: address,
+          decoration: const InputDecoration(
+            labelText: 'Address',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 10),
+        FilledButton.icon(
+          onPressed: () => widget.controller.updateSelectedDetails(
+            name: name.text,
+            description: description.text,
+            address: address.text,
+          ),
+          icon: const Icon(Icons.save_outlined),
+          label: const Text('Update details'),
+        ),
       ],
     );
   }

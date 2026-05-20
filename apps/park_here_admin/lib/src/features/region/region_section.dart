@@ -9,6 +9,90 @@ class _RegionManagementPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final region = state.region;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Region Management',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  region.name,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                Text(region.address),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    Chip(
+                      avatar: const Icon(Icons.center_focus_strong, size: 18),
+                      label: Text(
+                        '${region.centerLat.toStringAsFixed(6)}, ${region.centerLng.toStringAsFixed(6)}',
+                      ),
+                    ),
+                    Chip(
+                      avatar: const Icon(Icons.timeline, size: 18),
+                      label: Text(
+                        '${region.boundaryPoints.length} polygon points',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _ControlledRegionEditor(state: state, controller: controller),
+      ],
+    );
+  }
+}
+
+class _ControlledRegionEditor extends StatefulWidget {
+  const _ControlledRegionEditor({
+    required this.state,
+    required this.controller,
+    this.mandatory = false,
+  });
+
+  final AdminAppState state;
+  final AdminAppController controller;
+  final bool mandatory;
+
+  @override
+  State<_ControlledRegionEditor> createState() =>
+      _ControlledRegionEditorState();
+}
+
+class _ControlledRegionEditorState extends State<_ControlledRegionEditor> {
+  late final TextEditingController _name = TextEditingController(
+    text: widget.state.region.name,
+  );
+  late final TextEditingController _address = TextEditingController(
+    text: widget.state.region.address,
+  );
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _address.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = widget.state;
+    final controller = widget.controller;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -16,40 +100,123 @@ class _RegionManagementPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Region Management',
-              style: Theme.of(context).textTheme.titleMedium,
+              widget.mandatory
+                  ? 'Set up controlled region'
+                  : 'Edit controlled region',
+              style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 6),
-            Text(region.name, style: Theme.of(context).textTheme.titleLarge),
-            Text(region.address),
-            const SizedBox(height: 12),
-            _MiniBoundaryMap(
-              title: 'SIT Tumkur region geometry preview',
-              regionPoints: region.boundaryPoints,
-              areaPoints: const [],
-              gatePoints: const [],
-              selectedGeometryPoint: null,
+            Text(
+              widget.mandatory
+                  ? 'Create your region before managing parking areas.'
+                  : 'Use Add Point or Move Point mode to update the saved region.',
             ),
             const SizedBox(height: 12),
+            TextField(
+              controller: _name,
+              decoration: const InputDecoration(
+                labelText: 'Region name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _address,
+              decoration: const InputDecoration(
+                labelText: 'Address',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _AdminOsmGeometryMap(
+              title: 'Region boundary',
+              regionPoints: state.regionDraftBoundaryPoints,
+              areaPoints: const [],
+              gatePoints: const [],
+              selectedRegionPoint: state.selectedRegionPoint,
+              selectedGeometryPoint: null,
+              onMapTap: controller.handleRegionMapTap,
+              onRegionPointTap: controller.selectRegionPoint,
+            ),
+            const SizedBox(height: 12),
+            SegmentedButton<AdminRegionEditMode>(
+              segments: const [
+                ButtonSegment(
+                  value: AdminRegionEditMode.addPoint,
+                  icon: Icon(Icons.add_location_alt_outlined),
+                  label: Text('Add Point'),
+                ),
+                ButtonSegment(
+                  value: AdminRegionEditMode.movePoint,
+                  icon: Icon(Icons.open_with_outlined),
+                  label: Text('Move Point'),
+                ),
+              ],
+              selected: {state.regionEditMode},
+              onSelectionChanged: (selection) =>
+                  controller.changeRegionEditMode(selection.first),
+            ),
+            const SizedBox(height: 10),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
                 Chip(
-                  avatar: const Icon(Icons.center_focus_strong, size: 18),
-                  label: Text('${region.centerLat}, ${region.centerLng}'),
+                  avatar: const Icon(Icons.polyline_outlined, size: 18),
+                  label: Text(
+                    '${state.regionDraftBoundaryPoints.length} points',
+                  ),
                 ),
-                Chip(
-                  avatar: const Icon(Icons.timeline, size: 18),
-                  label: Text('${region.boundaryPoints.length} polygon points'),
-                ),
+                if (state.selectedRegionPoint != null)
+                  Chip(
+                    avatar: const Icon(Icons.ads_click, size: 18),
+                    label: Text('Selected ${state.selectedRegionPoint! + 1}'),
+                  ),
               ],
             ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: controller.nudgeRegionBoundary,
-              icon: const Icon(Icons.edit_location_alt_outlined),
-              label: const Text('Mark/edit region boundary'),
+            const SizedBox(height: 8),
+            Text(
+              state.regionStatusMessage,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: controller.markCurrentPositionAsRegionPoint,
+                  icon: const Icon(Icons.my_location),
+                  label: const Text('Use Current GPS'),
+                ),
+                IconButton.filledTonal(
+                  tooltip: 'Undo region edit',
+                  onPressed: controller.undoLastRegionChange,
+                  icon: const Icon(Icons.undo),
+                ),
+                OutlinedButton.icon(
+                  onPressed: controller.undoLastRegionPoint,
+                  icon: const Icon(Icons.backspace_outlined),
+                  label: const Text('Undo Last Point'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: controller.clearRegionDraft,
+                  icon: const Icon(Icons.clear_all),
+                  label: const Text('Clear Region'),
+                ),
+                FilledButton.icon(
+                  onPressed: state.isSavingRegion
+                      ? null
+                      : () => controller.saveControlledRegion(
+                          name: _name.text,
+                          address: _address.text,
+                        ),
+                  icon: const Icon(Icons.save_outlined),
+                  label: Text(
+                    state.isSavingRegion ? 'Saving Region...' : 'Save Region',
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -58,14 +225,16 @@ class _RegionManagementPanel extends StatelessWidget {
   }
 }
 
-class _MiniBoundaryMap extends StatelessWidget {
-  const _MiniBoundaryMap({
+class _AdminOsmGeometryMap extends StatefulWidget {
+  const _AdminOsmGeometryMap({
     required this.title,
     required this.regionPoints,
     required this.areaPoints,
     required this.gatePoints,
     required this.selectedGeometryPoint,
+    this.selectedRegionPoint,
     this.onMapTap,
+    this.onRegionPointTap,
     this.onCornerTap,
     this.onGateTap,
   });
@@ -75,69 +244,116 @@ class _MiniBoundaryMap extends StatelessWidget {
   final List<GeoPointValue> areaPoints;
   final List<GatePoint> gatePoints;
   final AdminGeometrySelection? selectedGeometryPoint;
+  final int? selectedRegionPoint;
   final ValueChanged<GeoPointValue>? onMapTap;
+  final ValueChanged<int>? onRegionPointTap;
   final ValueChanged<int>? onCornerTap;
   final ValueChanged<int>? onGateTap;
 
   @override
+  State<_AdminOsmGeometryMap> createState() => _AdminOsmGeometryMapState();
+}
+
+class _AdminOsmGeometryMapState extends State<_AdminOsmGeometryMap> {
+  bool _tileError = false;
+
+  @override
   Widget build(BuildContext context) {
+    final points = [
+      ...widget.regionPoints,
+      ...widget.areaPoints,
+      ...widget.gatePoints.map(
+        (gate) =>
+            GeoPointValue(latitude: gate.latitude, longitude: gate.longitude),
+      ),
+    ];
+    final center = points.isEmpty
+        ? const LatLng(13.3281211, 77.1256930)
+        : _toLatLng(GeometryUtils.calculatePolygonCenter(points));
     return LayoutBuilder(
       builder: (context, constraints) {
-        final height = constraints.maxWidth < 520 ? 240.0 : 320.0;
+        final height = constraints.maxWidth < 520 ? 280.0 : 380.0;
         return SizedBox(
           height: height,
           width: double.infinity,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: const Color(0xFFE9EFEA),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFD5DFDA)),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTapUp: (details) => _handleTap(
-                  details.localPosition,
-                  Size(constraints.maxWidth, height),
-                ),
-                child: Stack(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Stack(
+              children: [
+                FlutterMap(
+                  options: MapOptions(
+                    initialCenter: center,
+                    initialZoom: points.length >= 2 ? 18 : 16,
+                    initialCameraFit: points.length >= 2
+                        ? CameraFit.bounds(
+                            bounds: LatLngBounds.fromPoints(
+                              points.map(_toLatLng).toList(),
+                            ),
+                            padding: const EdgeInsets.all(36),
+                          )
+                        : null,
+                    minZoom: 13,
+                    maxZoom: 20,
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                    ),
+                    onTap: (_, latLng) => widget.onMapTap?.call(
+                      GeoPointValue(
+                        latitude: latLng.latitude,
+                        longitude: latLng.longitude,
+                      ),
+                    ),
+                  ),
                   children: [
-                    Positioned.fill(
-                      child: CustomPaint(
-                        painter: _BoundaryPainter(
-                          regionPoints: regionPoints,
-                          areaPoints: areaPoints,
-                          gatePoints: gatePoints,
-                          selectedGeometryPoint: selectedGeometryPoint,
-                        ),
-                      ),
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.parkhere.admin',
+                      errorTileCallback: (_, _, _) {
+                        if (mounted && !_tileError) {
+                          setState(() => _tileError = true);
+                        }
+                      },
                     ),
-                    Positioned(
-                      left: 12,
-                      top: 12,
-                      right: 12,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          child: Text(
-                            title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                    ),
+                    PolygonLayer(polygons: _polygons()),
+                    PolylineLayer(polylines: _polylines()),
+                    MarkerLayer(markers: _markers(context)),
                   ],
                 ),
-              ),
+                Positioned(
+                  left: 12,
+                  top: 12,
+                  right: 12,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(235),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      child: Text(
+                        widget.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ),
+                if (_tileError)
+                  Positioned(
+                    left: 12,
+                    right: 12,
+                    bottom: 12,
+                    child: _ErrorBanner(
+                      message:
+                          'Map tiles are unavailable. Check internet access and retry.',
+                      onRefresh: () async => setState(() => _tileError = false),
+                    ),
+                  ),
+              ],
             ),
           ),
         );
@@ -145,264 +361,136 @@ class _MiniBoundaryMap extends StatelessWidget {
     );
   }
 
-  void _handleTap(Offset offset, Size size) {
-    final viewport = _GeometryViewport(
-      size: size,
-      regionPoints: regionPoints,
-      areaPoints: areaPoints,
-      gatePoints: gatePoints,
-    );
-    final hit = viewport.hitTest(offset);
-    if (hit != null) {
-      if (hit.kind == AdminGeometryPointKind.corner) {
-        onCornerTap?.call(hit.index);
-      } else {
-        onGateTap?.call(hit.index);
-      }
-      return;
-    }
-    onMapTap?.call(viewport.unproject(offset));
+  List<Polygon> _polygons() {
+    return [
+      if (widget.regionPoints.length >= 3)
+        Polygon(
+          points: widget.regionPoints.map(_toLatLng).toList(),
+          color: ParkHereTheme.adminBlue.withAlpha(38),
+          borderColor: ParkHereTheme.adminBlue,
+          borderStrokeWidth: 3,
+        ),
+      if (widget.areaPoints.length >= 3)
+        Polygon(
+          points: widget.areaPoints.map(_toLatLng).toList(),
+          color: ParkHereTheme.yellow.withAlpha(90),
+          borderColor: ParkHereTheme.black,
+          borderStrokeWidth: 2,
+        ),
+    ];
+  }
+
+  List<Polyline> _polylines() {
+    return [
+      if (widget.regionPoints.length == 2)
+        Polyline(
+          points: widget.regionPoints.map(_toLatLng).toList(),
+          color: ParkHereTheme.adminBlue,
+          strokeWidth: 3,
+        ),
+      if (widget.areaPoints.length == 2)
+        Polyline(
+          points: widget.areaPoints.map(_toLatLng).toList(),
+          color: ParkHereTheme.black,
+          strokeWidth: 2,
+        ),
+    ];
+  }
+
+  List<Marker> _markers(BuildContext context) {
+    return [
+      for (var index = 0; index < widget.regionPoints.length; index++)
+        Marker(
+          point: _toLatLng(widget.regionPoints[index]),
+          width: 42,
+          height: 42,
+          child: _NumberMarker(
+            label: '${index + 1}',
+            selected: widget.selectedRegionPoint == index,
+            color: ParkHereTheme.adminBlue,
+            onTap: () => widget.onRegionPointTap?.call(index),
+          ),
+        ),
+      for (var index = 0; index < widget.areaPoints.length; index++)
+        Marker(
+          point: _toLatLng(widget.areaPoints[index]),
+          width: 42,
+          height: 42,
+          child: _NumberMarker(
+            label: '${index + 1}',
+            selected:
+                widget.selectedGeometryPoint?.kind ==
+                    AdminGeometryPointKind.corner &&
+                widget.selectedGeometryPoint?.index == index,
+            color: ParkHereTheme.black,
+            onTap: () => widget.onCornerTap?.call(index),
+          ),
+        ),
+      for (var index = 0; index < widget.gatePoints.length; index++)
+        Marker(
+          point: LatLng(
+            widget.gatePoints[index].latitude,
+            widget.gatePoints[index].longitude,
+          ),
+          width: 42,
+          height: 42,
+          child: _NumberMarker(
+            label: 'G',
+            selected:
+                widget.selectedGeometryPoint?.kind ==
+                    AdminGeometryPointKind.gate &&
+                widget.selectedGeometryPoint?.index == index,
+            color: Colors.green.shade700,
+            onTap: () => widget.onGateTap?.call(index),
+          ),
+        ),
+    ];
   }
 }
 
-class _BoundaryPainter extends CustomPainter {
-  const _BoundaryPainter({
-    required this.regionPoints,
-    required this.areaPoints,
-    required this.gatePoints,
-    required this.selectedGeometryPoint,
+class _NumberMarker extends StatelessWidget {
+  const _NumberMarker({
+    required this.label,
+    required this.selected,
+    required this.color,
+    required this.onTap,
   });
 
-  final List<GeoPointValue> regionPoints;
-  final List<GeoPointValue> areaPoints;
-  final List<GatePoint> gatePoints;
-  final AdminGeometrySelection? selectedGeometryPoint;
+  final String label;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final gridPaint = Paint()
-      ..color = Colors.white.withAlpha(110)
-      ..strokeWidth = 1;
-    for (var x = size.width * 0.2; x < size.width; x += size.width * 0.2) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-    }
-    for (var y = size.height * 0.25; y < size.height; y += size.height * 0.25) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-    _drawPolygon(
-      canvas,
-      size,
-      regionPoints,
-      _GeometryViewport(
-        size: size,
-        regionPoints: regionPoints,
-        areaPoints: areaPoints,
-        gatePoints: gatePoints,
-      ).project,
-      Paint()
-        ..color = ParkHereTheme.adminBlue.withAlpha(42)
-        ..style = PaintingStyle.fill,
-      Paint()
-        ..color = ParkHereTheme.adminBlue
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3,
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: selected ? ParkHereTheme.yellow : color,
+          border: Border.all(color: Colors.white, width: 2),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x33000000),
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? ParkHereTheme.black : Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
     );
-    _drawPolygon(
-      canvas,
-      size,
-      areaPoints,
-      _GeometryViewport(
-        size: size,
-        regionPoints: regionPoints,
-        areaPoints: areaPoints,
-        gatePoints: gatePoints,
-      ).project,
-      Paint()
-        ..color = ParkHereTheme.yellow.withAlpha(90)
-        ..style = PaintingStyle.fill,
-      Paint()
-        ..color = ParkHereTheme.black
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
-    _drawPoints(canvas, size, areaPoints, gatePoints);
   }
-
-  void _drawPolygon(
-    Canvas canvas,
-    Size size,
-    List<GeoPointValue> points,
-    Offset Function(GeoPointValue point) project,
-    Paint fill,
-    Paint stroke,
-  ) {
-    if (points.length < 2) {
-      return;
-    }
-
-    final path = Path()
-      ..moveTo(project(points.first).dx, project(points.first).dy);
-    for (final point in points.skip(1)) {
-      path.lineTo(project(point).dx, project(point).dy);
-    }
-    if (points.length >= 3) {
-      path.close();
-      canvas.drawPath(path, fill);
-    }
-    canvas.drawPath(path, stroke);
-  }
-
-  void _drawPoints(
-    Canvas canvas,
-    Size size,
-    List<GeoPointValue> corners,
-    List<GatePoint> gates,
-  ) {
-    final project = _GeometryViewport(
-      size: size,
-      regionPoints: regionPoints,
-      areaPoints: areaPoints,
-      gatePoints: gatePoints,
-    ).project;
-    final textPainter = TextPainter(textDirection: TextDirection.ltr);
-    for (var index = 0; index < corners.length; index++) {
-      final offset = project(corners[index]);
-      final selected =
-          selectedGeometryPoint?.kind == AdminGeometryPointKind.corner &&
-          selectedGeometryPoint?.index == index;
-      canvas.drawCircle(
-        offset,
-        selected ? 12 : 8,
-        Paint()..color = selected ? ParkHereTheme.yellow : ParkHereTheme.black,
-      );
-      canvas.drawCircle(offset, 6, Paint()..color = ParkHereTheme.black);
-      textPainter.text = TextSpan(
-        text: '${index + 1}',
-        style: const TextStyle(color: Colors.white, fontSize: 10),
-      );
-      textPainter.layout();
-      textPainter.paint(canvas, offset - const Offset(3, 6));
-    }
-    for (final gate in gates) {
-      final index = gates.indexOf(gate);
-      final offset = project(
-        GeoPointValue(latitude: gate.latitude, longitude: gate.longitude),
-      );
-      final selected =
-          selectedGeometryPoint?.kind == AdminGeometryPointKind.gate &&
-          selectedGeometryPoint?.index == index;
-      canvas.drawCircle(
-        offset,
-        selected ? 13 : 9,
-        Paint()
-          ..color = selected ? ParkHereTheme.yellow : Colors.green.shade700,
-      );
-      canvas.drawCircle(offset, 7, Paint()..color = Colors.green.shade700);
-      textPainter.text = const TextSpan(
-        text: 'G',
-        style: TextStyle(color: Colors.white, fontSize: 11),
-      );
-      textPainter.layout();
-      textPainter.paint(canvas, offset - const Offset(4, 7));
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _BoundaryPainter oldDelegate) =>
-      oldDelegate.regionPoints != regionPoints ||
-      oldDelegate.areaPoints != areaPoints ||
-      oldDelegate.gatePoints != gatePoints ||
-      oldDelegate.selectedGeometryPoint != selectedGeometryPoint;
 }
 
-class _GeometryViewport {
-  _GeometryViewport({
-    required this.size,
-    required this.regionPoints,
-    required this.areaPoints,
-    required this.gatePoints,
-  }) {
-    final gateGeoPoints = gatePoints
-        .map(
-          (gate) =>
-              GeoPointValue(latitude: gate.latitude, longitude: gate.longitude),
-        )
-        .toList();
-    final points = [...regionPoints, ...areaPoints, ...gateGeoPoints];
-    final allPoints = points.isEmpty ? [_defaultCenter] : points;
-    minLat = allPoints
-        .map((point) => point.latitude)
-        .reduce((a, b) => a < b ? a : b);
-    maxLat = allPoints
-        .map((point) => point.latitude)
-        .reduce((a, b) => a > b ? a : b);
-    minLng = allPoints
-        .map((point) => point.longitude)
-        .reduce((a, b) => a < b ? a : b);
-    maxLng = allPoints
-        .map((point) => point.longitude)
-        .reduce((a, b) => a > b ? a : b);
-    if ((maxLat - minLat).abs() < 0.0004) {
-      minLat -= 0.0002;
-      maxLat += 0.0002;
-    }
-    if ((maxLng - minLng).abs() < 0.0004) {
-      minLng -= 0.0002;
-      maxLng += 0.0002;
-    }
-  }
-
-  static const _defaultCenter = GeoPointValue(
-    latitude: 13.3281211,
-    longitude: 77.1256930,
-  );
-
-  final Size size;
-  final List<GeoPointValue> regionPoints;
-  final List<GeoPointValue> areaPoints;
-  final List<GatePoint> gatePoints;
-  late double minLat;
-  late double maxLat;
-  late double minLng;
-  late double maxLng;
-
-  Offset project(GeoPointValue point) {
-    final x = (point.longitude - minLng) / (maxLng - minLng);
-    final y = (maxLat - point.latitude) / (maxLat - minLat);
-    return Offset(24 + x * (size.width - 48), 24 + y * (size.height - 48));
-  }
-
-  GeoPointValue unproject(Offset offset) {
-    final x = ((offset.dx - 24) / (size.width - 48)).clamp(0.0, 1.0);
-    final y = ((offset.dy - 24) / (size.height - 48)).clamp(0.0, 1.0);
-    return GeoPointValue(
-      latitude: maxLat - y * (maxLat - minLat),
-      longitude: minLng + x * (maxLng - minLng),
-    );
-  }
-
-  AdminGeometrySelection? hitTest(Offset offset) {
-    const threshold = 20.0;
-    for (var index = 0; index < areaPoints.length; index++) {
-      if ((project(areaPoints[index]) - offset).distance <= threshold) {
-        return AdminGeometrySelection(
-          kind: AdminGeometryPointKind.corner,
-          index: index,
-        );
-      }
-    }
-    for (var index = 0; index < gatePoints.length; index++) {
-      final point = GeoPointValue(
-        latitude: gatePoints[index].latitude,
-        longitude: gatePoints[index].longitude,
-      );
-      if ((project(point) - offset).distance <= threshold) {
-        return AdminGeometrySelection(
-          kind: AdminGeometryPointKind.gate,
-          index: index,
-        );
-      }
-    }
-    return null;
-  }
-}
+LatLng _toLatLng(GeoPointValue point) =>
+    LatLng(point.latitude, point.longitude);

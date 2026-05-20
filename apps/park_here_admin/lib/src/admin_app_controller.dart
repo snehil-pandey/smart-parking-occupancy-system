@@ -45,7 +45,9 @@ enum AdminSection { dashboard, region, parkingAreas, bookings, issues, profile }
 
 enum AdminAuthStatus { checking, signedOut, signedIn }
 
-enum AdminGeometryMode { corner, gate }
+enum AdminGeometryMode { addCorner, moveCorner, addGate, moveGate }
+
+enum AdminRegionEditMode { addPoint, movePoint }
 
 enum AdminGeometryPointKind { corner, gate }
 
@@ -143,6 +145,7 @@ class AdminAppState {
     required this.authStatus,
     required this.section,
     required this.region,
+    required this.hasControlledRegion,
     required this.locations,
     required this.bookings,
     required this.issues,
@@ -152,6 +155,11 @@ class AdminAppState {
     required this.draftGatePoints,
     required this.geometryMode,
     required this.geometryUndoStack,
+    required this.regionDraftBoundaryPoints,
+    required this.regionEditMode,
+    required this.regionUndoStack,
+    required this.isSavingRegion,
+    required this.regionStatusMessage,
     required this.isSavingGeometry,
     required this.lastGpsPosition,
     required this.isLoading,
@@ -159,6 +167,7 @@ class AdminAppState {
     required this.imageStatusMessage,
     required this.geometryStatusMessage,
     this.selectedGeometryPoint,
+    this.selectedRegionPoint,
     this.error,
   });
 
@@ -167,7 +176,8 @@ class AdminAppState {
       admin: admin,
       authStatus: AdminAuthStatus.checking,
       section: AdminSection.dashboard,
-      region: _emptySitRegion,
+      region: _emptyRegionForAdmin(admin.id),
+      hasControlledRegion: false,
       locations: const [],
       bookings: const [],
       issues: const [],
@@ -175,9 +185,15 @@ class AdminAppState {
       selectedLocation: null,
       draftBoundaryPoints: const [],
       draftGatePoints: const [],
-      geometryMode: AdminGeometryMode.corner,
+      geometryMode: AdminGeometryMode.addCorner,
       selectedGeometryPoint: null,
       geometryUndoStack: const [],
+      regionDraftBoundaryPoints: const [],
+      regionEditMode: AdminRegionEditMode.addPoint,
+      selectedRegionPoint: null,
+      regionUndoStack: const [],
+      isSavingRegion: false,
+      regionStatusMessage: 'Add at least 3 points to define your region.',
       isSavingGeometry: false,
       lastGpsPosition: null,
       isLoading: true,
@@ -193,7 +209,8 @@ class AdminAppState {
       admin: null,
       authStatus: AdminAuthStatus.signedOut,
       section: AdminSection.dashboard,
-      region: _emptySitRegion,
+      region: _emptyRegionForAdmin(''),
+      hasControlledRegion: false,
       locations: const [],
       bookings: const [],
       issues: const [],
@@ -201,9 +218,15 @@ class AdminAppState {
       selectedLocation: null,
       draftBoundaryPoints: const [],
       draftGatePoints: const [],
-      geometryMode: AdminGeometryMode.corner,
+      geometryMode: AdminGeometryMode.addCorner,
       selectedGeometryPoint: null,
       geometryUndoStack: const [],
+      regionDraftBoundaryPoints: const [],
+      regionEditMode: AdminRegionEditMode.addPoint,
+      selectedRegionPoint: null,
+      regionUndoStack: const [],
+      isSavingRegion: false,
+      regionStatusMessage: 'Sign in to set up your controlled region.',
       isSavingGeometry: false,
       lastGpsPosition: null,
       isLoading: false,
@@ -217,6 +240,7 @@ class AdminAppState {
   final AdminAuthStatus authStatus;
   final AdminSection section;
   final ParkingRegion region;
+  final bool hasControlledRegion;
   final List<ParkingLocation> locations;
   final List<Booking> bookings;
   final List<IssueReport> issues;
@@ -227,6 +251,12 @@ class AdminAppState {
   final AdminGeometryMode geometryMode;
   final AdminGeometrySelection? selectedGeometryPoint;
   final List<AdminGeometrySnapshot> geometryUndoStack;
+  final List<GeoPointValue> regionDraftBoundaryPoints;
+  final AdminRegionEditMode regionEditMode;
+  final int? selectedRegionPoint;
+  final List<List<GeoPointValue>> regionUndoStack;
+  final bool isSavingRegion;
+  final String regionStatusMessage;
   final bool isSavingGeometry;
   final AdminGpsPosition? lastGpsPosition;
   final bool isLoading;
@@ -235,14 +265,17 @@ class AdminAppState {
   final String geometryStatusMessage;
   final String? error;
 
-  static final _emptySitRegion = ParkingRegion(
-    regionId: 'region_sit_tumkur',
-    name: 'SIT Tumkur',
-    address: 'SIT Tumkur',
+  bool get requiresRegionSetup =>
+      authStatus == AdminAuthStatus.signedIn && !hasControlledRegion;
+
+  static ParkingRegion _emptyRegionForAdmin(String adminId) => ParkingRegion(
+    regionId: adminId.isEmpty ? 'region_pending' : 'region_$adminId',
+    name: '',
+    address: '',
     boundaryPoints: const [],
     centerLat: 0,
     centerLng: 0,
-    createdByAdminId: '',
+    createdByAdminId: adminId,
     createdAt: DateTime.fromMillisecondsSinceEpoch(0),
     updatedAt: DateTime.fromMillisecondsSinceEpoch(0),
   );
@@ -275,16 +308,23 @@ class AdminAppState {
     AdminAuthStatus? authStatus,
     AdminSection? section,
     ParkingRegion? region,
+    bool? hasControlledRegion,
     List<ParkingLocation>? locations,
     List<Booking>? bookings,
     List<IssueReport>? issues,
     List<ParkingAreaImage>? selectedImages,
-    ParkingLocation? selectedLocation,
+    Object? selectedLocation = _unset,
     List<GeoPointValue>? draftBoundaryPoints,
     List<GatePoint>? draftGatePoints,
     AdminGeometryMode? geometryMode,
     Object? selectedGeometryPoint = _unset,
     List<AdminGeometrySnapshot>? geometryUndoStack,
+    List<GeoPointValue>? regionDraftBoundaryPoints,
+    AdminRegionEditMode? regionEditMode,
+    Object? selectedRegionPoint = _unset,
+    List<List<GeoPointValue>>? regionUndoStack,
+    bool? isSavingRegion,
+    String? regionStatusMessage,
     bool? isSavingGeometry,
     AdminGpsPosition? lastGpsPosition,
     bool? isLoading,
@@ -298,11 +338,14 @@ class AdminAppState {
       authStatus: authStatus ?? this.authStatus,
       section: section ?? this.section,
       region: region ?? this.region,
+      hasControlledRegion: hasControlledRegion ?? this.hasControlledRegion,
       locations: locations ?? this.locations,
       bookings: bookings ?? this.bookings,
       issues: issues ?? this.issues,
       selectedImages: selectedImages ?? this.selectedImages,
-      selectedLocation: selectedLocation ?? this.selectedLocation,
+      selectedLocation: identical(selectedLocation, _unset)
+          ? this.selectedLocation
+          : selectedLocation as ParkingLocation?,
       draftBoundaryPoints: draftBoundaryPoints ?? this.draftBoundaryPoints,
       draftGatePoints: draftGatePoints ?? this.draftGatePoints,
       geometryMode: geometryMode ?? this.geometryMode,
@@ -310,6 +353,15 @@ class AdminAppState {
           ? this.selectedGeometryPoint
           : selectedGeometryPoint as AdminGeometrySelection?,
       geometryUndoStack: geometryUndoStack ?? this.geometryUndoStack,
+      regionDraftBoundaryPoints:
+          regionDraftBoundaryPoints ?? this.regionDraftBoundaryPoints,
+      regionEditMode: regionEditMode ?? this.regionEditMode,
+      selectedRegionPoint: identical(selectedRegionPoint, _unset)
+          ? this.selectedRegionPoint
+          : selectedRegionPoint as int?,
+      regionUndoStack: regionUndoStack ?? this.regionUndoStack,
+      isSavingRegion: isSavingRegion ?? this.isSavingRegion,
+      regionStatusMessage: regionStatusMessage ?? this.regionStatusMessage,
       isSavingGeometry: isSavingGeometry ?? this.isSavingGeometry,
       lastGpsPosition: lastGpsPosition ?? this.lastGpsPosition,
       isLoading: isLoading ?? this.isLoading,
@@ -359,14 +411,44 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       return;
     }
     await _resetRealtimeListeners();
-    _startRealtimeListeners(admin.id);
     var region = state.region;
     var locations = state.locations;
     var bookings = state.bookings;
     var issues = state.issues;
     try {
-      region = await _regionRepository.getMainRegion();
-      locations = await _parkingRepository.getByAdmin(admin.id);
+      final controlledRegion = await _regionRepository.getControlledRegion(
+        admin.id,
+      );
+      if (controlledRegion == null) {
+        state = state.copyWith(
+          admin: admin,
+          authStatus: AdminAuthStatus.signedIn,
+          region: AdminAppState._emptyRegionForAdmin(admin.id),
+          hasControlledRegion: false,
+          locations: const [],
+          bookings: const [],
+          issues: const [],
+          selectedLocation: null,
+          draftBoundaryPoints: const [],
+          draftGatePoints: const [],
+          regionDraftBoundaryPoints: const [],
+          selectedGeometryPoint: null,
+          selectedRegionPoint: null,
+          geometryUndoStack: const [],
+          regionUndoStack: const [],
+          isLoading: false,
+          error: null,
+          regionStatusMessage:
+              'Set up your controlled region before opening the dashboard.',
+        );
+        return;
+      }
+
+      region = controlledRegion;
+      _startRealtimeListeners(admin.id);
+      locations = (await _parkingRepository.getByAdmin(
+        admin.id,
+      )).where((location) => location.regionId == region.regionId).toList();
       bookings = await _bookingRepository.getForAdmin(admin.id);
       issues = await _issueRepository.getForAdmin(admin.id);
       final selectedLocation = locations.firstOrNull;
@@ -374,16 +456,22 @@ class AdminAppController extends StateNotifier<AdminAppState> {
         admin: admin,
         authStatus: AdminAuthStatus.signedIn,
         region: region,
+        hasControlledRegion: true,
         locations: locations,
         bookings: bookings,
         issues: issues,
         selectedLocation: selectedLocation,
         draftBoundaryPoints: selectedLocation?.boundaryPoints ?? const [],
         draftGatePoints: selectedLocation?.gatePoints ?? const [],
+        regionDraftBoundaryPoints: region.boundaryPoints,
         selectedGeometryPoint: null,
+        selectedRegionPoint: null,
         geometryUndoStack: const [],
+        regionUndoStack: const [],
         isLoading: false,
         error: null,
+        regionStatusMessage:
+            'Region loaded with ${region.boundaryPoints.length} points.',
       );
       await _loadSelectedImages();
     } on Object catch (error) {
@@ -391,6 +479,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
         admin: admin,
         authStatus: AdminAuthStatus.signedIn,
         region: region,
+        hasControlledRegion: region.createdByAdminId == admin.id,
         locations: locations,
         bookings: bookings,
         issues: issues,
@@ -473,25 +562,214 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     await _loadSelectedImages();
   }
 
-  Future<void> saveRegionBoundary(List<GeoPointValue> points) async {
-    final updated = state.region.copyWith(
-      boundaryPoints: points,
-      updatedAt: DateTime.now(),
+  void changeRegionEditMode(AdminRegionEditMode mode) {
+    state = state.copyWith(
+      regionEditMode: mode,
+      selectedRegionPoint: null,
+      regionStatusMessage: mode == AdminRegionEditMode.addPoint
+          ? 'Add Point mode active. Tap the map to add region corners.'
+          : 'Move Point mode active. Select a point, then tap its new location.',
+      error: null,
     );
-    await _regionRepository.upsertRegion(updated);
-    state = state.copyWith(region: updated);
   }
 
-  Future<void> nudgeRegionBoundary() async {
-    final updated = state.region.boundaryPoints
-        .map(
-          (point) => GeoPointValue(
-            latitude: point.latitude + 0.0001,
-            longitude: point.longitude,
-          ),
-        )
+  void handleRegionMapTap(GeoPointValue point) {
+    if (state.regionEditMode == AdminRegionEditMode.movePoint) {
+      final selected = state.selectedRegionPoint;
+      if (selected == null) {
+        state = state.copyWith(
+          regionStatusMessage:
+              'Move Point mode active. Select an existing region point first.',
+        );
+        return;
+      }
+      moveSelectedRegionPoint(point);
+      return;
+    }
+    addRegionPoint(point);
+  }
+
+  void addRegionPoint(GeoPointValue point) {
+    _pushRegionUndo();
+    final updated = [...state.regionDraftBoundaryPoints, point];
+    state = state.copyWith(
+      regionDraftBoundaryPoints: updated,
+      selectedRegionPoint: updated.length - 1,
+      regionStatusMessage: 'Added region point ${updated.length}.',
+      error: null,
+    );
+  }
+
+  void selectRegionPoint(int index) {
+    if (index < 0 || index >= state.regionDraftBoundaryPoints.length) {
+      return;
+    }
+    state = state.copyWith(
+      selectedRegionPoint: index,
+      regionEditMode: AdminRegionEditMode.movePoint,
+      regionStatusMessage:
+          'Selected region point ${index + 1}. Tap the map to move it.',
+      error: null,
+    );
+  }
+
+  void moveSelectedRegionPoint(GeoPointValue point) {
+    final selected = state.selectedRegionPoint;
+    if (selected == null ||
+        selected < 0 ||
+        selected >= state.regionDraftBoundaryPoints.length) {
+      state = state.copyWith(error: 'Select a region point first.');
+      return;
+    }
+    _pushRegionUndo();
+    final updated = [...state.regionDraftBoundaryPoints];
+    updated[selected] = point;
+    state = state.copyWith(
+      regionDraftBoundaryPoints: updated,
+      regionStatusMessage: 'Moved region point ${selected + 1}.',
+      error: null,
+    );
+  }
+
+  Future<void> markCurrentPositionAsRegionPoint() async {
+    final position = await _locationService.currentPosition();
+    if (position.isFallback) {
+      state = state.copyWith(
+        lastGpsPosition: position,
+        error: 'GPS fallback cannot mark a controlled region.',
+      );
+      return;
+    }
+    addRegionPoint(position.toGeoPoint());
+    state = state.copyWith(
+      lastGpsPosition: position,
+      regionStatusMessage:
+          'Added GPS region point ${state.regionDraftBoundaryPoints.length}. ${position.message}',
+    );
+  }
+
+  void undoLastRegionPoint() {
+    if (state.regionDraftBoundaryPoints.isEmpty) {
+      return;
+    }
+    _pushRegionUndo();
+    final updated = state.regionDraftBoundaryPoints
+        .take(state.regionDraftBoundaryPoints.length - 1)
         .toList();
-    await saveRegionBoundary(updated);
+    state = state.copyWith(
+      regionDraftBoundaryPoints: updated,
+      selectedRegionPoint: null,
+      regionStatusMessage: 'Removed last region point.',
+    );
+  }
+
+  void clearRegionDraft() {
+    if (state.regionDraftBoundaryPoints.isEmpty) {
+      return;
+    }
+    _pushRegionUndo();
+    state = state.copyWith(
+      regionDraftBoundaryPoints: const [],
+      selectedRegionPoint: null,
+      regionStatusMessage: 'Cleared region draft.',
+    );
+  }
+
+  void undoLastRegionChange() {
+    if (state.regionUndoStack.isEmpty) {
+      state = state.copyWith(regionStatusMessage: 'Nothing to undo.');
+      return;
+    }
+    final stack = [...state.regionUndoStack];
+    final previous = stack.removeLast();
+    state = state.copyWith(
+      regionDraftBoundaryPoints: previous,
+      selectedRegionPoint: null,
+      regionUndoStack: stack,
+      regionStatusMessage: 'Undid last region edit.',
+      error: null,
+    );
+  }
+
+  Future<void> saveControlledRegion({
+    required String name,
+    required String address,
+  }) async {
+    final admin = state.admin;
+    if (admin == null) {
+      state = state.copyWith(error: 'Sign in before saving a region.');
+      return;
+    }
+    final cleanName = name.trim();
+    final cleanAddress = address.trim();
+    if (cleanName.isEmpty) {
+      state = state.copyWith(error: 'Enter a region name.');
+      return;
+    }
+    if (cleanAddress.isEmpty) {
+      state = state.copyWith(error: 'Enter a region address.');
+      return;
+    }
+    if (state.regionDraftBoundaryPoints.length < 3) {
+      state = state.copyWith(
+        error: 'Region polygon must have at least 3 points.',
+      );
+      return;
+    }
+    final center = GeometryUtils.calculatePolygonCenter(
+      state.regionDraftBoundaryPoints,
+    );
+    if (!GeometryUtils.pointInPolygon(
+      center,
+      state.regionDraftBoundaryPoints,
+    )) {
+      state = state.copyWith(error: 'Region area cannot be empty.');
+      return;
+    }
+    state = state.copyWith(isSavingRegion: true, error: null);
+    try {
+      final now = DateTime.now();
+      final existing = state.hasControlledRegion ? state.region : null;
+      final region = ParkingRegion(
+        regionId: existing?.regionId ?? 'region_${admin.id}',
+        name: cleanName,
+        address: cleanAddress,
+        boundaryPoints: state.regionDraftBoundaryPoints,
+        centerLat: center.latitude,
+        centerLng: center.longitude,
+        createdByAdminId: admin.id,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      );
+      await _regionRepository.upsertRegion(region);
+      state = state.copyWith(
+        region: region,
+        hasControlledRegion: true,
+        regionDraftBoundaryPoints: region.boundaryPoints,
+        selectedRegionPoint: null,
+        regionUndoStack: const [],
+        isSavingRegion: false,
+        regionStatusMessage: 'Controlled region saved.',
+        section: AdminSection.dashboard,
+        error: null,
+      );
+      await load();
+    } on Object catch (error) {
+      state = state.copyWith(
+        isSavingRegion: false,
+        error: FirebaseErrorMessages.friendlyMessage(error),
+      );
+    }
+  }
+
+  void _pushRegionUndo() {
+    final next = [
+      ...state.regionUndoStack,
+      List<GeoPointValue>.unmodifiable(state.regionDraftBoundaryPoints),
+    ];
+    state = state.copyWith(
+      regionUndoStack: next.length > 20 ? next.sublist(next.length - 20) : next,
+    );
   }
 
   Future<void> updateSelectedAreaBoundary(List<GeoPointValue> points) async {
@@ -531,9 +809,16 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     state = state.copyWith(
       geometryMode: mode,
       selectedGeometryPoint: null,
-      geometryStatusMessage: mode == AdminGeometryMode.corner
-          ? 'Tap the geometry preview to add corner points.'
-          : 'Tap the geometry preview to add gate points.',
+      geometryStatusMessage: switch (mode) {
+        AdminGeometryMode.addCorner =>
+          'Add Corner mode active. Tap inside your region to add area corners.',
+        AdminGeometryMode.moveCorner =>
+          'Move Corner mode active. Select a corner, then tap its new location.',
+        AdminGeometryMode.addGate =>
+          'Add Gate mode active. Tap inside your region to add a gate.',
+        AdminGeometryMode.moveGate =>
+          'Move Gate mode active. Select a gate, then tap its new location.',
+      },
     );
   }
 
@@ -579,12 +864,25 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       state = state.copyWith(error: 'Select a parking area first.');
       return;
     }
+    if (!_isInsideControlledRegion(point)) {
+      state = state.copyWith(
+        error: 'Parking area must be inside your controlled region.',
+      );
+      return;
+    }
     final selected = state.selectedGeometryPoint;
-    if (selected != null) {
+    if (selected != null &&
+        (state.geometryMode == AdminGeometryMode.moveCorner ||
+            state.geometryMode == AdminGeometryMode.moveGate)) {
       moveSelectedGeometryPoint(point);
       return;
     }
-    if (state.geometryMode == AdminGeometryMode.corner) {
+    if (state.geometryMode == AdminGeometryMode.moveCorner ||
+        state.geometryMode == AdminGeometryMode.moveGate) {
+      state = state.copyWith(error: 'Select a point to move first.');
+      return;
+    }
+    if (state.geometryMode == AdminGeometryMode.addCorner) {
       addCornerPoint(point);
     } else {
       addGatePoint(point);
@@ -592,6 +890,12 @@ class AdminAppController extends StateNotifier<AdminAppState> {
   }
 
   void addCornerPoint(GeoPointValue point) {
+    if (!_isInsideControlledRegion(point)) {
+      state = state.copyWith(
+        error: 'Parking area must be inside your controlled region.',
+      );
+      return;
+    }
     _pushGeometryUndo('Undo add corner');
     final updated = [...state.draftBoundaryPoints, point];
     state = state.copyWith(
@@ -614,6 +918,12 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     final location = state.selectedLocation;
     if (location == null) {
       state = state.copyWith(error: 'Select a parking area first.');
+      return;
+    }
+    if (!_isInsideControlledRegion(point)) {
+      state = state.copyWith(
+        error: 'Gate must be inside your controlled region.',
+      );
       return;
     }
     _pushGeometryUndo('Undo add gate');
@@ -642,6 +952,12 @@ class AdminAppController extends StateNotifier<AdminAppState> {
   }
 
   void moveSelectedGeometryPoint(GeoPointValue point) {
+    if (!_isInsideControlledRegion(point)) {
+      state = state.copyWith(
+        error: 'Parking area must be inside your controlled region.',
+      );
+      return;
+    }
     final selected = state.selectedGeometryPoint;
     if (selected == null) {
       state = state.copyWith(error: 'Select a corner or gate first.');
@@ -751,6 +1067,20 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       return;
     }
     final position = await _locationService.currentPosition();
+    if (position.isFallback) {
+      state = state.copyWith(
+        lastGpsPosition: position,
+        error: 'GPS fallback cannot mark real geometry. Enable location first.',
+      );
+      return;
+    }
+    if (!_isInsideControlledRegion(position.toGeoPoint())) {
+      state = state.copyWith(
+        lastGpsPosition: position,
+        error: 'Parking area must be inside your controlled region.',
+      );
+      return;
+    }
     _pushGeometryUndo('Undo GPS corner');
     final updated = [...state.draftBoundaryPoints, position.toGeoPoint()];
     state = state.copyWith(
@@ -762,9 +1092,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       lastGpsPosition: position,
       geometryStatusMessage:
           'Added corner ${updated.length}. ${position.message}',
-      error: position.isFallback
-          ? 'GPS fallback cannot mark real geometry. Enable location first.'
-          : null,
+      error: null,
     );
   }
 
@@ -778,6 +1106,20 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       return;
     }
     final position = await _locationService.currentPosition();
+    if (position.isFallback) {
+      state = state.copyWith(
+        lastGpsPosition: position,
+        error: 'GPS fallback cannot mark real gates. Enable location first.',
+      );
+      return;
+    }
+    if (!_isInsideControlledRegion(position.toGeoPoint())) {
+      state = state.copyWith(
+        lastGpsPosition: position,
+        error: 'Gate must be inside your controlled region.',
+      );
+      return;
+    }
     _pushGeometryUndo('Undo GPS gate');
     final gateIndex = state.draftGatePoints.length + 1;
     final gate = GatePoint(
@@ -797,9 +1139,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       ),
       lastGpsPosition: position,
       geometryStatusMessage: 'Added ${gate.name}. ${position.message}',
-      error: position.isFallback
-          ? 'GPS fallback cannot mark real gates. Enable location first.'
-          : null,
+      error: null,
     );
   }
 
@@ -911,19 +1251,14 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     }
     state = state.copyWith(isSavingGeometry: true, error: null);
     try {
+      final center = GeometryUtils.calculatePolygonCenter(
+        state.draftBoundaryPoints,
+      );
       final updated = location.copyWith(
         boundaryPoints: state.draftBoundaryPoints,
         gatePoints: state.draftGatePoints,
-        latitude:
-            state.draftBoundaryPoints
-                .map((point) => point.latitude)
-                .reduce((a, b) => a + b) /
-            state.draftBoundaryPoints.length,
-        longitude:
-            state.draftBoundaryPoints
-                .map((point) => point.longitude)
-                .reduce((a, b) => a + b) /
-            state.draftBoundaryPoints.length,
+        latitude: center.latitude,
+        longitude: center.longitude,
         updatedAt: DateTime.now(),
       );
       await _parkingRepository.upsert(updated);
@@ -956,9 +1291,8 @@ class AdminAppController extends StateNotifier<AdminAppState> {
 
   Future<void> registerLocation({
     required String name,
+    required String description,
     required String address,
-    required double latitude,
-    required double longitude,
     required int totalSpaces,
     required int availableSpaces,
     required double pricePerHour,
@@ -966,6 +1300,18 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     required String openingTime,
     required String closingTime,
   }) async {
+    if (!state.hasControlledRegion) {
+      state = state.copyWith(error: 'Set up your controlled region first.');
+      return;
+    }
+    if (name.trim().isEmpty) {
+      state = state.copyWith(error: 'Parking area name is required.');
+      return;
+    }
+    if (address.trim().isEmpty) {
+      state = state.copyWith(error: 'Parking area address is required.');
+      return;
+    }
     final spaceError = _validateSpaces(
       totalSpaces: totalSpaces,
       availableSpaces: availableSpaces,
@@ -981,17 +1327,25 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       return;
     }
     final now = DateTime.now();
+    final center = state.region.boundaryPoints.length >= 3
+        ? GeometryUtils.calculatePolygonCenter(state.region.boundaryPoints)
+        : GeoPointValue(
+            latitude: state.region.centerLat,
+            longitude: state.region.centerLng,
+          );
     final location = ParkingLocation(
       id: 'loc_${now.millisecondsSinceEpoch}',
       regionId: state.region.regionId,
       adminId: state.admin!.id,
-      name: name,
-      description: 'New parking area inside ${state.region.name}.',
-      address: address,
+      name: name.trim(),
+      description: description.trim().isEmpty
+          ? 'New parking area inside ${state.region.name}.'
+          : description.trim(),
+      address: address.trim(),
       boundaryPoints: const [],
       gatePoints: const [],
-      latitude: latitude,
-      longitude: longitude,
+      latitude: center.latitude,
+      longitude: center.longitude,
       totalSpaces: totalSpaces,
       availableSpaces: availableSpaces,
       pricePerHour: pricePerHour,
@@ -1049,6 +1403,40 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     }
   }
 
+  Future<void> updateSelectedDetails({
+    required String name,
+    required String description,
+    required String address,
+  }) async {
+    final location = state.selectedLocation;
+    if (location == null) {
+      return;
+    }
+    final cleanName = name.trim();
+    final cleanAddress = address.trim();
+    if (cleanName.isEmpty) {
+      state = state.copyWith(error: 'Parking area name is required.');
+      return;
+    }
+    if (cleanAddress.isEmpty) {
+      state = state.copyWith(error: 'Parking area address is required.');
+      return;
+    }
+    final updated = location.copyWith(
+      name: cleanName,
+      description: description.trim(),
+      address: cleanAddress,
+      updatedAt: DateTime.now(),
+    );
+    await _parkingRepository.upsert(updated);
+    await load();
+    final refreshed = await _parkingRepository.findById(location.id);
+    if (refreshed != null) {
+      state = state.copyWith(selectedLocation: refreshed);
+      await _loadSelectedImages();
+    }
+  }
+
   String? _validateSpaces({
     required int totalSpaces,
     required int availableSpaces,
@@ -1066,16 +1454,44 @@ class AdminAppController extends StateNotifier<AdminAppState> {
   }
 
   String? _validateAreaForSave(ParkingLocation location) {
+    if (!state.hasControlledRegion || state.region.boundaryPoints.length < 3) {
+      return 'Set up your controlled region before saving parking areas.';
+    }
     if (location.regionId != state.region.regionId) {
-      return 'Parking area must belong to the SIT Tumkur region.';
+      return 'Parking area must belong to your controlled region.';
     }
     if (!ParkingLocation.isValidPrice(location.pricePerHour)) {
       return 'Price must be between Rs. 0 and Rs. 100 per hour.';
+    }
+    if (state.draftBoundaryPoints.length < 3) {
+      return 'Parking area polygon must have at least 3 points.';
+    }
+    if (!GeometryUtils.polygonInsidePolygon(
+      state.draftBoundaryPoints,
+      state.region.boundaryPoints,
+    )) {
+      return 'Parking area must be inside your controlled region.';
+    }
+    final center = GeometryUtils.calculatePolygonCenter(
+      state.draftBoundaryPoints,
+    );
+    if (!GeometryUtils.pointInPolygon(center, state.region.boundaryPoints)) {
+      return 'Parking area center must be inside your controlled region.';
+    }
+    for (final gate in state.draftGatePoints) {
+      if (!GeometryUtils.gateInsideRegion(gate, state.region.boundaryPoints)) {
+        return 'Gate must be inside your controlled region.';
+      }
     }
     return _validateSpaces(
       totalSpaces: location.totalSpaces,
       availableSpaces: location.availableSpaces,
     );
+  }
+
+  bool _isInsideControlledRegion(GeoPointValue point) {
+    return state.hasControlledRegion &&
+        GeometryUtils.pointInPolygon(point, state.region.boundaryPoints);
   }
 
   Future<void> markCompleted(Booking booking) async {
@@ -1214,7 +1630,11 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     _parkingSubscription ??= _parkingRepository
         .watchByAdmin(adminId, limit: 50)
         .listen(
-          (locations) => state = state.copyWith(locations: locations),
+          (locations) => state = state.copyWith(
+            locations: locations
+                .where((location) => location.regionId == state.region.regionId)
+                .toList(),
+          ),
           onError: (Object error) {
             state = state.copyWith(
               isLoading: false,

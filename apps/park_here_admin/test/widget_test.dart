@@ -216,7 +216,7 @@ void main() {
     await controller.load();
     final initialCorners = controller.state.draftBoundaryPoints.length;
     controller.handleMapTap(
-      const GeoPointValue(latitude: 13.3284, longitude: 77.1258),
+      const GeoPointValue(latitude: 13.3507, longitude: 77.1016),
     );
 
     expect(controller.state.draftBoundaryPoints, hasLength(initialCorners + 1));
@@ -226,14 +226,14 @@ void main() {
     );
 
     controller.moveSelectedGeometryPoint(
-      const GeoPointValue(latitude: 13.3285, longitude: 77.1259),
+      const GeoPointValue(latitude: 13.3508, longitude: 77.1017),
     );
-    expect(controller.state.draftBoundaryPoints.last.latitude, 13.3285);
+    expect(controller.state.draftBoundaryPoints.last.latitude, 13.3508);
 
-    controller.changeGeometryMode(AdminGeometryMode.gate);
+    controller.changeGeometryMode(AdminGeometryMode.addGate);
     controller.clearGeometrySelection();
     controller.handleMapTap(
-      const GeoPointValue(latitude: 13.3286, longitude: 77.1260),
+      const GeoPointValue(latitude: 13.3509, longitude: 77.1018),
     );
     expect(controller.state.draftGatePoints, isNotEmpty);
 
@@ -270,6 +270,45 @@ void main() {
 
     expect(controller.state.error, contains('Available spaces'));
   });
+
+  test('admin with no region is forced into region setup', () async {
+    final controller = AdminAppController(
+      auth: LocalAuthService(),
+      parkingRepository: InMemoryParkingRepository(seed: const []),
+      bookingRepository: InMemoryBookingRepository(seed: const []),
+      imageRepository: InMemoryImageRepository(seed: const []),
+      regionRepository: InMemoryRegionRepository.empty(),
+      issueRepository: InMemoryIssueRepository(seed: const []),
+      locationService: const _TestAdminLocationService(),
+    );
+
+    await controller.load();
+
+    expect(controller.state.requiresRegionSetup, isTrue);
+    expect(controller.state.locations, isEmpty);
+  });
+
+  test('admin controller rejects parking geometry outside region', () async {
+    final controller = AdminAppController(
+      auth: LocalAuthService(),
+      parkingRepository: InMemoryParkingRepository(),
+      bookingRepository: InMemoryBookingRepository(),
+      imageRepository: InMemoryImageRepository(seed: const []),
+      regionRepository: InMemoryRegionRepository(),
+      issueRepository: InMemoryIssueRepository(),
+      locationService: const _TestAdminLocationService(),
+    );
+
+    await controller.load();
+    controller.handleMapTap(
+      const GeoPointValue(latitude: 14.0, longitude: 78.0),
+    );
+
+    expect(
+      controller.state.error,
+      'Parking area must be inside your controlled region.',
+    );
+  });
 }
 
 class _TestAdminLocationService implements AdminLocationService {
@@ -278,8 +317,8 @@ class _TestAdminLocationService implements AdminLocationService {
   @override
   Future<AdminGpsPosition> currentPosition() async {
     return const AdminGpsPosition(
-      latitude: 13.3281211,
-      longitude: 77.1256930,
+      latitude: 13.3506,
+      longitude: 77.1016,
       accuracyMeters: 8,
       isFallback: false,
       message: 'Test GPS accuracy 8 m.',

@@ -23,7 +23,7 @@ class _DashboardSection extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          'SIT Tumkur parking status, bookings, and owner actions in one quick view.',
+          '${state.region.name} parking status, bookings, and owner actions in one quick view.',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         const SizedBox(height: 16),

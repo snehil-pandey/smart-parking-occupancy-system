@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:park_here_shared/park_here_shared.dart';
 
 import 'admin_app_controller.dart';
@@ -41,6 +43,35 @@ class AdminDashboardScreen extends ConsumerWidget {
       );
     }
 
+    if (state.requiresRegionSetup) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Region Setup'),
+          actions: [
+            IconButton(
+              tooltip: 'Sign out',
+              onPressed: controller.signOut,
+              icon: const Icon(Icons.logout),
+            ),
+          ],
+        ),
+        body: ListView(
+          padding: const EdgeInsets.all(18),
+          children: [
+            if (state.error != null) ...[
+              _ErrorBanner(message: state.error!, onRefresh: controller.load),
+              const SizedBox(height: 12),
+            ],
+            _ControlledRegionEditor(
+              state: state,
+              controller: controller,
+              mandatory: true,
+            ),
+          ],
+        ),
+      );
+    }
+
     return _AdminNavigationShell(
       firebase: firebase,
       state: state,
@@ -50,10 +81,10 @@ class AdminDashboardScreen extends ConsumerWidget {
   }
 
   void _showRegisterLocationSheet(BuildContext context, WidgetRef ref) {
-    final name = TextEditingController(text: 'New SIT Parking Area');
-    final address = TextEditingController(text: 'SIT Tumkur Campus');
-    final lat = TextEditingController(text: '13.3281');
-    final lon = TextEditingController(text: '77.1257');
+    final state = ref.read(adminAppControllerProvider);
+    final name = TextEditingController(text: 'New Parking Area');
+    final address = TextEditingController(text: state.region.address);
+    final description = TextEditingController(text: 'Managed parking area.');
     final total = TextEditingController(text: '36');
     final available = TextEditingController(text: '20');
     final price = TextEditingController(text: '20');
@@ -79,9 +110,18 @@ class AdminDashboardScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Add parking area inside SIT Tumkur',
+                      'Add parking area inside your region',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
+                    const SizedBox(height: 8),
+                    _AdminOsmGeometryMap(
+                      title: 'Controlled region for new area',
+                      regionPoints: state.region.boundaryPoints,
+                      areaPoints: const [],
+                      gatePoints: const [],
+                      selectedGeometryPoint: null,
+                    ),
+                    const SizedBox(height: 12),
                     TextField(
                       controller: name,
                       decoration: const InputDecoration(
@@ -92,26 +132,11 @@ class AdminDashboardScreen extends ConsumerWidget {
                       controller: address,
                       decoration: const InputDecoration(labelText: 'Address'),
                     ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: lat,
-                            decoration: const InputDecoration(
-                              labelText: 'Latitude',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: lon,
-                            decoration: const InputDecoration(
-                              labelText: 'Longitude',
-                            ),
-                          ),
-                        ),
-                      ],
+                    TextField(
+                      controller: description,
+                      decoration: const InputDecoration(
+                        labelText: 'Description',
+                      ),
                     ),
                     Row(
                       children: [
@@ -184,8 +209,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                             .registerLocation(
                               name: name.text,
                               address: address.text,
-                              latitude: double.tryParse(lat.text) ?? 0,
-                              longitude: double.tryParse(lon.text) ?? 0,
+                              description: description.text,
                               totalSpaces: int.tryParse(total.text) ?? 0,
                               availableSpaces:
                                   int.tryParse(available.text) ?? 0,
@@ -279,10 +303,8 @@ class _AdminNavigationShell extends StatelessWidget {
                     NavigationRail(
                       extended: constraints.maxWidth >= 1120,
                       selectedIndex: selectedIndex,
-                      onDestinationSelected: (index) =>
-                          controller.changeSection(
-                            _adminDestinations[index].section,
-                          ),
+                      onDestinationSelected: (index) => controller
+                          .changeSection(_adminDestinations[index].section),
                       labelType: constraints.maxWidth >= 1120
                           ? NavigationRailLabelType.none
                           : NavigationRailLabelType.all,
