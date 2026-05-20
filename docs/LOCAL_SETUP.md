@@ -118,6 +118,8 @@ firebase use park-here-dev
 firebase deploy --only firestore:indexes
 ```
 
+Run these commands from the repository root so Firebase CLI reads the checked-in `firebase.json` and `firestore.indexes.json`.
+
 If Firebase CLI has not been initialized for Firestore yet:
 
 ```bash
@@ -508,8 +510,8 @@ Firestore asks for an index:
 
 - This usually appears as a `FAILED_PRECONDITION` error.
 - If the message says the index is currently building, wait a few minutes and refresh the app.
-- Review `docs/FIREBASE_SCHEMA.md` for the query-derived composite indexes.
-- Prefer deploying the checked-in index config:
+- Review `docs/FIREBASE_SCHEMA.md` for the query-derived composite indexes and single-field queries that do not need composite entries.
+- Prefer deploying the checked-in index config from the project root:
 
 ```bash
 firebase login

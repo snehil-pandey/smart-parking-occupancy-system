@@ -249,7 +249,7 @@ Road routes are not persisted in Firestore. The user app requests road geometry 
 - Active QR tickets should be readable only by the owning user, area admin, or verification API.
 - QR verification hardware should use a constrained service account or callable API, not a wide-open client key.
 
-## Recommended Composite Indexes
+## Firestore Query Index Audit
 
 The root `firestore.indexes.json` is generated from the Firestore query shapes in the shared Firebase repositories. Deploy it from the project root before testing Firebase realtime queries:
 
@@ -267,21 +267,38 @@ firebase init firestore
 
 Use the checked-in `firestore.indexes.json` file. The Python seed script cannot create composite indexes.
 
-Indexes derived from current app code:
+Composite indexes required by current app code:
 
-| Collection | Fields | Screen/Use |
-| --- | --- | --- |
-| `parking_areas` | `adminId ASC`, `updatedAt DESC` | Admin parking area list and realtime updates |
-| `parking_areas` | `regionId ASC`, `availableSpaces DESC` | User region discovery and realtime availability |
-| `bookings` | `userId ASC`, `status ASC`, `createdAt DESC` | User active booking lookup |
-| `bookings` | `adminId ASC`, `createdAt DESC` | Admin booking history |
-| `bookings` | `userId ASC`, `createdAt DESC` | User booking history |
-| `active_qr_tickets` | `bookingId ASC`, `status ASC`, `expiresAt ASC` | Active QR lookup and QR status stream |
-| `issue_reports` | `adminId ASC`, `createdAt DESC` | Issues Received |
-| `issue_reports` | `adminId ASC`, `status ASC`, `createdAt DESC` | Filtered Issues Received |
-| `reviews` | `areaId ASC`, `createdAt DESC` | Area detail comments |
-| `parking_area_images` | `areaId ASC`, `uploadedAt DESC` | Lazy thumbnail/preview pagination |
-| `notifications` | `userId ASC`, `createdAt DESC` | User Updates tab |
+| Repository | Collection | Query pattern | Matching index |
+| --- | --- | --- | --- |
+| `FirebaseParkingRepository.getByAdmin/watchByAdmin` | `parking_areas` | `where(adminId == uid).orderBy(updatedAt DESC)` | `adminId ASC`, `updatedAt DESC` |
+| `FirebaseParkingRepository.getByRegion/watchByRegion` | `parking_areas` | `where(regionId == regionId).orderBy(availableSpaces DESC)` | `regionId ASC`, `availableSpaces DESC` |
+| `FirebaseBookingRepository.activeForUser` | `bookings` | `where(userId == uid).where(status == active).orderBy(createdAt DESC)` | `userId ASC`, `status ASC`, `createdAt DESC` |
+| `FirebaseBookingRepository.getForAdmin/watchForAdmin` | `bookings` | `where(adminId == uid).orderBy(createdAt DESC)` | `adminId ASC`, `createdAt DESC` |
+| `FirebaseBookingRepository.getForUser/watchForUser` | `bookings` | `where(userId == uid).orderBy(createdAt DESC)` | `userId ASC`, `createdAt DESC` |
+| `FirebaseBookingRepository.getActiveQrForBooking/watchActiveQrForBooking/_findActiveQrForBooking` | `active_qr_tickets` | `where(bookingId == bookingId).where(status == active).orderBy(expiresAt ASC)` | `bookingId ASC`, `status ASC`, `expiresAt ASC` |
+| `FirebaseIssueRepository.getForAdmin/watchForAdmin` | `issue_reports` | `where(adminId == uid).orderBy(createdAt DESC)` | `adminId ASC`, `createdAt DESC` |
+| `FirebaseIssueRepository.getForAdmin/watchForAdmin` with status | `issue_reports` | `where(adminId == uid).where(status == status).orderBy(createdAt DESC)` | `adminId ASC`, `status ASC`, `createdAt DESC` |
+| `FirebaseReviewRepository.getForArea/watchForArea` | `reviews` | `where(areaId == areaId).orderBy(createdAt DESC)` | `areaId ASC`, `createdAt DESC` |
+| `FirestoreImageRepository.getPreviewsForArea/getThumbnailsForArea` | `parking_area_images` | `where(areaId == areaId).orderBy(uploadedAt DESC)` | `areaId ASC`, `uploadedAt DESC` |
+| `FirebaseNotificationRepository.watchForUser` | `notifications` | `where(userId == uid).orderBy(createdAt DESC)` | `userId ASC`, `createdAt DESC` |
+
+Queries that do not require composite indexes:
+
+| Repository | Collection | Query pattern | Why no composite index |
+| --- | --- | --- | --- |
+| `FirebaseParkingRepository.findById/reserveSlot/releaseSlot/updateAvailability/upsert` | `parking_areas` | direct document reads/writes by id | Document lookup |
+| `FirebaseParkingRepository.watchNearby` | `parking_areas` | `orderBy(availableSpaces DESC)` | Single-field index |
+| `FirebaseRegionRepository.getMainRegion/watchMainRegion/upsertRegion` | `regions` | direct document read/write by id | Document lookup |
+| `FirebaseRegionRepository.getControlledRegion/watchControlledRegion` | `regions` | `where(adminId == uid)` or legacy `where(createdByAdminId == uid)` | Single-field index |
+| `FirebaseAuthService` | `users`, `admins` | direct document reads/writes by uid | Document lookup |
+| `FirebaseBookingRepository.createBooking/cancelBooking/createActiveQrTicket/consumeQrTicket/updateStatus` | `bookings`, `active_qr_tickets`, `parking_areas` | direct document reads/writes and transactions | Document lookup |
+| `FirebaseReviewRepository.upsertReview` | `reviews`, `parking_areas` | direct document reads/writes in a transaction | Document lookup |
+| `FirebaseIssueRepository.createIssue/updateIssueStatus` | `issue_reports` | direct document writes by id | Document lookup |
+| `FirebaseNotificationRepository.upsert/markRead` | `notifications` | direct document writes by id | Document lookup |
+| `FirestoreImageRepository.findById/removeImage/replaceImage/uploadOptimizedAreaImage` | `parking_area_images`, `parking_areas` | direct document reads/writes and transactions | Document lookup |
+
+There are no runtime metrics collection queries in the current app code. If weekly/monthly metrics are added later, add their exact `where` and `orderBy` combinations here and regenerate `firestore.indexes.json`.
 
 `FAILED_PRECONDITION` errors usually mean a query needs a composite index that is still missing or still building. Compare the failing query fields with this table and redeploy `firestore.indexes.json` if repository queries change. During index build time, the apps keep the signed-in session alive and ask the user/admin to wait a few minutes and refresh.
 

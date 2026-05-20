@@ -255,3 +255,9 @@
 - Added Add/Move point modes for region corners and Add/Move corner/gate modes for parking areas using select-point then tap-to-move behavior.
 - Enforced that parking area corners, centers, and gates stay inside the signed-in admin's controlled region.
 - Added admin area detail editing and updated tests for controlled-region setup and outside-region rejection.
+
+### chore(firebase): align Firestore indexes with app queries
+- Audited Firebase repository query patterns against `firestore.indexes.json`.
+- Confirmed current composite indexes match app query shapes for parking areas, bookings, QR tickets, issues, reviews, Firestore images, and notifications.
+- Documented single-field/direct-document queries, including admin-controlled region lookups, so they are not mistaken for missing composite indexes.
+- Added the exact project-root index deployment command using `firebase use park-here-dev` and `firebase deploy --only firestore:indexes`.
