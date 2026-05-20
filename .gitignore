@@ -1,24 +1,53 @@
 # Dart / Flutter
-.dart_tool/
-.packages
-.flutter-plugins
-.flutter-plugins-dependencies
-build/
+**/.dart_tool/
+**/.packages
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/build/
+**/coverage/
+*.apk
+*.aab
+*.appbundle
+*.symbols
+app.*.map.json
 
 # Firebase / local secrets
 .env
+.env.*
+!.env.example
 firebase_options.dart
 google-services.json
 GoogleService-Info.plist
+*serviceAccount*.json
 serviceAccountKey.json
+firebase-adminsdk-*.json
 
 # IDE
 .idea/
 .vscode/
 .agents/
 skills-lock.json
+*.iml
 
 # Python
 .venv/
-.__pycache__/
+venv/
+env/
+**/__pycache__/
+.pytest_cache/
+.mypy_cache/
 *.pyc
+
+# Android / Gradle
+**/.gradle/
+**/.kotlin/
+**/android/app/build/
+**/android/build/
+local.properties
+
+# Apple local build caches
+**/ios/Pods/
+**/DerivedData/
+
+# Temporary logs
+*.log
