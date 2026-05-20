@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:park_here_shared/park_here_shared.dart';
 
 import '../user_app_controller.dart';
+import '../widgets/park_here_loading.dart';
 import '../widgets/user_status_strip.dart';
 
 class UserHomeTab extends StatelessWidget {
@@ -26,6 +27,7 @@ class UserHomeTab extends StatelessWidget {
             routes: state.routes,
             selectedRouteId: state.selectedRoute?.id,
             position: state.position,
+            isRouteLoading: state.isRouteLoading,
             onSelect: controller.selectLocation,
           ),
         ),
@@ -35,6 +37,17 @@ class UserHomeTab extends StatelessWidget {
           top: 14,
           child: _HomeSearchHeader(state: state, controller: controller),
         ),
+        if (state.locations.isEmpty && state.error == null)
+          const Positioned(
+            left: 16,
+            right: 16,
+            top: 118,
+            child: Center(
+              child: InlineParkHereLoading(
+                message: 'Loading live parking data...',
+              ),
+            ),
+          ),
         DraggableScrollableSheet(
           initialChildSize: state.selectedLocation == null ? 0.34 : 0.42,
           minChildSize: 0.18,
@@ -232,6 +245,7 @@ class InteractiveParkingMap extends StatefulWidget {
     required this.routes,
     required this.selectedRouteId,
     required this.position,
+    required this.isRouteLoading,
     required this.onSelect,
     super.key,
   });
@@ -242,6 +256,7 @@ class InteractiveParkingMap extends StatefulWidget {
   final List<RouteOption> routes;
   final String? selectedRouteId;
   final UserPosition? position;
+  final bool isRouteLoading;
   final ValueChanged<ParkingLocation> onSelect;
 
   @override
@@ -255,6 +270,10 @@ class _InteractiveParkingMapState extends State<InteractiveParkingMap>
   Animation<LatLng>? _centerAnimation;
   Animation<double>? _zoomAnimation;
   bool _tileError = false;
+  String? _polygonSignature;
+  List<Polygon>? _polygonCache;
+  String? _polylineSignature;
+  List<Polyline>? _polylineCache;
 
   @override
   void initState() {
@@ -317,10 +336,8 @@ class _InteractiveParkingMapState extends State<InteractiveParkingMap>
                 }
               },
             ),
-            // Polygon layer: Firebase parking area `boundaryPoints` overlays.
-            PolygonLayer(polygons: _parkingPolygons()),
-            // Route layer: current RouteProvider polyline options.
-            PolylineLayer(polylines: _routePolylines()),
+            _ParkingPolygonLayer(polygons: _parkingPolygons()),
+            _RouteGeometryLayer(polylines: _routePolylines()),
             // Marker layer: GPS, parking centers, gate points, and search pins.
             MarkerLayer(markers: _markers()),
           ],
@@ -334,6 +351,15 @@ class _InteractiveParkingMapState extends State<InteractiveParkingMap>
               message:
                   'Map tiles are unavailable. Check internet access and retry.',
               isError: true,
+            ),
+          ),
+        if (widget.isRouteLoading)
+          const Positioned(
+            left: 16,
+            right: 16,
+            top: 132,
+            child: Center(
+              child: InlineParkHereLoading(message: 'Calculating route...'),
             ),
           ),
         Positioned(
@@ -395,39 +421,63 @@ class _InteractiveParkingMapState extends State<InteractiveParkingMap>
     );
   }
 
-  List<Polygon> _parkingPolygons() => [
-    for (final location in widget.locations)
-      if (location.boundaryPoints.length >= 3)
-        Polygon(
-          points: location.boundaryPoints
+  List<Polygon> _parkingPolygons() {
+    final signature = widget.locations
+        .map(
+          (location) =>
+              '${location.id}:${location.boundaryPoints.length}:${location.isBookable}:${location.id == widget.selectedLocation?.id}',
+        )
+        .join('|');
+    if (_polygonSignature == signature && _polygonCache != null) {
+      return _polygonCache!;
+    }
+    _polygonSignature = signature;
+    _polygonCache = [
+      for (final location in widget.locations)
+        if (location.boundaryPoints.length >= 3)
+          Polygon(
+            points: location.boundaryPoints
+                .map((point) => LatLng(point.latitude, point.longitude))
+                .toList(),
+            color: location.id == widget.selectedLocation?.id
+                ? ParkHereTheme.yellow.withAlpha(110)
+                : location.isBookable
+                ? const Color(0xFF2E7D32).withAlpha(74)
+                : Colors.grey.withAlpha(88),
+            borderColor: location.id == widget.selectedLocation?.id
+                ? ParkHereTheme.black
+                : location.isBookable
+                ? const Color(0xFF2E7D32)
+                : Colors.grey,
+            borderStrokeWidth: location.id == widget.selectedLocation?.id
+                ? 3
+                : 2,
+          ),
+    ];
+    return _polygonCache!;
+  }
+
+  List<Polyline> _routePolylines() {
+    final signature =
+        '${widget.selectedRouteId}:${widget.routes.map(_routeSignature).join('|')}';
+    if (_polylineSignature == signature && _polylineCache != null) {
+      return _polylineCache!;
+    }
+    _polylineSignature = signature;
+    _polylineCache = [
+      for (final route in widget.routes)
+        Polyline(
+          points: route.points
               .map((point) => LatLng(point.latitude, point.longitude))
               .toList(),
-          color: location.id == widget.selectedLocation?.id
-              ? ParkHereTheme.yellow.withAlpha(110)
-              : location.isBookable
-              ? const Color(0xFF2E7D32).withAlpha(74)
-              : Colors.grey.withAlpha(88),
-          borderColor: location.id == widget.selectedLocation?.id
+          color: route.id == selectedRoute?.id
               ? ParkHereTheme.black
-              : location.isBookable
-              ? const Color(0xFF2E7D32)
-              : Colors.grey,
-          borderStrokeWidth: location.id == widget.selectedLocation?.id ? 3 : 2,
+              : const Color(0xFF5C6BC0).withAlpha(150),
+          strokeWidth: route.id == selectedRoute?.id ? 5 : 3,
         ),
-  ];
-
-  List<Polyline> _routePolylines() => [
-    for (final route in widget.routes)
-      Polyline(
-        points: route.points
-            .map((point) => LatLng(point.latitude, point.longitude))
-            .toList(),
-        color: route.id == selectedRoute?.id
-            ? ParkHereTheme.black
-            : const Color(0xFF5C6BC0).withAlpha(150),
-        strokeWidth: route.id == selectedRoute?.id ? 5 : 3,
-      ),
-  ];
+    ];
+    return _polylineCache!;
+  }
 
   List<Marker> _markers() => [
     if (widget.position != null)
@@ -592,6 +642,28 @@ class _LatLngTween extends Tween<LatLng> {
     begin!.latitude + (end!.latitude - begin!.latitude) * t,
     begin!.longitude + (end!.longitude - begin!.longitude) * t,
   );
+}
+
+class _ParkingPolygonLayer extends StatelessWidget {
+  const _ParkingPolygonLayer({required this.polygons});
+
+  final List<Polygon> polygons;
+
+  @override
+  Widget build(BuildContext context) {
+    return PolygonLayer(polygons: polygons);
+  }
+}
+
+class _RouteGeometryLayer extends StatelessWidget {
+  const _RouteGeometryLayer({required this.polylines});
+
+  final List<Polyline> polylines;
+
+  @override
+  Widget build(BuildContext context) {
+    return PolylineLayer(polylines: polylines);
+  }
 }
 
 class _ParkingDiscoverySheet extends StatelessWidget {

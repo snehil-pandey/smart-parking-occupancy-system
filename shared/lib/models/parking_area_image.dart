@@ -20,13 +20,23 @@ class ParkingAreaImage {
   final String mimeType;
   final DateTime uploadedAt;
 
-  int get thumbnailSizeBytes => base64Decode(thumbnailBase64).length;
+  static final Expando<Uint8List> _thumbnailByteCache = Expando<Uint8List>(
+    'thumbnailBytes',
+  );
 
-  int get previewSizeBytes => base64Decode(previewBase64).length;
+  static final Expando<Uint8List> _previewByteCache = Expando<Uint8List>(
+    'previewBytes',
+  );
 
-  Uint8List get thumbnailBytes => base64Decode(thumbnailBase64);
+  Uint8List get thumbnailBytes =>
+      _thumbnailByteCache[this] ??= base64Decode(thumbnailBase64);
 
-  Uint8List get previewBytes => base64Decode(previewBase64);
+  Uint8List get previewBytes =>
+      _previewByteCache[this] ??= base64Decode(previewBase64);
+
+  int get thumbnailSizeBytes => thumbnailBytes.length;
+
+  int get previewSizeBytes => previewBytes.length;
 
   Map<String, Object?> toJson() => {
     'imageId': imageId,

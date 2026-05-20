@@ -9,6 +9,7 @@ import 'features/user_notifications_tab.dart';
 import 'features/user_profile_tab.dart';
 import 'user_app_controller.dart';
 import 'widgets/user_status_strip.dart';
+import 'widgets/park_here_loading.dart';
 
 class UserHomeScreen extends ConsumerStatefulWidget {
   const UserHomeScreen({super.key});
@@ -43,7 +44,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     final controller = ref.read(userAppControllerProvider.notifier);
 
     if (state.isLoading || state.authStatus == UserAuthStatus.checking) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return ParkHereLoadingScreen(message: state.loadingMessage);
     }
     if (state.authStatus == UserAuthStatus.signedOut) {
       return Scaffold(

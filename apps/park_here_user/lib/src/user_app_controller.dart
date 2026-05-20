@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:park_here_shared/park_here_shared.dart';
@@ -225,6 +226,8 @@ class UserAppState {
     required this.isLoading,
     required this.isRefreshingData,
     required this.isBookingInProgress,
+    required this.isRouteLoading,
+    required this.loadingMessage,
     this.bookingConfirmation,
     this.actionMessage,
     this.error,
@@ -254,6 +257,37 @@ class UserAppState {
       isLoading: true,
       isRefreshingData: false,
       isBookingInProgress: false,
+      isRouteLoading: false,
+      loadingMessage: 'Restoring your parking dashboard...',
+    );
+  }
+
+  factory UserAppState.checking() {
+    return UserAppState(
+      user: null,
+      authStatus: UserAuthStatus.checking,
+      locations: const [],
+      bookings: const [],
+      routes: const [],
+      selectedRouteId: null,
+      thumbnailByArea: const {},
+      previewImages: const [],
+      selectedReviews: const [],
+      notifications: const [],
+      activeQrTicket: null,
+      position: null,
+      selectedLocation: null,
+      selectedPlace: null,
+      searchQuery: '',
+      searchResults: const [],
+      parkingFilter: ParkingFilter.all,
+      currentTab: UserTab.home,
+      durationHours: 2,
+      isLoading: true,
+      isRefreshingData: false,
+      isBookingInProgress: false,
+      isRouteLoading: false,
+      loadingMessage: 'Checking your session...',
     );
   }
 
@@ -281,6 +315,8 @@ class UserAppState {
       isLoading: false,
       isRefreshingData: false,
       isBookingInProgress: false,
+      isRouteLoading: false,
+      loadingMessage: 'Connecting to Park Here...',
     );
   }
 
@@ -306,6 +342,8 @@ class UserAppState {
   final bool isLoading;
   final bool isRefreshingData;
   final bool isBookingInProgress;
+  final bool isRouteLoading;
+  final String loadingMessage;
   final UserBookingConfirmation? bookingConfirmation;
   final String? actionMessage;
   final String? error;
@@ -406,6 +444,8 @@ class UserAppState {
     bool? isLoading,
     bool? isRefreshingData,
     bool? isBookingInProgress,
+    bool? isRouteLoading,
+    String? loadingMessage,
     UserBookingConfirmation? bookingConfirmation,
     bool clearBookingConfirmation = false,
     String? actionMessage,
@@ -442,6 +482,8 @@ class UserAppState {
       isLoading: isLoading ?? this.isLoading,
       isRefreshingData: isRefreshingData ?? this.isRefreshingData,
       isBookingInProgress: isBookingInProgress ?? this.isBookingInProgress,
+      isRouteLoading: isRouteLoading ?? this.isRouteLoading,
+      loadingMessage: loadingMessage ?? this.loadingMessage,
       bookingConfirmation: clearBookingConfirmation
           ? null
           : bookingConfirmation ?? this.bookingConfirmation,
@@ -479,7 +521,7 @@ class UserAppController extends StateNotifier<UserAppState> {
        _qrPayloadService = qrPayloadService,
        _placeSearchService = placeSearchService,
        _qrExpiryNotificationService = qrExpiryNotificationService,
-       super(UserAppState.signedOut());
+       super(UserAppState.checking());
 
   final AuthService _auth;
   final ParkingRepository _parkingRepository;
@@ -503,25 +545,34 @@ class UserAppController extends StateNotifier<UserAppState> {
   StreamSubscription<List<ParkingReview>>? _reviewSubscription;
   StreamSubscription<List<AppNotification>>? _notificationSubscription;
   Timer? _searchDebounce;
+  Timer? _routeDebounce;
   Timer? _qrCountdownTimer;
+  String? _lastRouteKey;
+  int _routeRequestId = 0;
   final Set<String> _notifiedQrThresholds = {};
 
   Future<void> load() async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(
+      authStatus: UserAuthStatus.checking,
+      isLoading: true,
+      loadingMessage: 'Checking your session...',
+      error: null,
+    );
     final user = await _auth.loadCurrentUser();
     if (user == null) {
       state = UserAppState.signedOut();
       return;
     }
-    final position = await _locationService.currentPosition();
-    await _resetRealtimeSubscriptions();
-    _startLocationUpdates();
-    _startParkingUpdates();
-    _startBookingUpdates(user.id);
-    _startNotificationUpdates(user.id);
+    state = state.copyWith(
+      user: user,
+      authStatus: UserAuthStatus.checking,
+      loadingMessage: 'Restoring your parking dashboard...',
+    );
     var locations = state.locations;
     var bookings = state.bookings;
+    UserPosition? position;
     try {
+      position = await _locationService.currentPosition();
       locations = await _parkingRepository.watchNearby(
         latitude: position.latitude,
         longitude: position.longitude,
@@ -543,11 +594,18 @@ class UserAppController extends StateNotifier<UserAppState> {
         clearActiveQrTicket: activeQrTicket == null,
         selectedLocation: locations.firstOrNull,
         isLoading: false,
+        loadingMessage: 'Connected to Park Here.',
         error: null,
       );
-      await _loadThumbnails(locations);
-      if (locations.isNotEmpty) {
-        await selectLocation(locations.first);
+      await _resetRealtimeSubscriptions();
+      _startLocationUpdates();
+      _startParkingUpdates();
+      _startBookingUpdates(user.id);
+      _startNotificationUpdates(user.id);
+      unawaited(_loadThumbnails(locations));
+      final first = locations.firstOrNull;
+      if (first != null) {
+        _scheduleRouteRefresh(first);
       }
     } on Object catch (error) {
       state = state.copyWith(
@@ -557,18 +615,26 @@ class UserAppController extends StateNotifier<UserAppState> {
         authStatus: UserAuthStatus.signedIn,
         position: position,
         isLoading: false,
+        loadingMessage: 'Connected to Park Here.',
         error: FirebaseErrorMessages.friendlyMessage(error),
       );
     }
   }
 
   Future<void> signIn({required String email, required String password}) async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(
+      isLoading: true,
+      loadingMessage: 'Restoring your parking dashboard...',
+      error: null,
+    );
     try {
       await _auth.signInUserWithEmail(email: email, password: password);
       await load();
     } on Object catch (error) {
-      state = UserAppState.signedOut().copyWith(error: error.toString());
+      debugPrint('User sign-in failed: $error');
+      state = UserAppState.signedOut().copyWith(
+        error: 'Unable to sign in. Check your details and try again.',
+      );
     }
   }
 
@@ -580,7 +646,11 @@ class UserAppController extends StateNotifier<UserAppState> {
     required String vehicleNumber,
     required VehicleType vehicleType,
   }) async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(
+      isLoading: true,
+      loadingMessage: 'Creating your Park Here account...',
+      error: null,
+    );
     try {
       await _auth.signUpUserWithEmail(
         email: email,
@@ -592,7 +662,10 @@ class UserAppController extends StateNotifier<UserAppState> {
       );
       await load();
     } on Object catch (error) {
-      state = UserAppState.signedOut().copyWith(error: error.toString());
+      debugPrint('User sign-up failed: $error');
+      state = UserAppState.signedOut().copyWith(
+        error: 'Unable to create account. Please try again.',
+      );
     }
   }
 
@@ -625,9 +698,9 @@ class UserAppController extends StateNotifier<UserAppState> {
       clearSelectedPlace: true,
       currentTab: UserTab.home,
     );
-    await _refreshRoutesForSelected(location);
-    await _loadPreviewImages(location);
-    await _loadReviews(location.id);
+    _scheduleRouteRefresh(location);
+    unawaited(_loadPreviewImages(location));
+    unawaited(_loadReviews(location.id));
     _startReviewUpdates(location.id);
   }
 
@@ -665,6 +738,9 @@ class UserAppController extends StateNotifier<UserAppState> {
         parkingAreas: state.locations,
       );
       final placeResults = await _placeSearchService.searchPlaces(trimmed);
+      if (state.searchQuery.trim() != trimmed) {
+        return;
+      }
       state = state.copyWith(
         searchResults: [...areaResults, ...placeResults].take(10).toList(),
       );
@@ -840,7 +916,7 @@ class UserAppController extends StateNotifier<UserAppState> {
         ),
       );
       _startActiveQrUpdates(booking.id);
-      await _refreshRoutesForSelected(reservedLocation);
+      _scheduleRouteRefresh(reservedLocation);
       _syncQrExpiryNotifications(ticket);
     } on Object catch (error) {
       state = state.copyWith(
@@ -871,23 +947,48 @@ class UserAppController extends StateNotifier<UserAppState> {
       origin: origin,
       location: location,
     );
+    final routeKey =
+        '${location.id}:${origin.latitude.toStringAsFixed(4)},${origin.longitude.toStringAsFixed(4)}:${destination.latitude.toStringAsFixed(4)},${destination.longitude.toStringAsFixed(4)}';
+    if (_lastRouteKey == routeKey && state.routes.isNotEmpty) {
+      return;
+    }
+    final requestId = ++_routeRequestId;
+    state = state.copyWith(isRouteLoading: true);
     try {
       final routes = await _routeProvider.findRoutes(
         origin: origin,
         destination: destination,
       );
+      if (requestId != _routeRequestId ||
+          state.selectedLocation?.id != location.id) {
+        return;
+      }
+      _lastRouteKey = routeKey;
       state = state.copyWith(
         routes: routes,
         selectedRouteId: routes.firstOrNull?.id,
         clearSelectedRoute: routes.isEmpty,
+        isRouteLoading: false,
       );
     } on Object catch (error) {
+      debugPrint('Route calculation failed: $error');
+      if (requestId != _routeRequestId) {
+        return;
+      }
       state = state.copyWith(
         routes: const [],
         clearSelectedRoute: true,
-        error: FirebaseErrorMessages.friendlyMessage(error),
+        isRouteLoading: false,
+        actionMessage: 'Connection is slow. Retrying route when available.',
       );
     }
+  }
+
+  void _scheduleRouteRefresh(ParkingLocation location) {
+    _routeDebounce?.cancel();
+    _routeDebounce = Timer(const Duration(milliseconds: 420), () {
+      unawaited(_refreshRoutesForSelected(location));
+    });
   }
 
   ParkingLocation? _updatedSelectedFrom(List<ParkingLocation> locations) {
@@ -931,7 +1032,8 @@ class UserAppController extends StateNotifier<UserAppState> {
       );
       await _qrExpiryNotificationService.cancelScheduled();
     } on Object catch (error) {
-      state = state.copyWith(error: error.toString());
+      debugPrint('Cancel booking failed: $error');
+      state = state.copyWith(error: 'Could not complete this action.');
     }
   }
 
@@ -1020,7 +1122,7 @@ class UserAppController extends StateNotifier<UserAppState> {
     final thumbnails = Map<String, ParkingAreaImage>.from(state.thumbnailByArea)
       ..removeWhere((areaId, _) => !activeAreaIds.contains(areaId));
     try {
-      for (final location in locations) {
+      for (final location in locations.take(10)) {
         if (thumbnails.containsKey(location.id)) {
           continue;
         }
@@ -1040,18 +1142,19 @@ class UserAppController extends StateNotifier<UserAppState> {
       }
       state = state.copyWith(thumbnailByArea: thumbnails);
     } on Object catch (error) {
-      state = state.copyWith(
-        thumbnailByArea: thumbnails,
-        error: FirebaseErrorMessages.friendlyMessage(error),
-      );
+      debugPrint('Thumbnail load failed: $error');
+      state = state.copyWith(thumbnailByArea: thumbnails);
     }
   }
 
   Future<void> _loadPreviewImages(ParkingLocation location) async {
+    state = state.copyWith(previewImages: const []);
     final cached = _imageCache.getMany(location.imagePreviewRefs);
     if (cached.isNotEmpty &&
         cached.length == location.imagePreviewRefs.length) {
-      state = state.copyWith(previewImages: cached);
+      if (state.selectedLocation?.id == location.id) {
+        state = state.copyWith(previewImages: cached);
+      }
       return;
     }
     try {
@@ -1062,11 +1165,14 @@ class UserAppController extends StateNotifier<UserAppState> {
       for (final image in images) {
         _imageCache.put(image);
       }
-      state = state.copyWith(previewImages: images);
+      if (state.selectedLocation?.id == location.id) {
+        state = state.copyWith(previewImages: images);
+      }
     } on Object catch (error) {
+      debugPrint('Preview image load failed: $error');
       state = state.copyWith(
         previewImages: const [],
-        error: FirebaseErrorMessages.friendlyMessage(error),
+        actionMessage: 'Connection is slow. Images will appear when ready.',
       );
     }
   }
@@ -1074,11 +1180,14 @@ class UserAppController extends StateNotifier<UserAppState> {
   Future<void> _loadReviews(String areaId) async {
     try {
       final reviews = await _reviewRepository.getForArea(areaId, limit: 5);
-      state = state.copyWith(selectedReviews: reviews);
+      if (state.selectedLocation?.id == areaId) {
+        state = state.copyWith(selectedReviews: reviews);
+      }
     } on Object catch (error) {
+      debugPrint('Review load failed: $error');
       state = state.copyWith(
         selectedReviews: const [],
-        error: FirebaseErrorMessages.friendlyMessage(error),
+        actionMessage: 'Unable to load comments right now.',
       );
     }
   }
@@ -1090,10 +1199,21 @@ class UserAppController extends StateNotifier<UserAppState> {
     _positionSubscription = _locationService.positionStream().listen((
       position,
     ) async {
+      final previous = state.position;
+      if (previous != null &&
+          Geolocator.distanceBetween(
+                previous.latitude,
+                previous.longitude,
+                position.latitude,
+                position.longitude,
+              ) <
+              50) {
+        return;
+      }
       state = state.copyWith(position: position);
       final selected = state.selectedLocation;
       if (selected != null) {
-        await _refreshRoutesForSelected(selected);
+        _scheduleRouteRefresh(selected);
       }
     });
   }
@@ -1116,9 +1236,9 @@ class UserAppController extends StateNotifier<UserAppState> {
               error: null,
             );
             if (updatedSelected != null) {
-              await _refreshRoutesForSelected(updatedSelected);
+              _scheduleRouteRefresh(updatedSelected);
             }
-            await _loadThumbnails(locations);
+            unawaited(_loadThumbnails(locations));
           },
           onError: (Object error) {
             state = state.copyWith(
@@ -1211,6 +1331,7 @@ class UserAppController extends StateNotifier<UserAppState> {
       parkingName: location?.name ?? 'your parking area',
     );
     _qrCountdownTimer?.cancel();
+    _routeDebounce?.cancel();
     if (ticket == null || booking == null) {
       _notifiedQrThresholds.clear();
       return;
@@ -1326,6 +1447,7 @@ class UserAppController extends StateNotifier<UserAppState> {
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _routeDebounce?.cancel();
     _positionSubscription?.cancel();
     _parkingSubscription?.cancel();
     _bookingSubscription?.cancel();

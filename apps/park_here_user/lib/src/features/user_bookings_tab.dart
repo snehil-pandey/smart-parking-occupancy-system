@@ -4,6 +4,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:screen_brightness/screen_brightness.dart';
 
 import '../user_app_controller.dart';
+import '../widgets/park_here_loading.dart';
 import '../widgets/user_status_strip.dart';
 
 class UserBookingsTab extends StatelessWidget {
@@ -114,11 +115,17 @@ class _ActiveBookingCard extends StatelessWidget {
                         Text(
                           '${formatInr(booking.price)} - ${booking.durationHours} hours',
                         ),
-                        Text(
-                          activeQrTicket == null
-                              ? 'QR waiting for active ticket sync'
-                              : 'QR ${activeQrTicket!.status.name} until ${_time(activeQrTicket!.expiresAt)}',
-                        ),
+                        if (activeQrTicket == null)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 6),
+                            child: InlineParkHereLoading(
+                              message: 'Loading QR...',
+                            ),
+                          )
+                        else
+                          Text(
+                            'QR ${activeQrTicket!.status.name} until ${_time(activeQrTicket!.expiresAt)}',
+                          ),
                       ],
                     ),
                   ),
