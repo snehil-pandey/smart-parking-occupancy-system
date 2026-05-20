@@ -185,17 +185,17 @@ The seed data can include demo users, demo admins, admin-controlled regions, par
 - Multi-admin, multi-region scaling
 - Dedicated operational dashboards for larger deployments
 
-## Contribution / Branch Workflow
+## Development Workflow
 
-The stable integration branch is `main`.
+The stable integration branch is `main`. Do not commit directly to `main` for feature work.
 
-Feature and experiment work should happen on isolated branches such as:
+Use approval/staging branches before changes reach `main`:
 
-- `temp-user-ipv`
-- `temp-admin-ipv`
-- other short-lived feature branches
+- `temp-user` for driver/user app work.
+- `temp-admin` for admin app work.
+- Isolated feature branches for addon/scanner work when needed.
 
-Merge only the intended branch into `main`, validate before pushing, and keep experimental branches intact until they are intentionally retired.
+Implement, test, commit, and push changes on the relevant staging branch first. Merge `temp-user` or `temp-admin` into `main` only after approval and validation.
 
 ## Documentation
 
@@ -204,4 +204,5 @@ Additional project documentation lives in [docs](docs):
 - [Architecture](docs/ARCHITECTURE.md)
 - [Firebase Schema](docs/FIREBASE_SCHEMA.md)
 - [Local Setup](docs/LOCAL_SETUP.md)
+- [Branch Workflow](docs/BRANCH_WORKFLOW.md)
 - [Changelog](docs/CHANGELOG.md)
