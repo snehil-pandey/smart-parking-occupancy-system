@@ -223,6 +223,13 @@ Runtime providers now use Firebase implementations:
 - `FirestoreImageRepository`
 - `FirebaseAuthService`
 
+Admin region setup:
+
+- After admin sign-in, the app looks for a controlled region owned by the Firebase Auth uid.
+- If no region exists, the dashboard is blocked and the admin must create a region with name, address, and at least three OSM map points.
+- Parking area creation and editing stay locked to that controlled region. Points outside the region are rejected with a friendly error.
+- Demo admins continue to use the seeded SIT Tumkur region if it exists in Firestore.
+
 Realtime listeners are bounded:
 
 - User parking availability: `parking_areas` by `regionId`, open status, and limit.
@@ -256,6 +263,17 @@ Search is routed through `PlaceSearchService`. The default implementation is `Lo
 - Firebase-loaded parking areas
 
 If you later replace it with Google Places or OpenStreetMap/Nominatim, keep the same service interface and store API keys outside source control.
+
+## Admin OSM Region And Area Editing
+
+The admin app also uses real OpenStreetMap tiles through `flutter_map` for region and area geometry:
+
+- Region Setup: focused on current GPS or the default fallback, with Add Point and Move Point modes.
+- Region tab: edits the saved controlled region boundary.
+- Add Parking Area: shows the controlled region so the admin starts area setup in the right place.
+- Edit Parking Area: shows the controlled region, parking area polygon, numbered corners, selected point, and gates.
+
+Point movement currently uses select-point then tap-to-move. This is the supported cross-platform behavior for now; draggable markers can be added later behind the same controller validation.
 
 ## Road-Aware Routing
 

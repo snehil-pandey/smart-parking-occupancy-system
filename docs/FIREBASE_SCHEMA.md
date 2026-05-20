@@ -52,8 +52,9 @@ Unknown values fall back to `car` and print a debug warning instead of crashing.
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `regionId` | string | Fixed demo id: `region_sit_tumkur` |
-| `name` | string | `SIT Tumkur` for the MVP |
+| `regionId` | string | Region id; demo id remains `region_sit_tumkur` |
+| `adminId` | string | Owning admin uid for newly created controlled regions |
+| `name` | string | Admin-controlled region name; seeded demo uses `SIT Tumkur` |
 | `address` | string | Region address |
 | `boundaryPoints` | array | Polygon points: `{latitude, longitude}` |
 | `centerLat` | number | Map center latitude |
@@ -107,14 +108,16 @@ Gate point shape:
 Admin geometry editing rules:
 
 - `boundaryPoints` must contain at least three points before saving final area geometry.
+- New admins must save one controlled region before creating parking areas.
 - `gatePoints` are optional but recommended because user routing targets the nearest valid gate before falling back to area center.
 - Gate `type` must be `entry`, `exit`, or `both`.
 - Admin editor drafts are local until Save; Save updates the `/parking_areas/{areaId}` document and Firestore streams refresh the UI.
-- Current admin map editing uses tap-to-select/tap-to-move for existing points. True draggable map markers can be added later when the admin app adopts the real OSM editor layer.
+- Admin map editing uses OSM tiles with Add Point/Add Corner/Add Gate and Move Point/Move Corner/Move Gate modes.
+- Current point movement is tap-to-select/tap-to-move. True draggable markers can be added later without changing the Firestore schema.
 - `totalSpaces` must be `>= 0`.
 - `availableSpaces` must be between `0` and `totalSpaces`.
 - `pricePerHour` must be between `0` and `100`.
-- MVP admin areas must belong to `region_sit_tumkur`.
+- Parking area corners, center, and gates must be inside the owning admin's controlled region.
 
 ## `/parking_area_images/{imageId}`
 
@@ -301,7 +304,8 @@ The app should continue using `ImageRepository`, swapping `FirestoreImageReposit
 - The Firebase demo seed creates/reuses Auth users first, then writes profiles under the actual Auth UID.
 - The Firebase Auth UID is the primary profile document id for both users and admins.
 - User discovery reads parking areas by region and displays full/closed areas as disabled.
-- Admin area management reads by `adminId` so closed areas remain manageable.
+- Admin region setup reads `/regions` by `adminId` or legacy `createdByAdminId`; empty Firebase shows mandatory Region Setup instead of fake local data.
+- Admin area management reads by `adminId` and filters to the controlled region so closed areas remain manageable.
 - Images are not stored on parking area documents; parking areas store image ids only.
 - Active QR tickets are operational records. Booking history remains in `/bookings`.
 - Cancellation never deletes booking history. It marks `/bookings/{bookingId}.status = cancelled`, stores fine metadata, expires the active QR if present, and releases the reserved slot once.

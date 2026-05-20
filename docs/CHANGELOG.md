@@ -247,3 +247,11 @@
 - Added gate list editing for name/type updates and gate removal.
 - Removed the hardcoded default polygon from runtime parking area creation so new areas start empty and must be marked by the admin or seeded through Firebase.
 - Added controller validation for area spaces, price range, SIT Tumkur region ownership, and minimum polygon corners before saving geometry.
+
+### feat(admin-region): add controlled region setup and OSM map editing
+- Added per-admin controlled region loading from Firestore and mandatory Region Setup for admins without a region.
+- Added shared geometry utilities for point-in-polygon, polygon containment, gate containment, polygon centers, and bounds.
+- Replaced active admin geometry editing surfaces with real OpenStreetMap tile maps for region and parking area polygons.
+- Added Add/Move point modes for region corners and Add/Move corner/gate modes for parking areas using select-point then tap-to-move behavior.
+- Enforced that parking area corners, centers, and gates stay inside the signed-in admin's controlled region.
+- Added admin area detail editing and updated tests for controlled-region setup and outside-region rejection.

@@ -92,13 +92,19 @@ flowchart TD
   Start["Open Admin App"] --> Init["Initialize Firebase"]
   Init --> Auth["Firebase Auth login/signup"]
   Auth --> Profile["Load or create /admins/{uid}"]
-  Profile --> Region["Load SIT Tumkur region"]
-  Region --> Areas["Stream admin parking areas"]
+  Profile --> RegionCheck["Load /regions where adminId or createdByAdminId == uid"]
+  RegionCheck --> MissingRegion["No region: mandatory Region Setup"]
+  MissingRegion --> RegionCreate["Admin marks OSM polygon and saves region"]
+  RegionCheck --> Region["Existing controlled region"]
+  RegionCreate --> Region
+  Region --> Areas["Stream admin parking areas inside region"]
   Areas --> Editor["Edit boundary, gates, slots, price, images"]
   Profile --> Bookings["Stream admin bookings"]
   Profile --> Issues["Stream Issues Received"]
   Bookings --> Complete["Complete booking or consume QR"]
 ```
+
+Admins must define one controlled region before the dashboard opens. New admins see Region Setup after sign-in and cannot create parking areas until the region document is saved to Firestore. Existing demo admins still load the seeded SIT Tumkur region from Firebase.
 
 ## Admin App Navigation
 
@@ -107,7 +113,7 @@ The admin app is now separated into focused operational sections instead of one 
 ```mermaid
 flowchart LR
   Shell["AdminNavigationShell"] --> Dashboard["Dashboard: income, bookings, slots, issues, quick actions"]
-  Shell --> Region["Region: SIT Tumkur metadata and boundary preview"]
+  Shell --> Region["Region: controlled-region metadata and OSM boundary editor"]
   Shell --> Areas["Parking Areas: list, availability, geometry, images"]
   Shell --> Bookings["Bookings: active, completed, cancelled"]
   Shell --> Issues["Issues: filters and status updates"]
@@ -123,11 +129,11 @@ Visual direction is practical and Namma-Yatri-inspired: warm yellow accents, bla
 
 ## Region To Parking Area Flow
 
-SIT Tumkur is the current main region. Admins manage that region boundary, then publish bookable parking areas inside it. Users only see parking areas; the region is not a selectable parking object.
+Each admin controls one primary region for now. Demo data can still use SIT Tumkur, but new admins create their own Firestore-backed region. Admins manage that region boundary, then publish bookable parking areas inside it. Users only see parking areas; the region is not a selectable parking object.
 
 ```mermaid
 flowchart TD
-  Region["/regions/region_sit_tumkur"] --> Boundary["Admin edits region polygon"]
+  Region["/regions/{regionId}"] --> Boundary["Admin edits region polygon"]
   Boundary --> Area["Admin creates parking area polygon"]
   Area --> Gates["Admin marks entry/exit gates by GPS"]
   Gates --> Publish["Publish area with slots, price, vehicle types, images"]
@@ -225,7 +231,7 @@ Cancellation uses the booking repository transaction path. It marks the booking 
 
 ```mermaid
 flowchart TD
-  Admin["Admin opens Parking Areas"] --> Mode["Choose Corner or Gate mode"]
+  Admin["Admin opens Parking Areas"] --> Mode["Choose Add/Move Corner or Add/Move Gate mode"]
   Mode --> Tap["Select On Map: tap preview to add point"]
   Mode --> GPS["GPS: stand at point and mark current position"]
   Tap --> Draft["Update draft boundaryPoints/gatePoints immediately"]
@@ -241,11 +247,11 @@ flowchart TD
 
 Poor GPS accuracy is shown in the Admin app. The seeded SIT Tumkur coordinates are approximate and should be corrected using this flow before real operation.
 
-The admin geometry surface is currently a lightweight preview of saved polygons, numbered corner points, and gate points. It is not wired to the real `flutter_map` OpenStreetMap tile stack yet. The user app uses real OSM tiles; admin can safely keep editing Firebase geometry through GPS controls and select-on-map mode until an OSM editor is added.
+The admin region and parking-area editors now use real `flutter_map` OpenStreetMap tiles. Region setup focuses on the region draft polygon. Parking-area creation and editing fit the map to the controlled region, render the region boundary, render the area polygon, and show gate markers.
 
-Because the admin preview does not use draggable map markers yet, point adjustment uses an explicit fallback interaction: tap an existing corner or gate to select it, then tap the desired position to move it. This is intentionally documented as tap-to-select/tap-to-move rather than true dragging.
+The current editor uses explicit tap-to-select/tap-to-move interactions instead of true draggable markers. This keeps Android and Web behavior predictable with the current map package integration. If draggable markers are added later, they should preserve the same repository and validation rules.
 
-Before saving geometry, the controller validates that the selected area belongs to `region_sit_tumkur`, has at least three polygon corners, uses a price within `0..100`, and has `availableSpaces` between `0` and `totalSpaces`. Draft edits remain local until Save writes the updated area document to Firebase, after which the Firestore stream refreshes the selected area.
+Before saving geometry, the controller validates that the selected area belongs to the signed-in admin's controlled region, has at least three polygon corners, every corner/gate/center is inside the region, uses a price within `0..100`, and has `availableSpaces` between `0` and `totalSpaces`. Draft edits remain local until Save writes the updated area document to Firebase, after which the Firestore stream refreshes the selected area.
 
 ## Firestore-Only Image Flow
 
