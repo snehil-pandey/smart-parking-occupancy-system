@@ -26,6 +26,28 @@ class FirebaseRegionRepository implements RegionRepository {
   }
 
   @override
+  Future<ParkingRegion?> getControlledRegion(String adminId) async {
+    final adminIdSnapshot = await _firestore
+        .collection(FirebaseCollectionPaths.regions)
+        .where('adminId', isEqualTo: adminId)
+        .limit(1)
+        .get();
+    if (adminIdSnapshot.docs.isNotEmpty) {
+      return FirestoreModelMapper.regionFromDoc(adminIdSnapshot.docs.first);
+    }
+
+    final snapshot = await _firestore
+        .collection(FirebaseCollectionPaths.regions)
+        .where('createdByAdminId', isEqualTo: adminId)
+        .limit(1)
+        .get();
+    if (snapshot.docs.isEmpty) {
+      return null;
+    }
+    return FirestoreModelMapper.regionFromDoc(snapshot.docs.first);
+  }
+
+  @override
   Stream<ParkingRegion> watchMainRegion() {
     return _regionDoc.snapshots().map((doc) {
       if (!doc.exists || doc.data() == null) {
@@ -35,6 +57,21 @@ class FirebaseRegionRepository implements RegionRepository {
       }
       return FirestoreModelMapper.regionFromDoc(doc);
     });
+  }
+
+  @override
+  Stream<ParkingRegion?> watchControlledRegion(String adminId) {
+    return _firestore
+        .collection(FirebaseCollectionPaths.regions)
+        .where('adminId', isEqualTo: adminId)
+        .limit(1)
+        .snapshots()
+        .map((snapshot) {
+          if (snapshot.docs.isEmpty) {
+            return null;
+          }
+          return FirestoreModelMapper.regionFromDoc(snapshot.docs.first);
+        });
   }
 
   @override

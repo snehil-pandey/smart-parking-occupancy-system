@@ -55,5 +55,6 @@ export 'services/place_search_service.dart';
 export 'services/qr_payload_service.dart';
 export 'theme/park_here_theme.dart';
 export 'utils/demo_seed.dart';
+export 'utils/geometry_utils.dart';
 export 'utils/money.dart';
 export 'utils/result.dart';

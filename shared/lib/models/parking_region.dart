@@ -54,6 +54,7 @@ class ParkingRegion {
     'boundaryPoints': boundaryPoints.map((point) => point.toJson()).toList(),
     'centerLat': centerLat,
     'centerLng': centerLng,
+    'adminId': createdByAdminId,
     'createdByAdminId': createdByAdminId,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
@@ -70,7 +71,7 @@ class ParkingRegion {
           .toList(),
       centerLat: (json['centerLat'] as num).toDouble(),
       centerLng: (json['centerLng'] as num).toDouble(),
-      createdByAdminId: json['createdByAdminId'] as String,
+      createdByAdminId: (json['adminId'] ?? json['createdByAdminId']) as String,
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
     );

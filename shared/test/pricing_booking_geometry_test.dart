@@ -58,6 +58,93 @@ void main() {
     );
   });
 
+  test('pointInPolygon includes interior and boundary points', () {
+    expect(
+      GeometryUtils.pointInPolygon(
+        const GeoPointValue(latitude: 1, longitude: 1),
+        _squareRegion,
+      ),
+      isTrue,
+    );
+    expect(
+      GeometryUtils.pointInPolygon(
+        const GeoPointValue(latitude: 0, longitude: 1),
+        _squareRegion,
+      ),
+      isTrue,
+    );
+    expect(
+      GeometryUtils.pointInPolygon(
+        const GeoPointValue(latitude: 3, longitude: 1),
+        _squareRegion,
+      ),
+      isFalse,
+    );
+  });
+
+  test('polygonInsidePolygon rejects parking polygons outside region', () {
+    expect(
+      GeometryUtils.polygonInsidePolygon(const [
+        GeoPointValue(latitude: 0.2, longitude: 0.2),
+        GeoPointValue(latitude: 0.8, longitude: 0.2),
+        GeoPointValue(latitude: 0.8, longitude: 0.8),
+      ], _squareRegion),
+      isTrue,
+    );
+    expect(
+      GeometryUtils.polygonInsidePolygon(const [
+        GeoPointValue(latitude: 0.2, longitude: 0.2),
+        GeoPointValue(latitude: 2.4, longitude: 0.2),
+        GeoPointValue(latitude: 0.8, longitude: 0.8),
+      ], _squareRegion),
+      isFalse,
+    );
+  });
+
+  test('gateInsideRegion rejects gates outside controlled region', () {
+    final now = DateTime.now();
+    expect(
+      GeometryUtils.gateInsideRegion(
+        GatePoint(
+          gateId: 'gate_inside',
+          name: 'Inside',
+          latitude: 1,
+          longitude: 1,
+          type: GatePointType.entry,
+          createdAt: now,
+        ),
+        _squareRegion,
+      ),
+      isTrue,
+    );
+    expect(
+      GeometryUtils.gateInsideRegion(
+        GatePoint(
+          gateId: 'gate_outside',
+          name: 'Outside',
+          latitude: 3,
+          longitude: 1,
+          type: GatePointType.entry,
+          createdAt: now,
+        ),
+        _squareRegion,
+      ),
+      isFalse,
+    );
+  });
+
+  test('calculatePolygonCenter and calculateBounds use polygon points', () {
+    final center = GeometryUtils.calculatePolygonCenter(_squareRegion);
+    final bounds = GeometryUtils.calculateBounds(_squareRegion);
+
+    expect(center.latitude, closeTo(1, 0.0001));
+    expect(center.longitude, closeTo(1, 0.0001));
+    expect(bounds.minLatitude, 0);
+    expect(bounds.maxLatitude, 2);
+    expect(bounds.minLongitude, 0);
+    expect(bounds.maxLongitude, 2);
+  });
+
   test('full area cannot be reserved', () async {
     final repository = InMemoryParkingRepository(
       seed: [_area(availableSpaces: 0)],
@@ -131,6 +218,13 @@ void main() {
     expect(restored.gatePoints.first.type, GatePointType.both);
   });
 }
+
+const _squareRegion = [
+  GeoPointValue(latitude: 0, longitude: 0),
+  GeoPointValue(latitude: 0, longitude: 2),
+  GeoPointValue(latitude: 2, longitude: 2),
+  GeoPointValue(latitude: 2, longitude: 0),
+];
 
 ParkingLocation _area({
   int availableSpaces = 3,

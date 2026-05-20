@@ -5,5 +5,9 @@ abstract interface class RegionRepository {
 
   Stream<ParkingRegion> watchMainRegion();
 
+  Future<ParkingRegion?> getControlledRegion(String adminId);
+
+  Stream<ParkingRegion?> watchControlledRegion(String adminId);
+
   Future<void> upsertRegion(ParkingRegion region);
 }

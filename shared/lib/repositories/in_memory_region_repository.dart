@@ -6,13 +6,36 @@ class InMemoryRegionRepository implements RegionRepository {
   InMemoryRegionRepository({ParkingRegion? seed})
     : _region = seed ?? DemoSeed.sitTumkurRegion();
 
-  ParkingRegion _region;
+  InMemoryRegionRepository.empty() : _region = null;
+
+  ParkingRegion? _region;
 
   @override
-  Future<ParkingRegion> getMainRegion() async => _region;
+  Future<ParkingRegion> getMainRegion() async {
+    final region = _region;
+    if (region == null) {
+      throw StateError('No region exists.');
+    }
+    return region;
+  }
 
   @override
-  Stream<ParkingRegion> watchMainRegion() => Stream.value(_region);
+  Future<ParkingRegion?> getControlledRegion(String adminId) async {
+    final region = _region;
+    if (region == null || region.createdByAdminId != adminId) {
+      return null;
+    }
+    return region;
+  }
+
+  @override
+  Stream<ParkingRegion> watchMainRegion() async* {
+    yield await getMainRegion();
+  }
+
+  @override
+  Stream<ParkingRegion?> watchControlledRegion(String adminId) =>
+      Stream.value(_region?.createdByAdminId == adminId ? _region : null);
 
   @override
   Future<void> upsertRegion(ParkingRegion region) async {
