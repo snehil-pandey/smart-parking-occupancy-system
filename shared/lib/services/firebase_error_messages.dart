@@ -1,8 +1,7 @@
 class FirebaseErrorMessages {
   const FirebaseErrorMessages._();
 
-  static const indexBuilding =
-      'Firebase index is still building. Please wait a few minutes and refresh.';
+  static const indexBuilding = 'Parking data is preparing. Try again shortly.';
 
   static String friendlyMessage(Object error) {
     if (isIndexBuildingError(error)) {

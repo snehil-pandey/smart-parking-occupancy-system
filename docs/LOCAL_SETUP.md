@@ -133,7 +133,7 @@ Index creation can take a few minutes after deployment. A Firestore `FAILED_PREC
 While an index is still building, the apps keep the Firebase Auth session alive and show:
 
 ```text
-Firebase index is still building. Please wait a few minutes and refresh.
+Parking data is preparing. Try again shortly.
 ```
 
 Use the refresh button in the app after Firebase Console marks the index as enabled.
@@ -442,6 +442,8 @@ python reset_firebase_demo.py --yes --delete-auth-demo-users
 python seed_firebase_demo.py
 ```
 
+`--delete-auth-demo-users` is accepted for older command habits; demo Auth users are now deleted by default during reset. The script deletes only users ending with `@parkhere.demo` unless a dangerous full-reset flag is used.
+
 Preview reset impact without deleting anything:
 
 ```bash
@@ -450,6 +452,15 @@ python reset_firebase_demo.py --dry-run
 ```
 
 Firestore composite indexes are not ordinary Firestore documents. The reset script does not delete indexes, and the seed script does not create them. Keep index definitions in the root `firestore.indexes.json` file and deploy them from the project root with `firebase deploy --only firestore:indexes`.
+
+Full destructive reset is available only for disposable Firebase projects:
+
+```bash
+cd demo
+python reset_firebase_demo.py --delete-all-auth-users --delete-all-firestore-data
+```
+
+That command requires the confirmation phrases `DELETE ALL AUTH USERS` and `DELETE ALL FIRESTORE DATA`.
 
 Firebase Auth UID is the profile document id for `/users/{uid}` and `/admins/{uid}`. Demo profiles also store `authUid`, `userId` or `adminId`, and `email`.
 
@@ -524,6 +535,12 @@ flutter run -d <android-device-id>
 Firestore asks for an index:
 
 - This usually appears as a `FAILED_PRECONDITION` error.
+- Confirm Firebase CLI is pointing at the same project used by the Flutter app:
+
+```bash
+firebase use park-here-dev
+```
+
 - If the message says the index is currently building, wait a few minutes and refresh the app.
 - Review `docs/FIREBASE_SCHEMA.md` for the query-derived composite indexes and single-field queries that do not need composite entries.
 - Prefer deploying the checked-in index config from the project root:

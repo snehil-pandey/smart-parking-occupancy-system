@@ -1,4 +1,4 @@
-"""Delete Park Here demo Firestore data, with optional demo Auth user cleanup."""
+"""Delete Park Here demo Firestore data and demo Auth users safely."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ COLLECTIONS = [
     "admins",
     "regions",
     "parking_areas",
+    "parking_locations",
     "parking_area_images",
     "bookings",
     "active_qr_tickets",
@@ -27,9 +28,20 @@ COLLECTIONS = [
     "area_metrics",
     "history_metrics",
     "qr_scan_logs",
+    "route_cache",
+    "raw_metric_events",
 ]
 
 DEMO_EMAIL_SUFFIX = "@parkhere.demo"
+DEMO_EMAILS = {
+    "admin@parkhere.demo",
+    "ananya@parkhere.demo",
+    "karthik@parkhere.demo",
+    "meera@parkhere.demo",
+    "rahul@parkhere.demo",
+    "sneha@parkhere.demo",
+    "vikram@parkhere.demo",
+}
 
 
 def read_env_file(path: Path) -> None:
@@ -59,6 +71,10 @@ def initialize_firestore() -> firestore.Client:
     return firestore.client()
 
 
+def list_top_level_collections(db: firestore.Client) -> list[str]:
+    return sorted(collection.id for collection in db.collections())
+
+
 def delete_collection(
     db: firestore.Client,
     collection_name: str,
@@ -81,33 +97,59 @@ def delete_collection(
         deleted += len(docs)
 
 
-def delete_demo_auth_users(dry_run: bool = False) -> int:
+def delete_auth_users(
+    *,
+    delete_all: bool,
+    dry_run: bool = False,
+) -> tuple[int, int]:
     deleted = 0
+    skipped = 0
     page = auth.list_users()
     while page:
         for user in page.users:
             email = (user.email or "").lower()
-            if email.endswith(DEMO_EMAIL_SUFFIX):
+            is_demo = email.endswith(DEMO_EMAIL_SUFFIX) or email in DEMO_EMAILS
+            if delete_all or is_demo:
                 if not dry_run:
                     auth.delete_user(user.uid)
                 deleted += 1
                 action = "Would delete" if dry_run else "Deleted"
-                print(f"{action} demo Auth user: {email} ({user.uid})")
+                scope = "Auth user" if delete_all else "demo Auth user"
+                print(f"{action} {scope}: {email or '<no-email>'} ({user.uid})")
+            else:
+                skipped += 1
         page = page.get_next_page()
-    return deleted
+    return deleted, skipped
+
+
+def require_phrase(phrase: str, reason: str) -> None:
+    print(reason)
+    answer = input(f"Type {phrase} to continue: ").strip()
+    if answer != phrase:
+        raise SystemExit("Reset cancelled.")
 
 
 def confirm_or_exit(args: argparse.Namespace) -> None:
-    if args.yes:
-        return
     if args.dry_run:
         print("Dry run: no Firestore documents or Auth users will be deleted.")
         return
+    if args.delete_all_firestore_data:
+        require_phrase(
+            "DELETE ALL FIRESTORE DATA",
+            "DANGER: this deletes every top-level Firestore collection in the configured project.",
+        )
+    if args.delete_all_auth_users:
+        require_phrase(
+            "DELETE ALL AUTH USERS",
+            "DANGER: this deletes every Firebase Auth user in the configured project. This is irreversible.",
+        )
+    if args.yes:
+        return
+
     print("This will delete Park Here demo Firestore collections:")
     for collection in COLLECTIONS:
         print(f"- {collection}")
-    if args.delete_auth_demo_users:
-        print(f"It will also delete Firebase Auth users ending with {DEMO_EMAIL_SUFFIX}.")
+    print(f"It will also delete Firebase Auth demo users ending with {DEMO_EMAIL_SUFFIX}.")
     answer = input("Type DELETE to continue: ").strip()
     if answer != "DELETE":
         raise SystemExit("Reset cancelled.")
@@ -115,17 +157,27 @@ def confirm_or_exit(args: argparse.Namespace) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Reset Park Here demo Firestore data.",
+        description="Reset Park Here demo Firestore data and demo Auth users.",
     )
     parser.add_argument(
         "--yes",
         action="store_true",
-        help="Skip interactive confirmation.",
+        help="Skip normal demo reset confirmation. Dangerous full-reset flags still require phrase confirmation.",
     )
     parser.add_argument(
         "--delete-auth-demo-users",
         action="store_true",
-        help="Also delete Firebase Auth users whose email ends with @parkhere.demo.",
+        help="Delete Firebase Auth demo users. Kept for compatibility; demo Auth deletion is now part of reset.",
+    )
+    parser.add_argument(
+        "--delete-all-auth-users",
+        action="store_true",
+        help="DANGER: delete every Firebase Auth user after typing DELETE ALL AUTH USERS.",
+    )
+    parser.add_argument(
+        "--delete-all-firestore-data",
+        action="store_true",
+        help="DANGER: delete every top-level Firestore collection after typing DELETE ALL FIRESTORE DATA.",
     )
     parser.add_argument(
         "--dry-run",
@@ -140,23 +192,30 @@ def main() -> None:
     confirm_or_exit(args)
     db = initialize_firestore()
     mode = "Scanning" if args.dry_run else "Resetting"
-    print(f"{mode} Park Here demo Firestore data...")
+    print(f"{mode} Park Here Firebase data...")
+    collections = list_top_level_collections(db) if args.delete_all_firestore_data else COLLECTIONS
     total_docs = 0
-    for collection in COLLECTIONS:
+    for collection in collections:
         count = delete_collection(db, collection, dry_run=args.dry_run)
         total_docs += count
         action = "Would delete" if args.dry_run else "Deleted"
         print(f"{action} {count} docs from {collection}")
-    if args.delete_auth_demo_users:
-        count = delete_demo_auth_users(dry_run=args.dry_run)
-        action = "Would delete" if args.dry_run else "Deleted"
-        print(f"{action} {count} demo Firebase Auth users")
+
+    auth_deleted, auth_skipped = delete_auth_users(
+        delete_all=args.delete_all_auth_users,
+        dry_run=args.dry_run,
+    )
+    action = "Would delete" if args.dry_run else "Deleted"
+    auth_label = "Firebase Auth users" if args.delete_all_auth_users else "demo Firebase Auth users"
+    print(f"{action} {auth_deleted} {auth_label}")
+    print(f"Skipped {auth_skipped} real/non-demo Firebase Auth users")
     print(f"Firestore document total: {total_docs}")
-    print("Firestore composite indexes are not ordinary documents and are not reset by this script.")
+    print("Firestore indexes are configuration, not data.")
+    print("They are managed by firestore.indexes.json and Firebase CLI, not this reset script.")
     print("After reset/seed, run from the project root:")
     print("  firebase use park-here-dev")
     print("  firebase deploy --only firestore:indexes")
-    print("Firebase demo reset complete." if not args.dry_run else "Firebase demo dry run complete.")
+    print("Firebase reset complete." if not args.dry_run else "Firebase reset dry run complete.")
 
 
 if __name__ == "__main__":

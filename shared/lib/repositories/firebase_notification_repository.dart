@@ -14,14 +14,16 @@ class FirebaseNotificationRepository implements NotificationRepository {
   Stream<List<AppNotification>> watchForUser(String userId, {int limit = 30}) {
     return _notifications
         .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
         .limit(limit)
         .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => _notificationFromDoc(doc.id, doc.data()))
-              .toList(),
-        );
+        .map((snapshot) {
+          final notifications =
+              snapshot.docs
+                  .map((doc) => _notificationFromDoc(doc.id, doc.data()))
+                  .toList()
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return notifications;
+        });
   }
 
   @override

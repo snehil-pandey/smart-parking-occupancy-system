@@ -81,7 +81,7 @@ If Firebase CLI has not been initialized for Firestore yet:
 firebase init firestore
 ```
 
-Use the root `firestore.indexes.json` file. Missing or still-building indexes usually appear as a Firestore `FAILED_PRECONDITION` error, often for queries such as `bookings where userId == ... order by createdAt desc`. Index builds can take a few minutes after deployment.
+Use the root `firestore.indexes.json` file. Missing or still-building indexes usually appear as a Firestore `FAILED_PRECONDITION` error. Index builds can take a few minutes after deployment. The user app avoids unnecessary startup composite indexes by querying small user/campus result sets and sorting them in memory.
 
 ## Reset And Reseed
 
@@ -93,13 +93,13 @@ Preview what would be deleted:
 python reset_firebase_demo.py --dry-run
 ```
 
-Delete Firestore demo data only:
+Delete Firestore demo data and demo Firebase Auth users:
 
 ```bash
 python reset_firebase_demo.py --yes
 ```
 
-Delete Firestore demo data and demo Firebase Auth users whose emails end with `@parkhere.demo`:
+The older explicit Auth flag is still accepted:
 
 ```bash
 python reset_firebase_demo.py --yes --delete-auth-demo-users
@@ -111,9 +111,17 @@ Then seed a clean dataset:
 python seed_firebase_demo.py
 ```
 
-The reset script deletes only Park Here demo collections. It does not delete unrelated Firebase Auth users unless `--delete-auth-demo-users` is passed, and even then it only deletes users with `@parkhere.demo` emails.
+The reset script deletes only Park Here demo collections and Firebase Auth users with `@parkhere.demo` emails. It skips real/non-demo Auth users and prints the skipped count.
 
-The reset script clears these demo collections: `users`, `admins`, `regions`, `parking_areas`, `parking_area_images`, `bookings`, `active_qr_tickets`, `issue_reports`, `reviews`, `payments`, `booking_history`, `notifications`, `admin_metrics`, `area_metrics`, `history_metrics`, and `qr_scan_logs`.
+The reset script clears these demo collections: `users`, `admins`, `regions`, `parking_areas`, `parking_locations`, `parking_area_images`, `bookings`, `active_qr_tickets`, `issue_reports`, `reviews`, `payments`, `booking_history`, `notifications`, `admin_metrics`, `area_metrics`, `history_metrics`, `qr_scan_logs`, `route_cache`, and `raw_metric_events`.
+
+For a disposable Firebase project, full destructive reset is available:
+
+```bash
+python reset_firebase_demo.py --delete-all-auth-users --delete-all-firestore-data
+```
+
+That command requires the confirmation phrases `DELETE ALL AUTH USERS` and `DELETE ALL FIRESTORE DATA`. It should not be used on a shared or production Firebase project.
 
 After reset/seed, deploy indexes from the project root:
 
@@ -172,7 +180,7 @@ To reset demo passwords and profile links, rerun:
 python seed_firebase_demo.py
 ```
 
-To fully reset the accounts, delete the `@parkhere.demo` users from Firebase Console > Authentication, then rerun the seed script. Firestore demo documents use fixed ids where possible and `merge=True`, so repeated runs are safe.
+To fully reset the accounts, run `python reset_firebase_demo.py --yes`, then rerun the seed script. Firestore demo documents use fixed ids where possible and `merge=True`, so repeated runs are safe.
 
 ## Verify
 

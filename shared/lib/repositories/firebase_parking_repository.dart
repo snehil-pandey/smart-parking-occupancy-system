@@ -52,10 +52,13 @@ class FirebaseParkingRepository implements ParkingRepository {
   }) async {
     final snapshot = await _areas
         .where('regionId', isEqualTo: regionId)
-        .orderBy('availableSpaces', descending: true)
         .limit(limit)
         .get();
-    return snapshot.docs.map(FirestoreModelMapper.parkingAreaFromDoc).toList();
+    final locations = snapshot.docs
+        .map(FirestoreModelMapper.parkingAreaFromDoc)
+        .toList();
+    locations.sort((a, b) => b.availableSpaces.compareTo(a.availableSpaces));
+    return locations;
   }
 
   @override
@@ -65,14 +68,17 @@ class FirebaseParkingRepository implements ParkingRepository {
   }) {
     return _areas
         .where('regionId', isEqualTo: regionId)
-        .orderBy('availableSpaces', descending: true)
         .limit(limit)
         .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
+        .map((snapshot) {
+          final locations = snapshot.docs
               .map(FirestoreModelMapper.parkingAreaFromDoc)
-              .toList(),
-        );
+              .toList();
+          locations.sort(
+            (a, b) => b.availableSpaces.compareTo(a.availableSpaces),
+          );
+          return locations;
+        });
   }
 
   @override
@@ -80,11 +86,12 @@ class FirebaseParkingRepository implements ParkingRepository {
     required double latitude,
     required double longitude,
   }) async {
-    final snapshot = await _areas
-        .orderBy('availableSpaces', descending: true)
-        .limit(30)
-        .get();
-    return snapshot.docs.map(FirestoreModelMapper.parkingAreaFromDoc).toList();
+    final snapshot = await _areas.limit(30).get();
+    final locations = snapshot.docs
+        .map(FirestoreModelMapper.parkingAreaFromDoc)
+        .toList();
+    locations.sort((a, b) => b.availableSpaces.compareTo(a.availableSpaces));
+    return locations;
   }
 
   @override

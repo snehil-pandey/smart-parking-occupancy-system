@@ -272,3 +272,9 @@
 - Expanded the demo reset script to clear all supported Park Here demo collections, support `--dry-run`, and optionally delete only Auth users ending with `@parkhere.demo`.
 - Updated the seed script to recreate Auth users, matching Firestore profiles, SIT Tumkur region/areas, bounds fields, bookings, opaque active QR tickets, reviews, issues, notifications, payment, and lightweight metrics documents.
 - Documented that Firestore indexes are managed through `firestore.indexes.json` and Firebase CLI deployment, not through the Admin SDK reset/seed scripts.
+
+### fix(firebase): reset demo auth data and stabilize indexes
+- Made demo Auth user deletion part of the reset flow while still skipping real/non-demo users by default.
+- Added dangerous full-reset flags for disposable Firebase projects with explicit confirmation phrases for all Auth users and all Firestore collections.
+- Simplified user-facing parking, booking, and notification queries to sort small result sets in memory instead of requiring startup composite indexes.
+- Trimmed `firestore.indexes.json` to only the composite indexes still required by app queries and updated index deployment docs.

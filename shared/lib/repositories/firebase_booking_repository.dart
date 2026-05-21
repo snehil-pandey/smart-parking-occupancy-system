@@ -17,13 +17,14 @@ class FirebaseBookingRepository implements BookingRepository {
   Future<Booking?> activeForUser(String userId) async {
     final snapshot = await _bookings
         .where('userId', isEqualTo: userId)
-        .where('status', isEqualTo: BookingStatus.active.name)
-        .orderBy('createdAt', descending: true)
-        .limit(1)
+        .limit(30)
         .get();
-    return snapshot.docs.firstOrNull == null
-        ? null
-        : FirestoreModelMapper.bookingFromDoc(snapshot.docs.first);
+    final bookings =
+        snapshot.docs.map(FirestoreModelMapper.bookingFromDoc).toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return bookings
+        .where((booking) => booking.status == BookingStatus.active)
+        .firstOrNull;
   }
 
   @override
@@ -237,23 +238,26 @@ class FirebaseBookingRepository implements BookingRepository {
   Future<List<Booking>> getForUser(String userId) async {
     final snapshot = await _bookings
         .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
         .limit(30)
         .get();
-    return snapshot.docs.map(FirestoreModelMapper.bookingFromDoc).toList();
+    final bookings =
+        snapshot.docs.map(FirestoreModelMapper.bookingFromDoc).toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return bookings;
   }
 
   @override
   Stream<List<Booking>> watchForUser(String userId, {int limit = 30}) {
     return _bookings
         .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
         .limit(limit)
         .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map(FirestoreModelMapper.bookingFromDoc).toList(),
-        );
+        .map((snapshot) {
+          final bookings =
+              snapshot.docs.map(FirestoreModelMapper.bookingFromDoc).toList()
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return bookings;
+        });
   }
 
   @override
