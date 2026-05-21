@@ -79,11 +79,13 @@ flowchart TD
   Routes --> Fallback["SIT road-graph fallback"]
 ```
 
-The user map uses `flutter_map` with public OpenStreetMap tiles for local development, then overlays Firebase parking polygons, gate markers, current GPS, and route polylines. OpenStreetMap does not require Google Maps billing or an API key, but production traffic should use an OSM-compliant tile provider or self-hosted tiles.
+The user map uses `flutter_map` with public OpenStreetMap tiles for local development, then overlays Firebase parking polygons, gate markers, current GPS, and route polylines. The parking overlay is fed by a realtime `/parking_areas` snapshot of open Firebase areas, so areas created by real admins appear without a full app reload or a demo-region filter. OpenStreetMap does not require Google Maps billing or an API key, but production traffic should use an OSM-compliant tile provider or self-hosted tiles.
 
 Routes now come from `OsrmRouteProvider` first, not straight-line geometry. The provider requests OSRM road-network routes with full GeoJSON geometry, caches recent responses in memory, and falls back to a small SIT Tumkur weighted road graph only when the road-routing API is unavailable. `ParkingGateSelector` routes to the nearest valid entry/both gate before falling back to a parking area center.
 
 `PlaceSearchService` is an abstraction so Google Places, Nominatim, or another provider can be added later without putting API logic in widgets. Current runtime uses `LocalSitTumkurPlaceSearchService`, which is free/local-friendly and searches SIT Tumkur landmarks plus Firebase-loaded parking areas.
+
+User-facing Firestore queries are intentionally simple. Parking areas use `where(isOpen == true)`, bookings use `where(userId == uid)`, active QR tickets use `where(bookingId == bookingId)`, and notifications use `where(userId == uid)`. Sorting by distance, availability, rating, price, expiry, and creation time happens in memory for this campus/local scale so the user app does not block on avoidable composite index creation.
 
 ## Admin App Flow
 

@@ -15,15 +15,10 @@ class FirebaseBookingRepository implements BookingRepository {
 
   @override
   Future<Booking?> activeForUser(String userId) async {
-    final snapshot = await _bookings
-        .where('userId', isEqualTo: userId)
-        .where('status', isEqualTo: BookingStatus.active.name)
-        .orderBy('createdAt', descending: true)
-        .limit(1)
-        .get();
-    return snapshot.docs.firstOrNull == null
-        ? null
-        : FirestoreModelMapper.bookingFromDoc(snapshot.docs.first);
+    final snapshot = await _bookings.where('userId', isEqualTo: userId).get();
+    return _sortedBookings(
+      snapshot,
+    ).where((booking) => booking.status == BookingStatus.active).firstOrNull;
   }
 
   @override
@@ -155,14 +150,13 @@ class FirebaseBookingRepository implements BookingRepository {
   Future<ActiveQrTicket?> getActiveQrForBooking(String bookingId) async {
     final snapshot = await _activeQrTickets
         .where('bookingId', isEqualTo: bookingId)
-        .where('status', isEqualTo: ActiveQrStatus.active.name)
-        .orderBy('expiresAt')
-        .limit(1)
         .get();
-    if (snapshot.docs.isEmpty) {
+    final ticket = _activeTickets(
+      snapshot,
+    ).where((ticket) => ticket.status == ActiveQrStatus.active).firstOrNull;
+    if (ticket == null) {
       return null;
     }
-    final ticket = FirestoreModelMapper.activeQrFromDoc(snapshot.docs.first);
     if (ticket.expiresAt.isBefore(DateTime.now())) {
       await updateStatus(bookingId: bookingId, status: BookingStatus.expired);
       await _activeQrTickets.doc(ticket.qrId).update({
@@ -177,14 +171,11 @@ class FirebaseBookingRepository implements BookingRepository {
   Stream<ActiveQrTicket?> watchActiveQrForBooking(String bookingId) {
     return _activeQrTickets
         .where('bookingId', isEqualTo: bookingId)
-        .where('status', isEqualTo: ActiveQrStatus.active.name)
-        .orderBy('expiresAt')
-        .limit(1)
         .snapshots()
         .map(
-          (snapshot) => snapshot.docs.isEmpty
-              ? null
-              : FirestoreModelMapper.activeQrFromDoc(snapshot.docs.first),
+          (snapshot) => _activeTickets(snapshot)
+              .where((ticket) => ticket.status == ActiveQrStatus.active)
+              .firstOrNull,
         );
   }
 
@@ -235,25 +226,16 @@ class FirebaseBookingRepository implements BookingRepository {
 
   @override
   Future<List<Booking>> getForUser(String userId) async {
-    final snapshot = await _bookings
-        .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
-        .limit(30)
-        .get();
-    return snapshot.docs.map(FirestoreModelMapper.bookingFromDoc).toList();
+    final snapshot = await _bookings.where('userId', isEqualTo: userId).get();
+    return _sortedBookings(snapshot).take(30).toList();
   }
 
   @override
   Stream<List<Booking>> watchForUser(String userId, {int limit = 30}) {
     return _bookings
         .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
-        .limit(limit)
         .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map(FirestoreModelMapper.bookingFromDoc).toList(),
-        );
+        .map((snapshot) => _sortedBookings(snapshot).take(limit).toList());
   }
 
   @override
@@ -283,14 +265,10 @@ class FirebaseBookingRepository implements BookingRepository {
   Future<ActiveQrTicket?> _findActiveQrForBooking(String bookingId) async {
     final snapshot = await _activeQrTickets
         .where('bookingId', isEqualTo: bookingId)
-        .where('status', isEqualTo: ActiveQrStatus.active.name)
-        .orderBy('expiresAt')
-        .limit(1)
         .get();
-    if (snapshot.docs.isEmpty) {
-      return null;
-    }
-    return FirestoreModelMapper.activeQrFromDoc(snapshot.docs.first);
+    return _activeTickets(
+      snapshot,
+    ).where((ticket) => ticket.status == ActiveQrStatus.active).firstOrNull;
   }
 
   CollectionReference<Map<String, dynamic>> get _bookings =>
@@ -301,4 +279,16 @@ class FirebaseBookingRepository implements BookingRepository {
 
   CollectionReference<Map<String, dynamic>> get _areas =>
       _firestore.collection(FirebaseCollectionPaths.parkingAreas);
+
+  List<Booking> _sortedBookings(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    return snapshot.docs.map(FirestoreModelMapper.bookingFromDoc).toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  List<ActiveQrTicket> _activeTickets(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    return snapshot.docs.map(FirestoreModelMapper.activeQrFromDoc).toList()
+      ..sort((a, b) => a.expiresAt.compareTo(b.expiresAt));
+  }
 }

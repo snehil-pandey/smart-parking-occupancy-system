@@ -131,18 +131,20 @@ class FirestoreImageRepository implements ImageRepository {
     required int limit,
     String? startAfterImageId,
   }) async {
-    var query = _images
-        .where('areaId', isEqualTo: areaId)
-        .orderBy('uploadedAt', descending: true)
-        .limit(limit);
-    if (startAfterImageId != null) {
-      final startAfter = await _images.doc(startAfterImageId).get();
-      if (startAfter.exists) {
-        query = query.startAfterDocument(startAfter);
-      }
+    final snapshot = await _images.where('areaId', isEqualTo: areaId).get();
+    final images = snapshot.docs.map(FirestoreModelMapper.imageFromDoc).toList()
+      ..sort((a, b) => b.uploadedAt.compareTo(a.uploadedAt));
+    if (startAfterImageId == null) {
+      return images.take(limit).toList();
     }
-    final snapshot = await query.get();
-    return snapshot.docs.map(FirestoreModelMapper.imageFromDoc).toList();
+    final matchedIndex = images.indexWhere(
+      (image) => image.imageId == startAfterImageId,
+    );
+    if (matchedIndex == -1) {
+      return images.take(limit).toList();
+    }
+    final startIndex = matchedIndex + 1;
+    return images.skip(startIndex).take(limit).toList();
   }
 
   Future<void> _removeImageRefs(String areaId, String imageId) async {

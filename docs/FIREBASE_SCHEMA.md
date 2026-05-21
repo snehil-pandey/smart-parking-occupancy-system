@@ -272,27 +272,26 @@ Composite indexes required by current app code:
 | Repository | Collection | Query pattern | Matching index |
 | --- | --- | --- | --- |
 | `FirebaseParkingRepository.getByAdmin/watchByAdmin` | `parking_areas` | `where(adminId == uid).orderBy(updatedAt DESC)` | `adminId ASC`, `updatedAt DESC` |
-| `FirebaseParkingRepository.getByRegion/watchByRegion` | `parking_areas` | `where(regionId == regionId).orderBy(availableSpaces DESC)` | `regionId ASC`, `availableSpaces DESC` |
-| `FirebaseBookingRepository.activeForUser` | `bookings` | `where(userId == uid).where(status == active).orderBy(createdAt DESC)` | `userId ASC`, `status ASC`, `createdAt DESC` |
 | `FirebaseBookingRepository.getForAdmin/watchForAdmin` | `bookings` | `where(adminId == uid).orderBy(createdAt DESC)` | `adminId ASC`, `createdAt DESC` |
-| `FirebaseBookingRepository.getForUser/watchForUser` | `bookings` | `where(userId == uid).orderBy(createdAt DESC)` | `userId ASC`, `createdAt DESC` |
-| `FirebaseBookingRepository.getActiveQrForBooking/watchActiveQrForBooking/_findActiveQrForBooking` | `active_qr_tickets` | `where(bookingId == bookingId).where(status == active).orderBy(expiresAt ASC)` | `bookingId ASC`, `status ASC`, `expiresAt ASC` |
 | `FirebaseIssueRepository.getForAdmin/watchForAdmin` | `issue_reports` | `where(adminId == uid).orderBy(createdAt DESC)` | `adminId ASC`, `createdAt DESC` |
 | `FirebaseIssueRepository.getForAdmin/watchForAdmin` with status | `issue_reports` | `where(adminId == uid).where(status == status).orderBy(createdAt DESC)` | `adminId ASC`, `status ASC`, `createdAt DESC` |
-| `FirebaseReviewRepository.getForArea/watchForArea` | `reviews` | `where(areaId == areaId).orderBy(createdAt DESC)` | `areaId ASC`, `createdAt DESC` |
-| `FirestoreImageRepository.getPreviewsForArea/getThumbnailsForArea` | `parking_area_images` | `where(areaId == areaId).orderBy(uploadedAt DESC)` | `areaId ASC`, `uploadedAt DESC` |
-| `FirebaseNotificationRepository.watchForUser` | `notifications` | `where(userId == uid).orderBy(createdAt DESC)` | `userId ASC`, `createdAt DESC` |
 
 Queries that do not require composite indexes:
 
 | Repository | Collection | Query pattern | Why no composite index |
 | --- | --- | --- | --- |
 | `FirebaseParkingRepository.findById/reserveSlot/releaseSlot/updateAvailability/upsert` | `parking_areas` | direct document reads/writes by id | Document lookup |
-| `FirebaseParkingRepository.watchNearby` | `parking_areas` | `orderBy(availableSpaces DESC)` | Single-field index |
+| `FirebaseParkingRepository.getOpenAreas/watchOpenAreas/watchNearby` | `parking_areas` | `where(isOpen == true)` then local sort by availability/update time | Single-field equality query; user app sees all open admin-created areas without a demo region filter |
+| `FirebaseParkingRepository.getByRegion/watchByRegion` | `parking_areas` | `where(regionId == regionId)` then local sort by availability/update time | Single-field equality query |
 | `FirebaseRegionRepository.getMainRegion/watchMainRegion/upsertRegion` | `regions` | direct document read/write by id | Document lookup |
 | `FirebaseRegionRepository.getControlledRegion/watchControlledRegion` | `regions` | `where(adminId == uid)` or legacy `where(createdByAdminId == uid)` | Single-field index |
 | `FirebaseAuthService` | `users`, `admins` | direct document reads/writes by uid | Document lookup |
 | `FirebaseBookingRepository.createBooking/cancelBooking/createActiveQrTicket/consumeQrTicket/updateStatus` | `bookings`, `active_qr_tickets`, `parking_areas` | direct document reads/writes and transactions | Document lookup |
+| `FirebaseBookingRepository.activeForUser/getForUser/watchForUser` | `bookings` | `where(userId == uid)` then local status/date sort | Single-field equality query |
+| `FirebaseBookingRepository.getActiveQrForBooking/watchActiveQrForBooking/_findActiveQrForBooking` | `active_qr_tickets` | `where(bookingId == bookingId)` then local status/expiry filter | Single-field equality query |
+| `FirebaseReviewRepository.getForArea/watchForArea` | `reviews` | `where(areaId == areaId)` then local date sort | Single-field equality query |
+| `FirestoreImageRepository.getPreviewsForArea/getThumbnailsForArea` | `parking_area_images` | `where(areaId == areaId)` then local date sort/pagination | Single-field equality query |
+| `FirebaseNotificationRepository.watchForUser` | `notifications` | `where(userId == uid)` then local date sort | Single-field equality query |
 | `FirebaseReviewRepository.upsertReview` | `reviews`, `parking_areas` | direct document reads/writes in a transaction | Document lookup |
 | `FirebaseIssueRepository.createIssue/updateIssueStatus` | `issue_reports` | direct document writes by id | Document lookup |
 | `FirebaseNotificationRepository.upsert/markRead` | `notifications` | direct document writes by id | Document lookup |
@@ -320,7 +319,7 @@ The app should continue using `ImageRepository`, swapping `FirestoreImageReposit
 - Sign-in creates a minimal profile if Auth exists but the role-specific Firestore profile is missing.
 - The Firebase demo seed creates/reuses Auth users first, then writes profiles under the actual Auth UID.
 - The Firebase Auth UID is the primary profile document id for both users and admins.
-- User discovery reads parking areas by region and displays full/closed areas as disabled.
+- User discovery streams open `/parking_areas` from Firebase, not a seeded region or demo admin id, then sorts distance, availability, rating, and price in memory so newly created admin areas appear without waiting on composite indexes.
 - Admin region setup reads `/regions` by `adminId` or legacy `createdByAdminId`; empty Firebase shows mandatory Region Setup instead of fake local data.
 - Admin area management reads by `adminId` and filters to the controlled region so closed areas remain manageable.
 - Images are not stored on parking area documents; parking areas store image ids only.
