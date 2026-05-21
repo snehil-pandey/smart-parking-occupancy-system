@@ -20,6 +20,7 @@ Firestore requires composite indexes for these query shapes. The root `firestore
 - `issue_reports` by `adminId + status`, ordered by `createdAt desc`
 - `reviews` by `areaId`, ordered by `createdAt desc`
 - `parking_area_images` by `areaId`, ordered by `uploadedAt desc`
+- `notifications` by `userId`, ordered by `createdAt desc`
 
 ## Deploy
 
@@ -54,7 +55,8 @@ firebase deploy --only firestore:indexes
 ## Notes
 
 - Run these commands from the project root.
-- The Python seed script cannot create Firestore composite indexes.
+- The Python seed/reset scripts cannot create, delete, or rebuild Firestore composite indexes.
+- Indexes are managed by the root `firestore.indexes.json` file and Firebase CLI deployment.
 - Index creation can take a few minutes in Firebase after deployment.
 - During that window, the apps show `Firebase index is still building. Please wait a few minutes and refresh.` instead of crashing the signed-in session.
 - If a query still fails, open the Firebase error link or compare the query fields with `firestore.indexes.json`.

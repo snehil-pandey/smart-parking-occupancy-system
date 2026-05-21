@@ -11,9 +11,12 @@ This folder seeds a SIT Tumkur-focused dataset into Firestore for local testing 
 - Seven parking areas inside/near SIT Tumkur
 - Approximate `boundaryPoints` for each parking area
 - Approximate `gatePoints` for entry/exit markers
+- Parking area bounds fields: `minLat`, `maxLat`, `minLng`, `maxLng`
 - Empty image refs by default
 - Reviews and issue reports
 - One active booking with one active QR ticket using an opaque `qr_live_...` id
+- User notifications for the Updates tab
+- One payment record and lightweight metrics documents
 
 The script uses deterministic emails and preferred UIDs. It checks Firebase Auth first and reuses an existing user for the email when present. Firestore profile documents are written under the actual Firebase Auth UID so app login maps correctly.
 
@@ -64,7 +67,7 @@ python seed_firebase_demo.py
 
 ## Firestore Indexes
 
-The Python seed script cannot create Firestore composite indexes. Deploy the query-derived indexes from the project root before testing realtime queries in the Flutter apps:
+The Python seed/reset scripts cannot create, delete, or rebuild Firestore composite indexes. Firestore indexes are managed by the root `firestore.indexes.json` file and the Firebase CLI. Deploy the query-derived indexes from the project root before testing realtime queries in the Flutter apps:
 
 ```bash
 firebase login
@@ -83,6 +86,12 @@ Use the root `firestore.indexes.json` file. Missing or still-building indexes us
 ## Reset And Reseed
 
 When old Firestore demo data contains stale enum values such as `twoWheeler`, reset the demo collections before reseeding.
+
+Preview what would be deleted:
+
+```bash
+python reset_firebase_demo.py --dry-run
+```
 
 Delete Firestore demo data only:
 
@@ -103,6 +112,16 @@ python seed_firebase_demo.py
 ```
 
 The reset script deletes only Park Here demo collections. It does not delete unrelated Firebase Auth users unless `--delete-auth-demo-users` is passed, and even then it only deletes users with `@parkhere.demo` emails.
+
+The reset script clears these demo collections: `users`, `admins`, `regions`, `parking_areas`, `parking_area_images`, `bookings`, `active_qr_tickets`, `issue_reports`, `reviews`, `payments`, `booking_history`, `notifications`, `admin_metrics`, `area_metrics`, `history_metrics`, and `qr_scan_logs`.
+
+After reset/seed, deploy indexes from the project root:
+
+```bash
+cd ..
+firebase use park-here-dev
+firebase deploy --only firestore:indexes
+```
 
 ## Demo Login Credentials
 

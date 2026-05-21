@@ -106,6 +106,17 @@ def gp(lat: float, lng: float) -> dict[str, float]:
     return {"latitude": round(lat, 7), "longitude": round(lng, 7)}
 
 
+def bounds(points: list[dict[str, float]]) -> dict[str, float]:
+    latitudes = [point["latitude"] for point in points]
+    longitudes = [point["longitude"] for point in points]
+    return {
+        "minLat": min(latitudes),
+        "maxLat": max(latitudes),
+        "minLng": min(longitudes),
+        "maxLng": max(longitudes),
+    }
+
+
 def gate(
     gate_id: str,
     name: str,
@@ -184,6 +195,7 @@ def seed_region(db: firestore.Client, admin_uid: str) -> None:
             "boundaryPoints": boundary,
             "centerLat": 13.3281211,
             "centerLng": 77.1256930,
+            "adminId": admin_uid,
             "createdByAdminId": admin_uid,
             "createdAt": ts(-72),
             "updatedAt": ts(),
@@ -388,9 +400,11 @@ def seed_parking_areas(db: firestore.Client, admin_uid: str) -> None:
         invalid_types = set(vehicle_types) - CANONICAL_VEHICLE_TYPES
         if invalid_types:
             raise ValueError(f"{area_id} has unsupported vehicle types: {invalid_types}")
+        area_bounds = bounds(area["boundaryPoints"])
         db.collection("parking_areas").document(area_id).set(
             {
                 **area,
+                **area_bounds,
                 "id": area_id,
                 "regionId": REGION_ID,
                 "adminId": admin_uid,
@@ -495,6 +509,93 @@ def seed_reviews_and_issues(
     print("Seeded SIT reviews and issues")
 
 
+def seed_notifications(db: firestore.Client, user_uids: dict[str, str]) -> None:
+    notifications = [
+        {
+            "notificationId": "notif_sit_booking_confirmed",
+            "userId": user_uids["user_demo_001"],
+            "type": "bookingConfirmed",
+            "title": "Booking confirmed",
+            "message": "Your Main Gate Parking booking is active.",
+            "relatedBookingId": "book_sit_demo_001",
+            "relatedAreaId": "area_sit_main_gate_parking",
+            "read": False,
+            "createdAt": ts(-1),
+        },
+        {
+            "notificationId": "notif_sit_parking_status",
+            "userId": user_uids["user_demo_002"],
+            "type": "parkingStatus",
+            "title": "Parking update",
+            "message": "Library Parking is currently full. Try Hostel Side Parking.",
+            "relatedBookingId": None,
+            "relatedAreaId": "area_sit_library_parking",
+            "read": False,
+            "createdAt": ts(-3),
+        },
+    ]
+    for notification in notifications:
+        db.collection("notifications").document(notification["notificationId"]).set(
+            notification,
+            merge=True,
+        )
+    print(f"Seeded {len(notifications)} user notifications")
+
+
+def seed_payment_and_metrics(
+    db: firestore.Client,
+    user_uids: dict[str, str],
+    admin_uid: str,
+) -> None:
+    db.collection("payments").document("pay_sit_demo_001").set(
+        {
+            "paymentId": "pay_sit_demo_001",
+            "bookingId": "book_sit_demo_001",
+            "userId": user_uids["user_demo_001"],
+            "adminId": admin_uid,
+            "amount": 60.0,
+            "status": "paid",
+            "createdAt": ts(-1),
+        },
+        merge=True,
+    )
+    db.collection("admin_metrics").document(admin_uid).set(
+        {
+            "adminId": admin_uid,
+            "regionId": REGION_ID,
+            "activeBookings": 1,
+            "openIssues": 1,
+            "todayIncome": 60.0,
+            "updatedAt": ts(),
+        },
+        merge=True,
+    )
+    db.collection("area_metrics").document("area_sit_main_gate_parking").set(
+        {
+            "areaId": "area_sit_main_gate_parking",
+            "adminId": admin_uid,
+            "regionId": REGION_ID,
+            "totalBookings": 1,
+            "activeBookings": 1,
+            "occupancyPercent": 65.4,
+            "updatedAt": ts(),
+        },
+        merge=True,
+    )
+    db.collection("history_metrics").document("sit_tumkur_today").set(
+        {
+            "metricId": "sit_tumkur_today",
+            "regionId": REGION_ID,
+            "date": NOW.date().isoformat(),
+            "bookings": 1,
+            "income": 60.0,
+            "updatedAt": ts(),
+        },
+        merge=True,
+    )
+    print("Seeded payment and lightweight metrics documents")
+
+
 def seed_booking_and_qr(
     db: firestore.Client,
     user_uids: dict[str, str],
@@ -542,8 +643,17 @@ def seed_booking_and_qr(
     print("Seeded one active SIT booking and QR ticket")
 
 
+def warn_if_indexes_missing() -> None:
+    root = Path(__file__).resolve().parents[1]
+    if not (root / "firestore.indexes.json").exists():
+        print("WARNING: firestore.indexes.json was not found at the project root.")
+    if not (root / "firebase.json").exists():
+        print("WARNING: firebase.json was not found at the project root.")
+
+
 def main() -> None:
     db = initialize_firestore()
+    warn_if_indexes_missing()
     print("Starting Park Here SIT Tumkur demo seed...")
     admin_uid = seed_admin(db)
     user_uids = seed_users(db)
@@ -551,7 +661,12 @@ def main() -> None:
     seed_parking_areas(db, admin_uid)
     seed_reviews_and_issues(db, user_uids, admin_uid)
     seed_booking_and_qr(db, user_uids, admin_uid)
+    seed_notifications(db, user_uids)
+    seed_payment_and_metrics(db, user_uids, admin_uid)
     print("Demo seed complete. Re-run anytime; fixed document IDs are merged.")
+    print("After seeding, deploy indexes from the project root:")
+    print("  firebase use park-here-dev")
+    print("  firebase deploy --only firestore:indexes")
 
 
 if __name__ == "__main__":

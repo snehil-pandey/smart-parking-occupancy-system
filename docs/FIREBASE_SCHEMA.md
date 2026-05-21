@@ -243,6 +243,17 @@ User-facing notification records for in-app Updates tab. Local device notificati
 | `status` | string | `pending`, `paid`, `failed`, `refunded` |
 | `createdAt` | timestamp/string | Creation time |
 
+## Demo Metrics Collections
+
+The current apps calculate dashboard values from live bookings, areas, and issues. Demo tooling may still seed and reset lightweight metrics collections so future analytics experiments start from a clean Firebase state:
+
+- `/admin_metrics/{adminId}`
+- `/area_metrics/{areaId}`
+- `/history_metrics/{metricId}`
+- `/qr_scan_logs/{scanId}`
+
+These collections are not queried by the current runtime apps. If runtime metrics queries are added later, document their exact fields and update `firestore.indexes.json`.
+
 ## Routing Data
 
 Road routes are not persisted in Firestore. The user app requests road geometry through `OsrmRouteProvider`, caches recent route responses in local memory, and falls back to a small SIT Tumkur road graph if the routing service is unavailable. Parking gate metadata is stored on `/parking_areas/{areaId}.gatePoints`; route cache entries and polylines should not be written to Firestore unless a future backend adds server-side routing analytics.
@@ -307,7 +318,7 @@ Queries that do not require composite indexes:
 | `FirebaseNotificationRepository.upsert/markRead` | `notifications` | direct document writes by id | Document lookup |
 | `FirestoreImageRepository.findById/removeImage/replaceImage/uploadOptimizedAreaImage` | `parking_area_images`, `parking_areas` | direct document reads/writes and transactions | Document lookup |
 
-There are no runtime metrics collection queries in the current app code. If weekly/monthly metrics are added later, add their exact `where` and `orderBy` combinations here and regenerate `firestore.indexes.json`.
+There are no runtime metrics collection queries in the current app code. If weekly/monthly metrics or QR scan logs are added later, add their exact `where` and `orderBy` combinations here and regenerate `firestore.indexes.json`.
 
 `FAILED_PRECONDITION` errors usually mean a query needs a composite index that is still missing or still building. Compare the failing query fields with this table and redeploy `firestore.indexes.json` if repository queries change. During index build time, the apps keep the signed-in session alive and ask the user/admin to wait a few minutes and refresh.
 
@@ -332,6 +343,8 @@ The app should continue using `ImageRepository`, swapping `FirestoreImageReposit
 - User discovery reads parking areas by region and displays full/closed areas as disabled.
 - Admin region setup reads `/regions` by `adminId` or legacy `createdByAdminId`; empty Firebase shows mandatory Region Setup instead of fake local data.
 - Admin area management reads by `adminId` and filters to the controlled region so closed areas remain manageable.
+- Demo reset clears the supported demo collections, including metrics and QR scan logs, but does not delete or rebuild Firestore composite indexes.
+- Firestore indexes are managed through the root `firestore.indexes.json` file and `firebase deploy --only firestore:indexes` from the project root.
 - Images are not stored on parking area documents; parking areas store image ids only.
 - Active QR tickets are operational records. Booking history remains in `/bookings`.
 - Cancellation never deletes booking history. It marks `/bookings/{bookingId}.status = cancelled`, stores fine metadata, expires the active QR if present, and releases the reserved slot once.

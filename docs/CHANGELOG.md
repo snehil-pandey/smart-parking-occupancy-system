@@ -267,3 +267,8 @@
 - Added repository-level parking area conflict checks before Firestore upserts so UI bypasses cannot save overlapping geometry.
 - Updated the Admin area editor to render existing same-region parking areas, show other admins' areas as muted name-only reference zones, highlight conflicting zones, and disable Save while a conflict exists.
 - Added optional parking area bounds fields (`minLat`, `maxLat`, `minLng`, `maxLng`) for faster conflict pre-checks and future spatial filtering.
+
+### fix(demo): reset and seed Firebase data consistently
+- Expanded the demo reset script to clear all supported Park Here demo collections, support `--dry-run`, and optionally delete only Auth users ending with `@parkhere.demo`.
+- Updated the seed script to recreate Auth users, matching Firestore profiles, SIT Tumkur region/areas, bounds fields, bookings, opaque active QR tickets, reviews, issues, notifications, payment, and lightweight metrics documents.
+- Documented that Firestore indexes are managed through `firestore.indexes.json` and Firebase CLI deployment, not through the Admin SDK reset/seed scripts.

@@ -404,9 +404,11 @@ The script seeds:
 - Firebase Auth Email/Password accounts for the demo admin and users
 - Parking areas
 - Parking area corner and gate placeholders
+- Parking area bounds fields for conflict checks
 - Reviews
 - Issues
 - Bookings and active QR data
+- Notifications, one payment, and lightweight metrics documents
 
 The seed does not create image payloads by default. Admins can upload optimized images through Firestore image mode.
 
@@ -427,14 +429,27 @@ Clean reset and reseed:
 cd demo
 python reset_firebase_demo.py --yes
 python seed_firebase_demo.py
+cd ..
+firebase use park-here-dev
+firebase deploy --only firestore:indexes
 ```
 
 To also remove and recreate only demo Auth users:
 
 ```bash
+cd demo
 python reset_firebase_demo.py --yes --delete-auth-demo-users
 python seed_firebase_demo.py
 ```
+
+Preview reset impact without deleting anything:
+
+```bash
+cd demo
+python reset_firebase_demo.py --dry-run
+```
+
+Firestore composite indexes are not ordinary Firestore documents. The reset script does not delete indexes, and the seed script does not create them. Keep index definitions in the root `firestore.indexes.json` file and deploy them from the project root with `firebase deploy --only firestore:indexes`.
 
 Firebase Auth UID is the profile document id for `/users/{uid}` and `/admins/{uid}`. Demo profiles also store `authUid`, `userId` or `adminId`, and `email`.
 

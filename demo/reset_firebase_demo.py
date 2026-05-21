@@ -18,11 +18,15 @@ COLLECTIONS = [
     "parking_area_images",
     "bookings",
     "active_qr_tickets",
-    "notifications",
     "issue_reports",
     "reviews",
     "payments",
     "booking_history",
+    "notifications",
+    "admin_metrics",
+    "area_metrics",
+    "history_metrics",
+    "qr_scan_logs",
 ]
 
 DEMO_EMAIL_SUFFIX = "@parkhere.demo"
@@ -59,7 +63,11 @@ def delete_collection(
     db: firestore.Client,
     collection_name: str,
     batch_size: int = 250,
+    dry_run: bool = False,
 ) -> int:
+    if dry_run:
+        return sum(1 for _ in db.collection(collection_name).stream())
+
     deleted = 0
     collection = db.collection(collection_name)
     while True:
@@ -73,22 +81,27 @@ def delete_collection(
         deleted += len(docs)
 
 
-def delete_demo_auth_users() -> int:
+def delete_demo_auth_users(dry_run: bool = False) -> int:
     deleted = 0
     page = auth.list_users()
     while page:
         for user in page.users:
             email = (user.email or "").lower()
             if email.endswith(DEMO_EMAIL_SUFFIX):
-                auth.delete_user(user.uid)
+                if not dry_run:
+                    auth.delete_user(user.uid)
                 deleted += 1
-                print(f"Deleted demo Auth user: {email} ({user.uid})")
+                action = "Would delete" if dry_run else "Deleted"
+                print(f"{action} demo Auth user: {email} ({user.uid})")
         page = page.get_next_page()
     return deleted
 
 
 def confirm_or_exit(args: argparse.Namespace) -> None:
     if args.yes:
+        return
+    if args.dry_run:
+        print("Dry run: no Firestore documents or Auth users will be deleted.")
         return
     print("This will delete Park Here demo Firestore collections:")
     for collection in COLLECTIONS:
@@ -114,6 +127,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Also delete Firebase Auth users whose email ends with @parkhere.demo.",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Count matching Firestore docs/Auth users without deleting anything.",
+    )
     return parser.parse_args()
 
 
@@ -121,14 +139,24 @@ def main() -> None:
     args = parse_args()
     confirm_or_exit(args)
     db = initialize_firestore()
-    print("Resetting Park Here demo Firestore data...")
+    mode = "Scanning" if args.dry_run else "Resetting"
+    print(f"{mode} Park Here demo Firestore data...")
+    total_docs = 0
     for collection in COLLECTIONS:
-        count = delete_collection(db, collection)
-        print(f"Deleted {count} docs from {collection}")
+        count = delete_collection(db, collection, dry_run=args.dry_run)
+        total_docs += count
+        action = "Would delete" if args.dry_run else "Deleted"
+        print(f"{action} {count} docs from {collection}")
     if args.delete_auth_demo_users:
-        count = delete_demo_auth_users()
-        print(f"Deleted {count} demo Firebase Auth users")
-    print("Firebase demo reset complete.")
+        count = delete_demo_auth_users(dry_run=args.dry_run)
+        action = "Would delete" if args.dry_run else "Deleted"
+        print(f"{action} {count} demo Firebase Auth users")
+    print(f"Firestore document total: {total_docs}")
+    print("Firestore composite indexes are not ordinary documents and are not reset by this script.")
+    print("After reset/seed, run from the project root:")
+    print("  firebase use park-here-dev")
+    print("  firebase deploy --only firestore:indexes")
+    print("Firebase demo reset complete." if not args.dry_run else "Firebase demo dry run complete.")
 
 
 if __name__ == "__main__":
