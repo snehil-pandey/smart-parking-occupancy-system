@@ -66,9 +66,18 @@ class InMemoryParkingRepository implements ParkingRepository {
     required double latitude,
     required double longitude,
   }) async {
-    final copy = [..._locations]
-      ..sort((a, b) => b.availableSpaces.compareTo(a.availableSpaces));
-    return copy;
+    return getOpenAreas();
+  }
+
+  @override
+  Future<List<ParkingLocation>> getOpenAreas({int limit = 100}) async {
+    final copy = _sortedAreas(_locations.where((area) => area.isOpen).toList());
+    return copy.take(limit).toList();
+  }
+
+  @override
+  Stream<List<ParkingLocation>> watchOpenAreas({int limit = 100}) {
+    return Stream.fromFuture(getOpenAreas(limit: limit));
   }
 
   @override
@@ -146,5 +155,15 @@ class InMemoryParkingRepository implements ParkingRepository {
     );
     _locations[index] = updated;
     return updated;
+  }
+
+  List<ParkingLocation> _sortedAreas(List<ParkingLocation> areas) {
+    return areas..sort((a, b) {
+      final availableCompare = b.availableSpaces.compareTo(a.availableSpaces);
+      if (availableCompare != 0) {
+        return availableCompare;
+      }
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
   }
 }

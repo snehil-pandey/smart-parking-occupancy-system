@@ -1220,7 +1220,7 @@ class UserAppController extends StateNotifier<UserAppState> {
 
   void _startParkingUpdates() {
     _parkingSubscription ??= _parkingRepository
-        .watchByRegion('region_sit_tumkur', limit: 30)
+        .watchOpenAreas(limit: 100)
         .listen(
           (locations) async {
             final updatedSelected = _updatedSelectedFrom(locations);

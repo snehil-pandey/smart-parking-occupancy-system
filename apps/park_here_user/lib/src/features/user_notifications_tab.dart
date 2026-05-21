@@ -48,7 +48,7 @@ class UserNotificationsTab extends StatelessWidget {
         icon: Icons.local_parking_outlined,
         title: 'Realtime availability',
         body:
-            '${state.locations.where((area) => area.isBookable).length} parking areas currently available near SIT Tumkur.',
+            '${state.locations.where((area) => area.isBookable).length} parking areas currently available from live Firebase data.',
       ),
     ];
 

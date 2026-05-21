@@ -7,7 +7,7 @@ class FirebaseErrorMessages {
     if (isIndexBuildingError(error)) {
       return indexBuilding;
     }
-    return error.toString();
+    return 'Unable to load parking data. Try again.';
   }
 
   static bool isIndexBuildingError(Object error) {

@@ -291,9 +291,7 @@ Composite indexes required by current app code:
 
 | Repository | Collection | Query pattern | Matching index |
 | --- | --- | --- | --- |
-| `FirebaseBookingRepository.getActiveQrForBooking/watchActiveQrForBooking/_findActiveQrForBooking` | `active_qr_tickets` | `where(bookingId == bookingId).where(status == active).orderBy(expiresAt ASC)` | `bookingId ASC`, `status ASC`, `expiresAt ASC` |
-| `FirebaseReviewRepository.getForArea/watchForArea` | `reviews` | `where(areaId == areaId).orderBy(createdAt DESC)` | `areaId ASC`, `createdAt DESC` |
-| `FirestoreImageRepository.getPreviewsForArea/getThumbnailsForArea` | `parking_area_images` | `where(areaId == areaId).orderBy(uploadedAt DESC)` | `areaId ASC`, `uploadedAt DESC` |
+| None currently | - | Repository queries use document reads, collection snapshots, or single-field equality filters with local sorting. | - |
 
 Queries that do not require composite indexes:
 
@@ -303,19 +301,22 @@ Queries that do not require composite indexes:
 | `FirebaseParkingRepository.getAllAreas/watchAllAreas` | `parking_areas` | `limit(...)`, sorted in memory | Collection read with limit; admin map reference layer and final conflict check |
 | `FirebaseParkingRepository.getByAdmin/watchByAdmin` | `parking_areas` | `where(adminId == uid)`, sorted in memory | Single equality filter |
 | `FirebaseParkingRepository.getByRegion/watchByRegion` | `parking_areas` | `where(regionId == regionId).limit(...)`, sorted in memory | Single equality filter |
-| `FirebaseParkingRepository.watchNearby` | `parking_areas` | `limit(...)`, sorted in memory | Collection read with limit |
+| `FirebaseParkingRepository.getOpenAreas/watchOpenAreas/watchNearby` | `parking_areas` | `where(isOpen == true)` then local sort by availability/update time | Single-field equality query; user app sees all open admin-created areas without a demo region filter |
 | `FirebaseRegionRepository.getMainRegion/watchMainRegion/upsertRegion` | `regions` | direct document read/write by id | Document lookup |
 | `FirebaseRegionRepository.getControlledRegion/watchControlledRegion` | `regions` | `where(adminId == uid)` or legacy `where(createdByAdminId == uid)` | Single-field index |
 | `FirebaseRegionRepository.getAllRegions/watchAllRegions` | `regions` | collection snapshots, filtered in memory | Admin region setup reference layer and final conflict check |
-| `FirebaseBookingRepository.activeForUser` | `bookings` | `where(userId == uid).limit(...)`, sorted and filtered in memory | Single equality filter |
+| `FirebaseBookingRepository.activeForUser` | `bookings` | `where(userId == uid)`, sorted and filtered in memory | Single equality filter |
 | `FirebaseBookingRepository.getForAdmin/watchForAdmin` | `bookings` | `where(adminId == uid)`, sorted in memory | Single equality filter |
-| `FirebaseBookingRepository.getForUser/watchForUser` | `bookings` | `where(userId == uid).limit(...)`, sorted in memory | Single equality filter |
+| `FirebaseBookingRepository.getForUser/watchForUser` | `bookings` | `where(userId == uid)`, sorted in memory | Single equality filter |
 | `FirebaseAuthService` | `users`, `admins` | direct document reads/writes by uid | Document lookup |
 | `FirebaseBookingRepository.createBooking/cancelBooking/createActiveQrTicket/consumeQrTicket/updateStatus` | `bookings`, `active_qr_tickets`, `parking_areas` | direct document reads/writes and transactions | Document lookup |
+| `FirebaseBookingRepository.getActiveQrForBooking/watchActiveQrForBooking/_findActiveQrForBooking` | `active_qr_tickets` | `where(bookingId == bookingId)` then local status/expiry filter | Single-field equality query |
+| `FirebaseReviewRepository.getForArea/watchForArea` | `reviews` | `where(areaId == areaId)` then local date sort | Single-field equality query |
+| `FirestoreImageRepository.getPreviewsForArea/getThumbnailsForArea` | `parking_area_images` | `where(areaId == areaId)` then local date sort/pagination | Single-field equality query |
+| `FirebaseNotificationRepository.watchForUser` | `notifications` | `where(userId == uid)` then local date sort | Single-field equality query |
 | `FirebaseReviewRepository.upsertReview` | `reviews`, `parking_areas` | direct document reads/writes in a transaction | Document lookup |
 | `FirebaseIssueRepository.getForAdmin/watchForAdmin` | `issue_reports` | `where(adminId == uid)` and optional `where(status == status)`, sorted in memory | Equality filters without `orderBy` |
 | `FirebaseIssueRepository.createIssue/updateIssueStatus` | `issue_reports` | direct document writes by id | Document lookup |
-| `FirebaseNotificationRepository.watchForUser` | `notifications` | `where(userId == uid).limit(...)`, sorted in memory | Single equality filter |
 | `FirebaseNotificationRepository.upsert/markRead` | `notifications` | direct document writes by id | Document lookup |
 | `FirestoreImageRepository.findById/removeImage/replaceImage/uploadOptimizedAreaImage` | `parking_area_images`, `parking_areas` | direct document reads/writes and transactions | Document lookup |
 
@@ -343,7 +344,7 @@ The app should continue using `ImageRepository`, swapping `FirestoreImageReposit
 - Sign-in creates a minimal profile if Auth exists but the role-specific Firestore profile is missing.
 - The Firebase demo seed creates/reuses Auth users first, then writes profiles under the actual Auth UID.
 - The Firebase Auth UID is the primary profile document id for both users and admins.
-- User discovery reads parking areas by region and displays full/closed areas as disabled.
+- User discovery streams open `/parking_areas` from Firebase, not a seeded region or demo admin id, then sorts distance, availability, rating, and price in memory so newly created admin areas appear without waiting on composite indexes.
 - Admin region setup reads `/regions` by `adminId` or legacy `createdByAdminId`; empty Firebase shows mandatory Region Setup instead of fake local data.
 - Admin area management reads by `adminId` and filters to the controlled region so closed areas remain manageable.
 - Demo reset clears the supported demo collections, including metrics and QR scan logs, but does not delete or rebuild Firestore composite indexes.

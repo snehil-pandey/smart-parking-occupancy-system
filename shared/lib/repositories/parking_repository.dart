@@ -6,6 +6,10 @@ abstract interface class ParkingRepository {
     required double longitude,
   });
 
+  Future<List<ParkingLocation>> getOpenAreas({int limit = 100});
+
+  Stream<List<ParkingLocation>> watchOpenAreas({int limit = 100});
+
   Future<List<ParkingLocation>> getByAdmin(String adminId);
 
   Stream<List<ParkingLocation>> watchByAdmin(String adminId, {int limit = 50});

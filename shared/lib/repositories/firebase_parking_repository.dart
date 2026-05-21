@@ -51,15 +51,8 @@ class FirebaseParkingRepository implements ParkingRepository {
     String regionId, {
     int limit = 30,
   }) async {
-    final snapshot = await _areas
-        .where('regionId', isEqualTo: regionId)
-        .limit(limit)
-        .get();
-    final locations = snapshot.docs
-        .map(FirestoreModelMapper.parkingAreaFromDoc)
-        .toList();
-    locations.sort((a, b) => b.availableSpaces.compareTo(a.availableSpaces));
-    return locations;
+    final snapshot = await _areas.where('regionId', isEqualTo: regionId).get();
+    return _sortedAreas(snapshot).take(limit).toList();
   }
 
   @override
@@ -69,17 +62,22 @@ class FirebaseParkingRepository implements ParkingRepository {
   }) {
     return _areas
         .where('regionId', isEqualTo: regionId)
-        .limit(limit)
         .snapshots()
-        .map((snapshot) {
-          final locations = snapshot.docs
-              .map(FirestoreModelMapper.parkingAreaFromDoc)
-              .toList();
-          locations.sort(
-            (a, b) => b.availableSpaces.compareTo(a.availableSpaces),
-          );
-          return locations;
-        });
+        .map((snapshot) => _sortedAreas(snapshot).take(limit).toList());
+  }
+
+  @override
+  Future<List<ParkingLocation>> getOpenAreas({int limit = 100}) async {
+    final snapshot = await _areas.where('isOpen', isEqualTo: true).get();
+    return _sortedAreas(snapshot).take(limit).toList();
+  }
+
+  @override
+  Stream<List<ParkingLocation>> watchOpenAreas({int limit = 100}) {
+    return _areas
+        .where('isOpen', isEqualTo: true)
+        .snapshots()
+        .map((snapshot) => _sortedAreas(snapshot).take(limit).toList());
   }
 
   @override
@@ -87,12 +85,7 @@ class FirebaseParkingRepository implements ParkingRepository {
     required double latitude,
     required double longitude,
   }) async {
-    final snapshot = await _areas.limit(30).get();
-    final locations = snapshot.docs
-        .map(FirestoreModelMapper.parkingAreaFromDoc)
-        .toList();
-    locations.sort((a, b) => b.availableSpaces.compareTo(a.availableSpaces));
-    return locations;
+    return getOpenAreas(limit: 100);
   }
 
   @override
@@ -182,16 +175,20 @@ class FirebaseParkingRepository implements ParkingRepository {
   List<ParkingLocation> _sortedAreas(
     QuerySnapshot<Map<String, dynamic>> snapshot,
   ) {
-    final locations = snapshot.docs
-        .map(FirestoreModelMapper.parkingAreaFromDoc)
-        .toList();
-    locations.sort((a, b) {
-      final updatedCompare = b.updatedAt.compareTo(a.updatedAt);
-      if (updatedCompare != 0) {
-        return updatedCompare;
-      }
-      return b.availableSpaces.compareTo(a.availableSpaces);
-    });
-    return locations;
+    final areas =
+        snapshot.docs.map(FirestoreModelMapper.parkingAreaFromDoc).toList()
+          ..sort((a, b) {
+            if (a.isOpen != b.isOpen) {
+              return b.isOpen ? 1 : -1;
+            }
+            final availableCompare = b.availableSpaces.compareTo(
+              a.availableSpaces,
+            );
+            if (availableCompare != 0) {
+              return availableCompare;
+            }
+            return b.updatedAt.compareTo(a.updatedAt);
+          });
+    return areas;
   }
 }

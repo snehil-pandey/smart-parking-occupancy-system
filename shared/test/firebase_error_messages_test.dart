@@ -15,10 +15,13 @@ void main() {
     );
   });
 
-  test('does not rewrite unrelated Firebase errors', () {
+  test('hides unrelated raw Firebase errors from UI copy', () {
     final error = Exception('permission-denied');
 
     expect(FirebaseErrorMessages.isIndexBuildingError(error), isFalse);
-    expect(FirebaseErrorMessages.friendlyMessage(error), error.toString());
+    expect(
+      FirebaseErrorMessages.friendlyMessage(error),
+      'Unable to load parking data. Try again.',
+    );
   });
 }

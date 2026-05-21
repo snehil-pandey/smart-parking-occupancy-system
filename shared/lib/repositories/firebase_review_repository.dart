@@ -16,25 +16,16 @@ class FirebaseReviewRepository implements ReviewRepository {
     String areaId, {
     int limit = 20,
   }) async {
-    final snapshot = await _reviews
-        .where('areaId', isEqualTo: areaId)
-        .orderBy('createdAt', descending: true)
-        .limit(limit)
-        .get();
-    return snapshot.docs.map(FirestoreModelMapper.reviewFromDoc).toList();
+    final snapshot = await _reviews.where('areaId', isEqualTo: areaId).get();
+    return _sortedReviews(snapshot).take(limit).toList();
   }
 
   @override
   Stream<List<ParkingReview>> watchForArea(String areaId, {int limit = 20}) =>
       _reviews
           .where('areaId', isEqualTo: areaId)
-          .orderBy('createdAt', descending: true)
-          .limit(limit)
           .snapshots()
-          .map(
-            (snapshot) =>
-                snapshot.docs.map(FirestoreModelMapper.reviewFromDoc).toList(),
-          );
+          .map((snapshot) => _sortedReviews(snapshot).take(limit).toList());
 
   @override
   Future<ParkingReview> upsertReview(ParkingReview review) async =>
@@ -82,4 +73,11 @@ class FirebaseReviewRepository implements ReviewRepository {
 
   CollectionReference<Map<String, dynamic>> get _reviews =>
       _firestore.collection(FirebaseCollectionPaths.reviews);
+
+  List<ParkingReview> _sortedReviews(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    return snapshot.docs.map(FirestoreModelMapper.reviewFromDoc).toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
 }

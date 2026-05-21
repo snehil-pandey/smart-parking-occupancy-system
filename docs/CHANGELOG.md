@@ -226,6 +226,11 @@
 - Disabled Kotlin incremental compilation and Gradle build caching for the user Android app to avoid Windows cross-root cache failures involving Pub cache Android plugins.
 - Documented the user app Gradle daemon stop, build folder cleanup, `flutter clean`, `flutter pub get`, and debug APK rebuild recovery flow.
 
+### fix(user): show realtime admin-created parking areas
+- Switched user parking discovery from a fixed SIT Tumkur region stream to all open Firebase `/parking_areas`, so real admin-created areas appear immediately through snapshots.
+- Simplified user-facing Firestore queries for parking areas, bookings, active QR tickets, reviews, images, and notifications to single-field filters with local sorting to avoid repeated composite-index waits.
+- Replaced raw/index-specific Firebase error text with a short user-friendly retry message.
+
 ### refactor(admin-ui): separate admin app into focused sections
 - Split the admin screen internals into feature sections for auth, dashboard, region, parking areas, bookings, issues, and shared widgets while preserving the existing Firebase-backed controller.
 
