@@ -55,6 +55,12 @@ void main() {
       ),
       locations: [
         _area(id: 'available_near', availableSpaces: 3, latitude: 13.3282),
+        _area(
+          id: 'region_sit_tumkur',
+          regionId: 'region_sit_tumkur',
+          availableSpaces: 10,
+          latitude: 13.3281,
+        ),
         _area(id: 'full', availableSpaces: 0, latitude: 13.3280),
         _area(
           id: 'closed',
@@ -128,6 +134,7 @@ class _TestNotificationRepository implements NotificationRepository {
 
 ParkingLocation _area({
   required String id,
+  String regionId = 'region_test',
   required int availableSpaces,
   required double latitude,
   bool isOpen = true,
@@ -135,6 +142,7 @@ ParkingLocation _area({
   final now = DateTime.now();
   return ParkingLocation(
     id: id,
+    regionId: regionId,
     adminId: 'admin_test',
     name: id,
     address: 'SIT Tumkur',

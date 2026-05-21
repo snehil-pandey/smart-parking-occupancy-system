@@ -58,7 +58,11 @@ class InMemoryParkingRepository implements ParkingRepository {
 
   @override
   Future<List<ParkingLocation>> getOpenAreas({int limit = 100}) async {
-    final copy = _sortedAreas(_locations.where((area) => area.isOpen).toList());
+    final copy = _sortedAreas(
+      _locations
+          .where((area) => area.isUserVisibleParkingArea && area.isOpen)
+          .toList(),
+    );
     return copy.take(limit).toList();
   }
 
@@ -109,7 +113,7 @@ class InMemoryParkingRepository implements ParkingRepository {
       throw StateError('Parking area $areaId was not found.');
     }
     final location = _locations[index];
-    if (!location.isOpen || location.availableSpaces < 1) {
+    if (!location.isBookable) {
       throw StateError('Parking area $areaId has no available slots.');
     }
     final updated = location.copyWith(
