@@ -213,25 +213,16 @@ class FirebaseBookingRepository implements BookingRepository {
 
   @override
   Future<List<Booking>> getForAdmin(String adminId) async {
-    final snapshot = await _bookings
-        .where('adminId', isEqualTo: adminId)
-        .orderBy('createdAt', descending: true)
-        .limit(50)
-        .get();
-    return snapshot.docs.map(FirestoreModelMapper.bookingFromDoc).toList();
+    final snapshot = await _bookings.where('adminId', isEqualTo: adminId).get();
+    return _sortedBookings(snapshot).take(50).toList();
   }
 
   @override
   Stream<List<Booking>> watchForAdmin(String adminId, {int limit = 50}) {
     return _bookings
         .where('adminId', isEqualTo: adminId)
-        .orderBy('createdAt', descending: true)
-        .limit(limit)
         .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map(FirestoreModelMapper.bookingFromDoc).toList(),
-        );
+        .map((snapshot) => _sortedBookings(snapshot).take(limit).toList());
   }
 
   @override
@@ -305,4 +296,9 @@ class FirebaseBookingRepository implements BookingRepository {
 
   CollectionReference<Map<String, dynamic>> get _areas =>
       _firestore.collection(FirebaseCollectionPaths.parkingAreas);
+
+  List<Booking> _sortedBookings(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    return snapshot.docs.map(FirestoreModelMapper.bookingFromDoc).toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
 }

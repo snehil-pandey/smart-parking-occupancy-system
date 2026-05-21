@@ -1,6 +1,7 @@
 import '../models/gate_point.dart';
 import '../models/geo_point.dart';
 import '../models/parking_location.dart';
+import '../models/parking_region.dart';
 
 class GeometryBounds {
   const GeometryBounds({
@@ -50,6 +51,32 @@ class ParkingAreaConflict {
   final String message;
   final String? areaId;
   final String? areaName;
+  final bool isInvalidCandidate;
+}
+
+class ParkingRegionConflict {
+  const ParkingRegionConflict({
+    required this.message,
+    this.regionId,
+    this.regionName,
+    this.isInvalidCandidate = false,
+  });
+
+  factory ParkingRegionConflict.withRegion(ParkingRegion region) {
+    return ParkingRegionConflict(
+      regionId: region.regionId,
+      regionName: region.name,
+      message: 'Your region overlaps with existing region: ${region.name}',
+    );
+  }
+
+  factory ParkingRegionConflict.invalid(String message) {
+    return ParkingRegionConflict(message: message, isInvalidCandidate: true);
+  }
+
+  final String message;
+  final String? regionId;
+  final String? regionName;
   final bool isInvalidCandidate;
 }
 
@@ -239,6 +266,37 @@ class GeometryUtils {
         area.boundaryPoints,
       )) {
         return ParkingAreaConflict.withArea(area);
+      }
+    }
+    return null;
+  }
+
+  static ParkingRegionConflict? validateRegionDoesNotConflict(
+    ParkingRegion candidateRegion,
+    Iterable<ParkingRegion> existingRegions,
+  ) {
+    if (_openPolygon(candidateRegion.boundaryPoints).length < 3) {
+      return ParkingRegionConflict.invalid(
+        'Region polygon must have at least 3 points.',
+      );
+    }
+    final candidateBounds = calculateBounds(candidateRegion.boundaryPoints);
+    for (final region in existingRegions) {
+      if (region.regionId == candidateRegion.regionId) {
+        continue;
+      }
+      if (_openPolygon(region.boundaryPoints).length < 3) {
+        continue;
+      }
+      final existingBounds = calculateBounds(region.boundaryPoints);
+      if (!candidateBounds.overlaps(existingBounds)) {
+        continue;
+      }
+      if (polygonsOverlapOrTouch(
+        candidateRegion.boundaryPoints,
+        region.boundaryPoints,
+      )) {
+        return ParkingRegionConflict.withRegion(region);
       }
     }
     return null;

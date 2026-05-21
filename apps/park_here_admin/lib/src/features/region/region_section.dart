@@ -133,6 +133,8 @@ class _ControlledRegionEditorState extends State<_ControlledRegionEditor> {
               regionPoints: state.regionDraftBoundaryPoints,
               areaPoints: const [],
               gatePoints: const [],
+              referenceRegions: state.referenceRegions,
+              conflictingRegionId: state.draftRegionConflict?.regionId,
               selectedRegionPoint: state.selectedRegionPoint,
               selectedGeometryPoint: null,
               onMapTap: controller.handleRegionMapTap,
@@ -175,6 +177,12 @@ class _ControlledRegionEditorState extends State<_ControlledRegionEditor> {
               ],
             ),
             const SizedBox(height: 8),
+            if (state.draftRegionConflict != null) ...[
+              _GeometryWarningBanner(
+                message: state.draftRegionConflict!.message,
+              ),
+              const SizedBox(height: 8),
+            ],
             Text(
               state.regionStatusMessage,
               style: Theme.of(context).textTheme.bodySmall,
@@ -205,7 +213,8 @@ class _ControlledRegionEditorState extends State<_ControlledRegionEditor> {
                   label: const Text('Clear Region'),
                 ),
                 FilledButton.icon(
-                  onPressed: state.isSavingRegion
+                  onPressed:
+                      state.isSavingRegion || state.draftRegionConflict != null
                       ? null
                       : () => controller.saveControlledRegion(
                           name: _name.text,
@@ -233,9 +242,11 @@ class _AdminOsmGeometryMap extends StatefulWidget {
     required this.gatePoints,
     required this.selectedGeometryPoint,
     this.referenceAreas = const [],
+    this.referenceRegions = const [],
     this.currentAdminId,
     this.selectedAreaId,
     this.conflictingAreaId,
+    this.conflictingRegionId,
     this.selectedRegionPoint,
     this.onMapTap,
     this.onRegionPointTap,
@@ -249,9 +260,11 @@ class _AdminOsmGeometryMap extends StatefulWidget {
   final List<GatePoint> gatePoints;
   final AdminGeometrySelection? selectedGeometryPoint;
   final List<ParkingLocation> referenceAreas;
+  final List<ParkingRegion> referenceRegions;
   final String? currentAdminId;
   final String? selectedAreaId;
   final String? conflictingAreaId;
+  final String? conflictingRegionId;
   final int? selectedRegionPoint;
   final ValueChanged<GeoPointValue>? onMapTap;
   final ValueChanged<int>? onRegionPointTap;
@@ -270,6 +283,7 @@ class _AdminOsmGeometryMapState extends State<_AdminOsmGeometryMap> {
     final points = [
       ...widget.regionPoints,
       ...widget.areaPoints,
+      for (final region in widget.referenceRegions) ...region.boundaryPoints,
       for (final area in widget.referenceAreas) ...area.boundaryPoints,
       ...widget.gatePoints.map(
         (gate) =>
@@ -386,6 +400,20 @@ class _AdminOsmGeometryMapState extends State<_AdminOsmGeometryMap> {
           borderColor: ParkHereTheme.black,
           borderStrokeWidth: 3,
         ),
+      for (final region in widget.referenceRegions)
+        if (region.boundaryPoints.length >= 3)
+          Polygon(
+            points: region.boundaryPoints.map(_toLatLng).toList(),
+            color: region.regionId == widget.conflictingRegionId
+                ? Colors.red.withAlpha(42)
+                : Colors.grey.withAlpha(30),
+            borderColor: region.regionId == widget.conflictingRegionId
+                ? Colors.red.shade700
+                : Colors.grey.shade600,
+            borderStrokeWidth: region.regionId == widget.conflictingRegionId
+                ? 4
+                : 2,
+          ),
       for (final area in widget.referenceAreas)
         if (area.boundaryPoints.length >= 3 && area.id != widget.selectedAreaId)
           Polygon(
@@ -411,6 +439,15 @@ class _AdminOsmGeometryMapState extends State<_AdminOsmGeometryMap> {
           color: ParkHereTheme.black,
           strokeWidth: 2,
         ),
+      for (final region in widget.referenceRegions)
+        if (region.boundaryPoints.length == 2)
+          Polyline(
+            points: region.boundaryPoints.map(_toLatLng).toList(),
+            color: region.regionId == widget.conflictingRegionId
+                ? Colors.red.shade700
+                : Colors.grey.shade600,
+            strokeWidth: region.regionId == widget.conflictingRegionId ? 4 : 2,
+          ),
       for (final area in widget.referenceAreas)
         if (area.boundaryPoints.length == 2 && area.id != widget.selectedAreaId)
           Polyline(
@@ -468,6 +505,20 @@ class _AdminOsmGeometryMapState extends State<_AdminOsmGeometryMap> {
             onTap: () => widget.onGateTap?.call(index),
           ),
         ),
+      for (final region in widget.referenceRegions)
+        if (region.boundaryPoints.length >= 3)
+          Marker(
+            point: _toLatLng(
+              GeometryUtils.calculatePolygonCenter(region.boundaryPoints),
+            ),
+            width: 130,
+            height: 34,
+            child: _AreaNameMarker(
+              name: region.name,
+              isOwnArea: false,
+              isConflict: region.regionId == widget.conflictingRegionId,
+            ),
+          ),
       for (final area in widget.referenceAreas)
         if (area.boundaryPoints.length >= 3 && area.id != widget.selectedAreaId)
           Marker(

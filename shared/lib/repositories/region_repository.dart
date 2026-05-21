@@ -9,5 +9,9 @@ abstract interface class RegionRepository {
 
   Stream<ParkingRegion?> watchControlledRegion(String adminId);
 
+  Future<List<ParkingRegion>> getAllRegions();
+
+  Stream<List<ParkingRegion>> watchAllRegions();
+
   Future<void> upsertRegion(ParkingRegion region);
 }

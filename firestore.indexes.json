@@ -1,45 +1,12 @@
 {
   "indexes": [
     {
-      "collectionGroup": "parking_areas",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "adminId", "order": "ASCENDING" },
-        { "fieldPath": "updatedAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "bookings",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "adminId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "active_qr_tickets",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "bookingId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "expiresAt", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "issue_reports",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "adminId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "issue_reports",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "adminId", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
     {

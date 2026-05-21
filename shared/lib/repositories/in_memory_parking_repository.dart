@@ -31,6 +31,18 @@ class InMemoryParkingRepository implements ParkingRepository {
   }
 
   @override
+  Future<List<ParkingLocation>> getAllAreas({int limit = 500}) async {
+    final copy = [..._locations]
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return copy.take(limit).toList();
+  }
+
+  @override
+  Stream<List<ParkingLocation>> watchAllAreas({int limit = 500}) {
+    return Stream.fromFuture(getAllAreas(limit: limit));
+  }
+
+  @override
   Future<List<ParkingLocation>> getByRegion(
     String regionId, {
     int limit = 30,
@@ -89,9 +101,7 @@ class InMemoryParkingRepository implements ParkingRepository {
     if (location.boundaryPoints.length >= 3) {
       const ParkingAreaConflictService().throwIfConflicting(
         candidateArea: location,
-        existingAreas: _locations
-            .where((area) => area.regionId == location.regionId)
-            .toList(),
+        existingAreas: _locations,
       );
     }
     final index = _locations.indexWhere((item) => item.id == location.id);

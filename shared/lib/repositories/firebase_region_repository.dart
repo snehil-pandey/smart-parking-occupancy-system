@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/parking_region.dart';
 import '../services/firebase_collection_paths.dart';
 import '../services/firestore_model_mapper.dart';
+import '../utils/geometry_utils.dart';
 import 'firebase_repository_exception.dart';
 import 'region_repository.dart';
 
@@ -75,7 +76,33 @@ class FirebaseRegionRepository implements RegionRepository {
   }
 
   @override
+  Future<List<ParkingRegion>> getAllRegions() async {
+    final snapshot = await _firestore
+        .collection(FirebaseCollectionPaths.regions)
+        .get();
+    return snapshot.docs.map(FirestoreModelMapper.regionFromDoc).toList();
+  }
+
+  @override
+  Stream<List<ParkingRegion>> watchAllRegions() {
+    return _firestore
+        .collection(FirebaseCollectionPaths.regions)
+        .snapshots()
+        .map(
+          (snapshot) =>
+              snapshot.docs.map(FirestoreModelMapper.regionFromDoc).toList(),
+        );
+  }
+
+  @override
   Future<void> upsertRegion(ParkingRegion region) async {
+    final conflict = GeometryUtils.validateRegionDoesNotConflict(
+      region,
+      await getAllRegions(),
+    );
+    if (conflict != null) {
+      throw StateError(conflict.message);
+    }
     await _firestore
         .collection(FirebaseCollectionPaths.regions)
         .doc(region.regionId)

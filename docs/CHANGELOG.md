@@ -278,3 +278,9 @@
 - Added dangerous full-reset flags for disposable Firebase projects with explicit confirmation phrases for all Auth users and all Firestore collections.
 - Simplified user-facing parking, booking, and notification queries to sort small result sets in memory instead of requiring startup composite indexes.
 - Trimmed `firestore.indexes.json` to only the composite indexes still required by app queries and updated index deployment docs.
+
+### fix(admin): show existing zones and prevent region conflicts
+- Added realtime global region and parking-area reference streams for admin map editors, showing only public zone names and polygons.
+- Prevented new/edited regions from overlapping, touching, containing, or being contained by existing regions before Firestore writes.
+- Expanded parking-area conflict checks to all existing Firebase parking areas, not only areas in the current admin region.
+- Simplified admin area, booking, and issue streams to single-field Firestore filters with local sorting and trimmed obsolete composite indexes.

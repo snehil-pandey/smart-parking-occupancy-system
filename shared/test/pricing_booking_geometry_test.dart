@@ -296,6 +296,45 @@ void main() {
     );
   });
 
+  test('overlapping regions are rejected with public region name', () {
+    final candidate = _boxRegion(
+      id: 'candidate',
+      name: 'New Region',
+      points: _box(0, 0, 2, 2),
+    );
+    final existing = _boxRegion(
+      id: 'existing',
+      name: 'North Campus',
+      points: _box(1, 1, 3, 3),
+    );
+
+    final conflict = GeometryUtils.validateRegionDoesNotConflict(candidate, [
+      existing,
+    ]);
+
+    expect(conflict, isNotNull);
+    expect(conflict!.regionName, 'North Campus');
+    expect(conflict.message, contains('North Campus'));
+  });
+
+  test('same region id is ignored while editing', () {
+    final candidate = _boxRegion(
+      id: 'same_region',
+      name: 'Edited Region',
+      points: _box(0, 0, 2, 2),
+    );
+    final existing = _boxRegion(
+      id: 'same_region',
+      name: 'Saved Region',
+      points: _box(0, 0, 2, 2),
+    );
+
+    expect(
+      GeometryUtils.validateRegionDoesNotConflict(candidate, [existing]),
+      isNull,
+    );
+  });
+
   test('full area cannot be reserved', () async {
     final repository = InMemoryParkingRepository(
       seed: [_area(availableSpaces: 0)],
@@ -420,6 +459,26 @@ ParkingLocation _boxArea({
     isOpen: true,
     openingTime: '06:00',
     closingTime: '22:00',
+    createdAt: now,
+    updatedAt: now,
+  );
+}
+
+ParkingRegion _boxRegion({
+  required String id,
+  required String name,
+  required List<GeoPointValue> points,
+}) {
+  final now = DateTime.now();
+  final center = GeometryUtils.calculatePolygonCenter(points);
+  return ParkingRegion(
+    regionId: id,
+    name: name,
+    address: 'Test',
+    boundaryPoints: points,
+    centerLat: center.latitude,
+    centerLng: center.longitude,
+    createdByAdminId: 'admin_$id',
     createdAt: now,
     updatedAt: now,
   );

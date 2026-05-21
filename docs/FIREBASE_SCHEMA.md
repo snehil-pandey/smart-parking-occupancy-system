@@ -291,11 +291,7 @@ Composite indexes required by current app code:
 
 | Repository | Collection | Query pattern | Matching index |
 | --- | --- | --- | --- |
-| `FirebaseParkingRepository.getByAdmin/watchByAdmin` | `parking_areas` | `where(adminId == uid).orderBy(updatedAt DESC)` | `adminId ASC`, `updatedAt DESC` |
-| `FirebaseBookingRepository.getForAdmin/watchForAdmin` | `bookings` | `where(adminId == uid).orderBy(createdAt DESC)` | `adminId ASC`, `createdAt DESC` |
 | `FirebaseBookingRepository.getActiveQrForBooking/watchActiveQrForBooking/_findActiveQrForBooking` | `active_qr_tickets` | `where(bookingId == bookingId).where(status == active).orderBy(expiresAt ASC)` | `bookingId ASC`, `status ASC`, `expiresAt ASC` |
-| `FirebaseIssueRepository.getForAdmin/watchForAdmin` | `issue_reports` | `where(adminId == uid).orderBy(createdAt DESC)` | `adminId ASC`, `createdAt DESC` |
-| `FirebaseIssueRepository.getForAdmin/watchForAdmin` with status | `issue_reports` | `where(adminId == uid).where(status == status).orderBy(createdAt DESC)` | `adminId ASC`, `status ASC`, `createdAt DESC` |
 | `FirebaseReviewRepository.getForArea/watchForArea` | `reviews` | `where(areaId == areaId).orderBy(createdAt DESC)` | `areaId ASC`, `createdAt DESC` |
 | `FirestoreImageRepository.getPreviewsForArea/getThumbnailsForArea` | `parking_area_images` | `where(areaId == areaId).orderBy(uploadedAt DESC)` | `areaId ASC`, `uploadedAt DESC` |
 
@@ -304,15 +300,20 @@ Queries that do not require composite indexes:
 | Repository | Collection | Query pattern | Why no composite index |
 | --- | --- | --- | --- |
 | `FirebaseParkingRepository.findById/reserveSlot/releaseSlot/updateAvailability/upsert` | `parking_areas` | direct document reads/writes by id | Document lookup |
+| `FirebaseParkingRepository.getAllAreas/watchAllAreas` | `parking_areas` | `limit(...)`, sorted in memory | Collection read with limit; admin map reference layer and final conflict check |
+| `FirebaseParkingRepository.getByAdmin/watchByAdmin` | `parking_areas` | `where(adminId == uid)`, sorted in memory | Single equality filter |
 | `FirebaseParkingRepository.getByRegion/watchByRegion` | `parking_areas` | `where(regionId == regionId).limit(...)`, sorted in memory | Single equality filter |
 | `FirebaseParkingRepository.watchNearby` | `parking_areas` | `limit(...)`, sorted in memory | Collection read with limit |
 | `FirebaseRegionRepository.getMainRegion/watchMainRegion/upsertRegion` | `regions` | direct document read/write by id | Document lookup |
 | `FirebaseRegionRepository.getControlledRegion/watchControlledRegion` | `regions` | `where(adminId == uid)` or legacy `where(createdByAdminId == uid)` | Single-field index |
+| `FirebaseRegionRepository.getAllRegions/watchAllRegions` | `regions` | collection snapshots, filtered in memory | Admin region setup reference layer and final conflict check |
 | `FirebaseBookingRepository.activeForUser` | `bookings` | `where(userId == uid).limit(...)`, sorted and filtered in memory | Single equality filter |
+| `FirebaseBookingRepository.getForAdmin/watchForAdmin` | `bookings` | `where(adminId == uid)`, sorted in memory | Single equality filter |
 | `FirebaseBookingRepository.getForUser/watchForUser` | `bookings` | `where(userId == uid).limit(...)`, sorted in memory | Single equality filter |
 | `FirebaseAuthService` | `users`, `admins` | direct document reads/writes by uid | Document lookup |
 | `FirebaseBookingRepository.createBooking/cancelBooking/createActiveQrTicket/consumeQrTicket/updateStatus` | `bookings`, `active_qr_tickets`, `parking_areas` | direct document reads/writes and transactions | Document lookup |
 | `FirebaseReviewRepository.upsertReview` | `reviews`, `parking_areas` | direct document reads/writes in a transaction | Document lookup |
+| `FirebaseIssueRepository.getForAdmin/watchForAdmin` | `issue_reports` | `where(adminId == uid)` and optional `where(status == status)`, sorted in memory | Equality filters without `orderBy` |
 | `FirebaseIssueRepository.createIssue/updateIssueStatus` | `issue_reports` | direct document writes by id | Document lookup |
 | `FirebaseNotificationRepository.watchForUser` | `notifications` | `where(userId == uid).limit(...)`, sorted in memory | Single equality filter |
 | `FirebaseNotificationRepository.upsert/markRead` | `notifications` | direct document writes by id | Document lookup |
