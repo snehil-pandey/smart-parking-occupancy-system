@@ -222,6 +222,10 @@
 - Disabled Kotlin incremental compilation for the admin Android app to avoid Windows cross-root incremental cache failures involving Pub cache plugins.
 - Documented the Gradle daemon stop, build folder cleanup, `flutter clean`, and `flutter pub get` recovery flow.
 
+### fix(user-android): stabilize Kotlin build on Windows
+- Disabled Kotlin incremental compilation and Gradle build caching for the user Android app to avoid Windows cross-root cache failures involving Pub cache Android plugins.
+- Documented the user app Gradle daemon stop, build folder cleanup, `flutter clean`, `flutter pub get`, and debug APK rebuild recovery flow.
+
 ### refactor(admin-ui): separate admin app into focused sections
 - Split the admin screen internals into feature sections for auth, dashboard, region, parking areas, bookings, issues, and shared widgets while preserving the existing Firebase-backed controller.
 
