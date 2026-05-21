@@ -147,6 +147,7 @@ class AdminAppState {
     required this.region,
     required this.hasControlledRegion,
     required this.locations,
+    required this.referenceLocations,
     required this.bookings,
     required this.issues,
     required this.selectedImages,
@@ -179,6 +180,7 @@ class AdminAppState {
       region: _emptyRegionForAdmin(admin.id),
       hasControlledRegion: false,
       locations: const [],
+      referenceLocations: const [],
       bookings: const [],
       issues: const [],
       selectedImages: const [],
@@ -212,6 +214,7 @@ class AdminAppState {
       region: _emptyRegionForAdmin(''),
       hasControlledRegion: false,
       locations: const [],
+      referenceLocations: const [],
       bookings: const [],
       issues: const [],
       selectedImages: const [],
@@ -242,6 +245,7 @@ class AdminAppState {
   final ParkingRegion region;
   final bool hasControlledRegion;
   final List<ParkingLocation> locations;
+  final List<ParkingLocation> referenceLocations;
   final List<Booking> bookings;
   final List<IssueReport> issues;
   final List<ParkingAreaImage> selectedImages;
@@ -303,6 +307,24 @@ class AdminAppState {
         .fold(0, (total, booking) => total + booking.price);
   }
 
+  ParkingAreaConflict? get draftAreaConflict {
+    final location = selectedLocation;
+    if (location == null || draftBoundaryPoints.length < 3) {
+      return null;
+    }
+    final center = GeometryUtils.calculatePolygonCenter(draftBoundaryPoints);
+    final candidate = location.copyWith(
+      boundaryPoints: draftBoundaryPoints,
+      gatePoints: draftGatePoints,
+      latitude: center.latitude,
+      longitude: center.longitude,
+    );
+    return GeometryUtils.validateAreaDoesNotConflict(
+      candidate,
+      referenceLocations,
+    );
+  }
+
   AdminAppState copyWith({
     AdminProfile? admin,
     AdminAuthStatus? authStatus,
@@ -310,6 +332,7 @@ class AdminAppState {
     ParkingRegion? region,
     bool? hasControlledRegion,
     List<ParkingLocation>? locations,
+    List<ParkingLocation>? referenceLocations,
     List<Booking>? bookings,
     List<IssueReport>? issues,
     List<ParkingAreaImage>? selectedImages,
@@ -340,6 +363,7 @@ class AdminAppState {
       region: region ?? this.region,
       hasControlledRegion: hasControlledRegion ?? this.hasControlledRegion,
       locations: locations ?? this.locations,
+      referenceLocations: referenceLocations ?? this.referenceLocations,
       bookings: bookings ?? this.bookings,
       issues: issues ?? this.issues,
       selectedImages: selectedImages ?? this.selectedImages,
@@ -400,6 +424,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
   final IssueRepository _issueRepository;
   final AdminLocationService _locationService;
   StreamSubscription<List<ParkingLocation>>? _parkingSubscription;
+  StreamSubscription<List<ParkingLocation>>? _referenceParkingSubscription;
   StreamSubscription<List<Booking>>? _bookingSubscription;
   StreamSubscription<List<IssueReport>>? _issueSubscription;
 
@@ -413,6 +438,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     await _resetRealtimeListeners();
     var region = state.region;
     var locations = state.locations;
+    var referenceLocations = state.referenceLocations;
     var bookings = state.bookings;
     var issues = state.issues;
     try {
@@ -426,6 +452,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
           region: AdminAppState._emptyRegionForAdmin(admin.id),
           hasControlledRegion: false,
           locations: const [],
+          referenceLocations: const [],
           bookings: const [],
           issues: const [],
           selectedLocation: null,
@@ -445,7 +472,11 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       }
 
       region = controlledRegion;
-      _startRealtimeListeners(admin.id);
+      _startRealtimeListeners(admin.id, region.regionId);
+      referenceLocations = await _parkingRepository.getByRegion(
+        region.regionId,
+        limit: 200,
+      );
       locations = (await _parkingRepository.getByAdmin(
         admin.id,
       )).where((location) => location.regionId == region.regionId).toList();
@@ -458,6 +489,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
         region: region,
         hasControlledRegion: true,
         locations: locations,
+        referenceLocations: referenceLocations,
         bookings: bookings,
         issues: issues,
         selectedLocation: selectedLocation,
@@ -481,6 +513,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
         region: region,
         hasControlledRegion: region.createdByAdminId == admin.id,
         locations: locations,
+        referenceLocations: referenceLocations,
         bookings: bookings,
         issues: issues,
         isLoading: false,
@@ -1483,6 +1516,10 @@ class AdminAppController extends StateNotifier<AdminAppState> {
         return 'Gate must be inside your controlled region.';
       }
     }
+    final conflict = state.draftAreaConflict;
+    if (conflict != null) {
+      return conflict.message;
+    }
     return _validateSpaces(
       totalSpaces: location.totalSpaces,
       availableSpaces: location.availableSpaces,
@@ -1626,13 +1663,29 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     }
   }
 
-  void _startRealtimeListeners(String adminId) {
+  void _startRealtimeListeners(String adminId, String regionId) {
     _parkingSubscription ??= _parkingRepository
         .watchByAdmin(adminId, limit: 50)
         .listen(
           (locations) => state = state.copyWith(
             locations: locations
                 .where((location) => location.regionId == state.region.regionId)
+                .toList(),
+          ),
+          onError: (Object error) {
+            state = state.copyWith(
+              isLoading: false,
+              error: FirebaseErrorMessages.friendlyMessage(error),
+            );
+          },
+        );
+    _referenceParkingSubscription ??= _parkingRepository
+        .watchByRegion(regionId, limit: 200)
+        .listen(
+          (locations) => state = state.copyWith(
+            referenceLocations: locations,
+            locations: locations
+                .where((location) => location.adminId == adminId)
                 .toList(),
           ),
           onError: (Object error) {
@@ -1668,9 +1721,11 @@ class AdminAppController extends StateNotifier<AdminAppState> {
 
   Future<void> _resetRealtimeListeners() async {
     await _parkingSubscription?.cancel();
+    await _referenceParkingSubscription?.cancel();
     await _bookingSubscription?.cancel();
     await _issueSubscription?.cancel();
     _parkingSubscription = null;
+    _referenceParkingSubscription = null;
     _bookingSubscription = null;
     _issueSubscription = null;
   }
@@ -1678,6 +1733,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
   @override
   void dispose() {
     _parkingSubscription?.cancel();
+    _referenceParkingSubscription?.cancel();
     _bookingSubscription?.cancel();
     _issueSubscription?.cancel();
     super.dispose();

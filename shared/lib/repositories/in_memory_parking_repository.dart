@@ -1,4 +1,5 @@
 import '../models/parking_location.dart';
+import '../services/parking_area_conflict_service.dart';
 import '../utils/demo_seed.dart';
 import 'parking_repository.dart';
 
@@ -85,6 +86,14 @@ class InMemoryParkingRepository implements ParkingRepository {
   @override
   Future<void> upsert(ParkingLocation location) async {
     ParkingLocation.validatePrice(location.pricePerHour);
+    if (location.boundaryPoints.length >= 3) {
+      const ParkingAreaConflictService().throwIfConflicting(
+        candidateArea: location,
+        existingAreas: _locations
+            .where((area) => area.regionId == location.regionId)
+            .toList(),
+      );
+    }
     final index = _locations.indexWhere((item) => item.id == location.id);
     if (index == -1) {
       _locations.add(location);

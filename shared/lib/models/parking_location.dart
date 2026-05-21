@@ -25,6 +25,10 @@ class ParkingLocation {
     required this.closingTime,
     required this.createdAt,
     required this.updatedAt,
+    this.minLat,
+    this.maxLat,
+    this.minLng,
+    this.maxLng,
     this.ratingAverage = 0,
     this.ratingCount = 0,
   }) : assert(pricePerHour >= 0 && pricePerHour <= 100);
@@ -50,6 +54,10 @@ class ParkingLocation {
   final String closingTime;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final double? minLat;
+  final double? maxLat;
+  final double? minLng;
+  final double? maxLng;
   final double ratingAverage;
   final int ratingCount;
 
@@ -108,6 +116,10 @@ class ParkingLocation {
     String? closingTime,
     DateTime? createdAt,
     DateTime? updatedAt,
+    double? minLat,
+    double? maxLat,
+    double? minLng,
+    double? maxLng,
     double? ratingAverage,
     int? ratingCount,
   }) {
@@ -133,6 +145,10 @@ class ParkingLocation {
       closingTime: closingTime ?? this.closingTime,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      minLat: minLat ?? this.minLat,
+      maxLat: maxLat ?? this.maxLat,
+      minLng: minLng ?? this.minLng,
+      maxLng: maxLng ?? this.maxLng,
       ratingAverage: ratingAverage ?? this.ratingAverage,
       ratingCount: ratingCount ?? this.ratingCount,
     );
@@ -163,6 +179,10 @@ class ParkingLocation {
     'closingTime': closingTime,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
+    'minLat': minLat,
+    'maxLat': maxLat,
+    'minLng': minLng,
+    'maxLng': maxLng,
     'ratingAverage': ratingAverage,
     'ratingCount': ratingCount,
   };
@@ -200,6 +220,10 @@ class ParkingLocation {
       closingTime: json['closingTime'] as String,
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
+      minLat: (json['minLat'] as num?)?.toDouble(),
+      maxLat: (json['maxLat'] as num?)?.toDouble(),
+      minLng: (json['minLng'] as num?)?.toDouble(),
+      maxLng: (json['maxLng'] as num?)?.toDouble(),
       ratingAverage: (json['ratingAverage'] as num? ?? 0).toDouble(),
       ratingCount: json['ratingCount'] as int? ?? 0,
     );

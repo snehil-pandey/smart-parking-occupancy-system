@@ -145,6 +145,157 @@ void main() {
     expect(bounds.maxLongitude, 2);
   });
 
+  test('separate parking polygons are allowed', () {
+    final candidate = _boxArea(
+      id: 'candidate',
+      name: 'Candidate',
+      points: _box(0, 0, 1, 1),
+    );
+    final existing = _boxArea(
+      id: 'existing',
+      name: 'Existing',
+      points: _box(2, 2, 3, 3),
+    );
+
+    expect(
+      GeometryUtils.validateAreaDoesNotConflict(candidate, [existing]),
+      isNull,
+    );
+  });
+
+  test('overlapping parking polygons are rejected with area name', () {
+    final candidate = _boxArea(
+      id: 'candidate',
+      name: 'Candidate',
+      points: _box(0, 0, 2, 2),
+    );
+    final existing = _boxArea(
+      id: 'existing',
+      name: 'Library Lot',
+      points: _box(1, 1, 3, 3),
+    );
+
+    final conflict = GeometryUtils.validateAreaDoesNotConflict(candidate, [
+      existing,
+    ]);
+
+    expect(conflict, isNotNull);
+    expect(conflict!.areaName, 'Library Lot');
+    expect(conflict.message, contains('Library Lot'));
+  });
+
+  test('crossing polygon edges are rejected', () {
+    final candidate = _boxArea(
+      id: 'candidate',
+      name: 'Candidate',
+      points: const [
+        GeoPointValue(latitude: 0, longitude: 0.8),
+        GeoPointValue(latitude: 2, longitude: 0.8),
+        GeoPointValue(latitude: 2, longitude: 1.2),
+        GeoPointValue(latitude: 0, longitude: 1.2),
+      ],
+    );
+    final existing = _boxArea(
+      id: 'existing',
+      name: 'Existing',
+      points: _box(0.8, 0, 1.2, 2),
+    );
+
+    expect(
+      GeometryUtils.validateAreaDoesNotConflict(candidate, [existing]),
+      isNotNull,
+    );
+  });
+
+  test('one parking polygon inside another is rejected', () {
+    final candidate = _boxArea(
+      id: 'candidate',
+      name: 'Candidate',
+      points: _box(1, 1, 2, 2),
+    );
+    final existing = _boxArea(
+      id: 'existing',
+      name: 'Existing',
+      points: _box(0, 0, 3, 3),
+    );
+
+    expect(
+      GeometryUtils.validateAreaDoesNotConflict(candidate, [existing]),
+      isNotNull,
+    );
+  });
+
+  test('same parking area id is ignored while editing', () {
+    final candidate = _boxArea(
+      id: 'same',
+      name: 'Edited',
+      points: _box(0, 0, 2, 2),
+    );
+    final existing = _boxArea(
+      id: 'same',
+      name: 'Saved',
+      points: _box(0, 0, 2, 2),
+    );
+
+    expect(
+      GeometryUtils.validateAreaDoesNotConflict(candidate, [existing]),
+      isNull,
+    );
+  });
+
+  test('touching parking boundaries are rejected', () {
+    final candidate = _boxArea(
+      id: 'candidate',
+      name: 'Candidate',
+      points: _box(0, 0, 1, 1),
+    );
+    final existing = _boxArea(
+      id: 'existing',
+      name: 'Existing',
+      points: _box(1, 0, 2, 1),
+    );
+
+    expect(
+      GeometryUtils.validateAreaDoesNotConflict(candidate, [existing]),
+      isNotNull,
+    );
+  });
+
+  test('invalid parking polygon is rejected', () {
+    final candidate = _boxArea(
+      id: 'candidate',
+      name: 'Candidate',
+      points: const [
+        GeoPointValue(latitude: 0, longitude: 0),
+        GeoPointValue(latitude: 1, longitude: 1),
+      ],
+    );
+
+    final conflict = GeometryUtils.validateAreaDoesNotConflict(candidate, []);
+
+    expect(conflict, isNotNull);
+    expect(conflict!.isInvalidCandidate, isTrue);
+  });
+
+  test('repository save rejects overlapping parking polygons', () async {
+    final existing = _boxArea(
+      id: 'existing',
+      name: 'Library Lot',
+      points: _box(0, 0, 2, 2),
+    );
+    final candidate = _boxArea(
+      id: 'candidate',
+      name: 'Candidate',
+      points: _box(1, 1, 3, 3),
+    );
+    final repository = InMemoryParkingRepository(seed: [existing]);
+
+    expect(
+      () => repository.upsert(candidate),
+      throwsA(isA<ParkingAreaConflictException>()),
+    );
+  });
+
   test('full area cannot be reserved', () async {
     final repository = InMemoryParkingRepository(
       seed: [_area(availableSpaces: 0)],
@@ -225,6 +376,54 @@ const _squareRegion = [
   GeoPointValue(latitude: 2, longitude: 2),
   GeoPointValue(latitude: 2, longitude: 0),
 ];
+
+List<GeoPointValue> _box(
+  double minLat,
+  double minLng,
+  double maxLat,
+  double maxLng,
+) {
+  return [
+    GeoPointValue(latitude: minLat, longitude: minLng),
+    GeoPointValue(latitude: minLat, longitude: maxLng),
+    GeoPointValue(latitude: maxLat, longitude: maxLng),
+    GeoPointValue(latitude: maxLat, longitude: minLng),
+  ];
+}
+
+ParkingLocation _boxArea({
+  required String id,
+  required String name,
+  required List<GeoPointValue> points,
+  String adminId = 'admin_test',
+}) {
+  final now = DateTime.now();
+  final center = points.length >= 3
+      ? GeometryUtils.calculatePolygonCenter(points)
+      : const GeoPointValue(latitude: 0, longitude: 0);
+  return ParkingLocation(
+    id: id,
+    regionId: 'region_test',
+    adminId: adminId,
+    name: name,
+    address: 'Test',
+    boundaryPoints: points,
+    gatePoints: const [],
+    latitude: center.latitude,
+    longitude: center.longitude,
+    totalSpaces: 10,
+    availableSpaces: 10,
+    pricePerHour: 10,
+    vehicleTypes: const [VehicleType.car],
+    thumbnailRefs: const [],
+    imagePreviewRefs: const [],
+    isOpen: true,
+    openingTime: '06:00',
+    closingTime: '22:00',
+    createdAt: now,
+    updatedAt: now,
+  );
+}
 
 ParkingLocation _area({
   int availableSpaces = 3,

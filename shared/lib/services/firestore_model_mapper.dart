@@ -8,6 +8,7 @@ import '../models/parking_area_image.dart';
 import '../models/parking_location.dart';
 import '../models/parking_region.dart';
 import '../models/parking_review.dart';
+import '../utils/geometry_utils.dart';
 
 class FirestoreModelMapper {
   const FirestoreModelMapper._();
@@ -174,13 +175,23 @@ class FirestoreModelMapper {
   static Map<String, Object?> regionToFirestore(ParkingRegion region) =>
       toFirestore(region.toJson());
 
-  static Map<String, Object?> parkingAreaToFirestore(ParkingLocation area) =>
-      toFirestore({
-        ...area.toJson(),
-        'supportedVehicleTypes': area.vehicleTypes
-            .map((type) => type.name)
-            .toList(),
-      });
+  static Map<String, Object?> parkingAreaToFirestore(ParkingLocation area) {
+    final json = area.toJson();
+    if (area.boundaryPoints.length >= 3) {
+      final bounds = GeometryUtils.calculateBounds(area.boundaryPoints);
+      json
+        ..['minLat'] = bounds.minLatitude
+        ..['maxLat'] = bounds.maxLatitude
+        ..['minLng'] = bounds.minLongitude
+        ..['maxLng'] = bounds.maxLongitude;
+    }
+    return toFirestore({
+      ...json,
+      'supportedVehicleTypes': area.vehicleTypes
+          .map((type) => type.name)
+          .toList(),
+    });
+  }
 
   static Map<String, Object?> bookingToFirestore(Booking booking) =>
       toFirestore(booking.toJson());

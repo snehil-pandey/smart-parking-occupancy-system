@@ -75,6 +75,7 @@ class _AreaBoundaryEditor extends StatelessWidget {
   Widget build(BuildContext context) {
     final location = state.selectedLocation!;
     final gps = state.lastGpsPosition;
+    final conflict = state.draftAreaConflict;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -87,6 +88,10 @@ class _AreaBoundaryEditor extends StatelessWidget {
           regionPoints: state.region.boundaryPoints,
           areaPoints: state.draftBoundaryPoints,
           gatePoints: state.draftGatePoints,
+          referenceAreas: state.referenceLocations,
+          currentAdminId: state.admin?.id,
+          selectedAreaId: location.id,
+          conflictingAreaId: conflict?.areaId,
           selectedGeometryPoint: state.selectedGeometryPoint,
           onMapTap: controller.handleMapTap,
           onCornerTap: controller.selectCornerPoint,
@@ -169,6 +174,10 @@ class _AreaBoundaryEditor extends StatelessWidget {
           state.geometryStatusMessage,
           style: Theme.of(context).textTheme.bodySmall,
         ),
+        if (conflict != null) ...[
+          const SizedBox(height: 6),
+          _GeometryWarningBanner(message: conflict.message),
+        ],
         if (gps != null && gps.accuracyMeters > 25) ...[
           const SizedBox(height: 6),
           const Text(
@@ -217,7 +226,7 @@ class _AreaBoundaryEditor extends StatelessWidget {
               label: const Text('Clear Gates'),
             ),
             FilledButton.icon(
-              onPressed: state.isSavingGeometry
+              onPressed: state.isSavingGeometry || conflict != null
                   ? null
                   : controller.saveAreaGeometry,
               icon: const Icon(Icons.save_outlined),
@@ -345,6 +354,33 @@ class _AreaBoundaryEditor extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+class _GeometryWarningBanner extends StatelessWidget {
+  const _GeometryWarningBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4E0),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE7B758)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber_outlined, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+      ),
     );
   }
 }

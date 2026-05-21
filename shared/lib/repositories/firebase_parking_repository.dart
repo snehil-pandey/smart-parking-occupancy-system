@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/parking_location.dart';
 import '../services/firebase_collection_paths.dart';
 import '../services/firestore_model_mapper.dart';
+import '../services/parking_area_conflict_service.dart';
 import 'parking_repository.dart';
 
 class FirebaseParkingRepository implements ParkingRepository {
@@ -152,6 +153,13 @@ class FirebaseParkingRepository implements ParkingRepository {
   @override
   Future<void> upsert(ParkingLocation location) async {
     ParkingLocation.validatePrice(location.pricePerHour);
+    if (location.boundaryPoints.length >= 3) {
+      final existingAreas = await getByRegion(location.regionId, limit: 500);
+      const ParkingAreaConflictService().throwIfConflicting(
+        candidateArea: location,
+        existingAreas: existingAreas,
+      );
+    }
     await _areas
         .doc(location.id)
         .set(

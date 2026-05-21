@@ -253,6 +253,12 @@ The current editor uses explicit tap-to-select/tap-to-move interactions instead 
 
 Before saving geometry, the controller validates that the selected area belongs to the signed-in admin's controlled region, has at least three polygon corners, every corner/gate/center is inside the region, uses a price within `0..100`, and has `availableSpaces` between `0` and `totalSpaces`. Draft edits remain local until Save writes the updated area document to Firebase, after which the Firestore stream refreshes the selected area.
 
+Parking area creation and editing also check candidate polygons against existing parking areas in the same region, including areas owned by other admins. The admin map renders those existing zones as references: the signed-in admin's other areas use the normal outline, other-admin areas use a muted outline, and only the area name is shown. Other admins' regions, admin identity, income, bookings, and user details are never shown in this reference layer.
+
+The shared geometry utilities treat boundary touching as a conflict. They reject overlapping polygons, crossing edges, one area fully containing another, and one area being fully contained inside another. The currently edited `areaId` is ignored so an admin can save unchanged geometry while editing that same area.
+
+Firestore security rules cannot reliably enforce polygon intersection, so conflict prevention lives in shared geometry utilities and the parking repository/service layer. The Admin UI warns while drawing and disables Save when a conflict is visible, but `ParkingRepository.upsert` performs a final validation immediately before writing to Firestore. Parking area documents store optional `minLat`, `maxLat`, `minLng`, and `maxLng` bounds so future spatial filtering can pre-check bounding boxes before running polygon intersection.
+
 ## Firestore-Only Image Flow
 
 Firebase Storage may require billing, so the default image path is Firestore-only and optimized.

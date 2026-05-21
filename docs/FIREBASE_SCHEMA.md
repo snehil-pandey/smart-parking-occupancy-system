@@ -79,6 +79,10 @@ Unknown values fall back to `car` and print a debug warning instead of crashing.
 | `gatePoints` | array | Entry/exit markers for the area |
 | `centerLat` / `latitude` | number | Map coordinate |
 | `centerLng` / `longitude` | number | Map coordinate |
+| `minLat` | number/null | Optional polygon bounding box minimum latitude |
+| `maxLat` | number/null | Optional polygon bounding box maximum latitude |
+| `minLng` | number/null | Optional polygon bounding box minimum longitude |
+| `maxLng` | number/null | Optional polygon bounding box maximum longitude |
 | `totalSpaces` | number | Total capacity |
 | `availableSpaces` | number | Live bookable capacity |
 | `pricePerHour` | number | Hourly price in INR, valid range `0..100` |
@@ -118,6 +122,11 @@ Admin geometry editing rules:
 - `availableSpaces` must be between `0` and `totalSpaces`.
 - `pricePerHour` must be between `0` and `100`.
 - Parking area corners, center, and gates must be inside the owning admin's controlled region.
+- Parking area polygons must not overlap, touch, cut through, contain, or be contained by any other saved parking area in the same region.
+- When editing an existing area, conflict validation ignores that same `areaId` and checks all other areas.
+- The Admin app may show other admins' saved parking area polygons as muted reference zones, but only the area name is displayed. Admin regions, income, bookings, user data, and owner details are not exposed in this layer.
+- Firestore rules cannot perform polygon intersection checks. The shared geometry utilities and parking repository perform app/service validation immediately before saving.
+- `minLat`, `maxLat`, `minLng`, and `maxLng` are written from `boundaryPoints` when a saved area has at least three points. They are used as a fast bounding-box pre-check before detailed polygon conflict validation and can support broader spatial querying later.
 
 ## `/parking_area_images/{imageId}`
 

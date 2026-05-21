@@ -232,6 +232,10 @@ class _AdminOsmGeometryMap extends StatefulWidget {
     required this.areaPoints,
     required this.gatePoints,
     required this.selectedGeometryPoint,
+    this.referenceAreas = const [],
+    this.currentAdminId,
+    this.selectedAreaId,
+    this.conflictingAreaId,
     this.selectedRegionPoint,
     this.onMapTap,
     this.onRegionPointTap,
@@ -244,6 +248,10 @@ class _AdminOsmGeometryMap extends StatefulWidget {
   final List<GeoPointValue> areaPoints;
   final List<GatePoint> gatePoints;
   final AdminGeometrySelection? selectedGeometryPoint;
+  final List<ParkingLocation> referenceAreas;
+  final String? currentAdminId;
+  final String? selectedAreaId;
+  final String? conflictingAreaId;
   final int? selectedRegionPoint;
   final ValueChanged<GeoPointValue>? onMapTap;
   final ValueChanged<int>? onRegionPointTap;
@@ -262,6 +270,7 @@ class _AdminOsmGeometryMapState extends State<_AdminOsmGeometryMap> {
     final points = [
       ...widget.regionPoints,
       ...widget.areaPoints,
+      for (final area in widget.referenceAreas) ...area.boundaryPoints,
       ...widget.gatePoints.map(
         (gate) =>
             GeoPointValue(latitude: gate.latitude, longitude: gate.longitude),
@@ -375,8 +384,16 @@ class _AdminOsmGeometryMapState extends State<_AdminOsmGeometryMap> {
           points: widget.areaPoints.map(_toLatLng).toList(),
           color: ParkHereTheme.yellow.withAlpha(90),
           borderColor: ParkHereTheme.black,
-          borderStrokeWidth: 2,
+          borderStrokeWidth: 3,
         ),
+      for (final area in widget.referenceAreas)
+        if (area.boundaryPoints.length >= 3 && area.id != widget.selectedAreaId)
+          Polygon(
+            points: area.boundaryPoints.map(_toLatLng).toList(),
+            color: _referenceFillColor(area),
+            borderColor: _referenceBorderColor(area),
+            borderStrokeWidth: area.id == widget.conflictingAreaId ? 4 : 2,
+          ),
     ];
   }
 
@@ -394,6 +411,13 @@ class _AdminOsmGeometryMapState extends State<_AdminOsmGeometryMap> {
           color: ParkHereTheme.black,
           strokeWidth: 2,
         ),
+      for (final area in widget.referenceAreas)
+        if (area.boundaryPoints.length == 2 && area.id != widget.selectedAreaId)
+          Polyline(
+            points: area.boundaryPoints.map(_toLatLng).toList(),
+            color: _referenceBorderColor(area),
+            strokeWidth: area.id == widget.conflictingAreaId ? 4 : 2,
+          ),
     ];
   }
 
@@ -444,7 +468,83 @@ class _AdminOsmGeometryMapState extends State<_AdminOsmGeometryMap> {
             onTap: () => widget.onGateTap?.call(index),
           ),
         ),
+      for (final area in widget.referenceAreas)
+        if (area.boundaryPoints.length >= 3 && area.id != widget.selectedAreaId)
+          Marker(
+            point: _toLatLng(
+              GeometryUtils.calculatePolygonCenter(area.boundaryPoints),
+            ),
+            width: 120,
+            height: 34,
+            child: _AreaNameMarker(
+              name: area.name,
+              isOwnArea: area.adminId == widget.currentAdminId,
+              isConflict: area.id == widget.conflictingAreaId,
+            ),
+          ),
     ];
+  }
+
+  Color _referenceBorderColor(ParkingLocation area) {
+    if (area.id == widget.conflictingAreaId) {
+      return Colors.red.shade700;
+    }
+    if (area.adminId == widget.currentAdminId) {
+      return ParkHereTheme.adminBlue;
+    }
+    return Colors.grey.shade700;
+  }
+
+  Color _referenceFillColor(ParkingLocation area) {
+    if (area.id == widget.conflictingAreaId) {
+      return Colors.red.withAlpha(45);
+    }
+    if (area.adminId == widget.currentAdminId) {
+      return ParkHereTheme.adminBlue.withAlpha(32);
+    }
+    return Colors.grey.withAlpha(38);
+  }
+}
+
+class _AreaNameMarker extends StatelessWidget {
+  const _AreaNameMarker({
+    required this.name,
+    required this.isOwnArea,
+    required this.isConflict,
+  });
+
+  final String name;
+  final bool isOwnArea;
+  final bool isConflict;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isConflict
+        ? Colors.red.shade700
+        : isOwnArea
+        ? ParkHereTheme.adminBlue
+        : Colors.grey.shade700;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(235),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Text(
+          name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: color,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
   }
 }
 

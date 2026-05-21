@@ -261,3 +261,9 @@
 - Confirmed current composite indexes match app query shapes for parking areas, bookings, QR tickets, issues, reviews, Firestore images, and notifications.
 - Documented single-field/direct-document queries, including admin-controlled region lookups, so they are not mistaken for missing composite indexes.
 - Added the exact project-root index deployment command using `firebase use park-here-dev` and `firebase deploy --only firestore:indexes`.
+
+### feat(admin): prevent parking area polygon conflicts
+- Added shared polygon intersection, containment, boundary-touch, and conflict validation utilities for parking areas.
+- Added repository-level parking area conflict checks before Firestore upserts so UI bypasses cannot save overlapping geometry.
+- Updated the Admin area editor to render existing same-region parking areas, show other admins' areas as muted name-only reference zones, highlight conflicting zones, and disable Save while a conflict exists.
+- Added optional parking area bounds fields (`minLat`, `maxLat`, `minLng`, `maxLng`) for faster conflict pre-checks and future spatial filtering.
