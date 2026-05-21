@@ -573,9 +573,11 @@ class UserAppController extends StateNotifier<UserAppState> {
     UserPosition? position;
     try {
       position = await _locationService.currentPosition();
-      locations = await _parkingRepository.watchNearby(
-        latitude: position.latitude,
-        longitude: position.longitude,
+      locations = _userVisibleParkingAreas(
+        await _parkingRepository.watchNearby(
+          latitude: position.latitude,
+          longitude: position.longitude,
+        ),
       );
       bookings = await _bookingRepository.getForUser(user.id);
       final activeBooking = bookings
@@ -693,6 +695,12 @@ class UserAppController extends StateNotifier<UserAppState> {
   }
 
   Future<void> selectLocation(ParkingLocation location) async {
+    if (!location.isUserVisibleParkingArea) {
+      state = state.copyWith(
+        error: 'Please select a parking area inside this region.',
+      );
+      return;
+    }
     state = state.copyWith(
       selectedLocation: location,
       clearSelectedPlace: true,
@@ -834,7 +842,13 @@ class UserAppController extends StateNotifier<UserAppState> {
       state = state.copyWith(error: 'Sign in before booking.');
       return;
     }
-    if (!location.isOpen || location.availableSpaces < 1) {
+    if (!location.isUserVisibleParkingArea) {
+      state = state.copyWith(
+        error: 'Please select a parking area inside this region.',
+      );
+      return;
+    }
+    if (!location.isBookable) {
       state = state.copyWith(error: 'This parking area is not available now.');
       return;
     }
@@ -997,6 +1011,14 @@ class UserAppController extends StateNotifier<UserAppState> {
       return null;
     }
     return locations.where((location) => location.id == selectedId).firstOrNull;
+  }
+
+  List<ParkingLocation> _userVisibleParkingAreas(
+    List<ParkingLocation> locations,
+  ) {
+    return locations
+        .where((location) => location.isUserVisibleParkingArea)
+        .toList();
   }
 
   Future<void> cancelActiveBooking({String? reason}) async {
@@ -1223,12 +1245,13 @@ class UserAppController extends StateNotifier<UserAppState> {
         .watchOpenAreas(limit: 100)
         .listen(
           (locations) async {
-            final updatedSelected = _updatedSelectedFrom(locations);
+            final visibleLocations = _userVisibleParkingAreas(locations);
+            final updatedSelected = _updatedSelectedFrom(visibleLocations);
             // Firestore streams update the lightweight area list in place.
             // Search, filters, selected area, tab, and sheet position stay in
             // local state so realtime snapshots do not wipe the Home UX.
             state = state.copyWith(
-              locations: locations,
+              locations: visibleLocations,
               selectedLocation: updatedSelected,
               clearSelectedLocation:
                   state.selectedLocation != null && updatedSelected == null,
@@ -1238,7 +1261,7 @@ class UserAppController extends StateNotifier<UserAppState> {
             if (updatedSelected != null) {
               _scheduleRouteRefresh(updatedSelected);
             }
-            unawaited(_loadThumbnails(locations));
+            unawaited(_loadThumbnails(visibleLocations));
           },
           onError: (Object error) {
             state = state.copyWith(

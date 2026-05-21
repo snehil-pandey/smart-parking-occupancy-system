@@ -79,7 +79,7 @@ flowchart TD
   Routes --> Fallback["SIT road-graph fallback"]
 ```
 
-The user map uses `flutter_map` with public OpenStreetMap tiles for local development, then overlays Firebase parking polygons, gate markers, current GPS, and route polylines. The parking overlay is fed by a realtime `/parking_areas` snapshot of open Firebase areas, so areas created by real admins appear without a full app reload or a demo-region filter. OpenStreetMap does not require Google Maps billing or an API key, but production traffic should use an OSM-compliant tile provider or self-hosted tiles.
+The user map uses `flutter_map` with public OpenStreetMap tiles for local development, then overlays Firebase parking polygons, gate markers, current GPS, and route polylines. The parking overlay is fed by a realtime `/parking_areas` snapshot of open Firebase areas, so areas created by real admins appear without a full app reload or a demo-region filter. `/regions` documents are admin-controlled boundary containers only; they may be used for map context or grouping, but they are not selectable, searchable as bookable places, routable as destinations, or eligible for booking. OpenStreetMap does not require Google Maps billing or an API key, but production traffic should use an OSM-compliant tile provider or self-hosted tiles.
 
 Routes now come from `OsrmRouteProvider` first, not straight-line geometry. The provider requests OSRM road-network routes with full GeoJSON geometry, caches recent responses in memory, and falls back to a small SIT Tumkur weighted road graph only when the road-routing API is unavailable. `ParkingGateSelector` routes to the nearest valid entry/both gate before falling back to a parking area center.
 
@@ -131,7 +131,7 @@ Visual direction is practical and Namma-Yatri-inspired: warm yellow accents, bla
 
 ## Region To Parking Area Flow
 
-Each admin controls one primary region for now. Demo data can still use SIT Tumkur, but new admins create their own Firestore-backed region. Admins manage that region boundary, then publish bookable parking areas inside it. Users only see parking areas; the region is not a selectable parking object.
+Each admin controls one primary region for now. Demo data can still use SIT Tumkur, but new admins create their own Firestore-backed region. Admins manage that region boundary, then publish bookable parking areas inside it. Users only see parking areas; the region is not a selectable parking object, and region-like documents are filtered out of user-facing discovery before map/list/search/booking state is updated.
 
 ```mermaid
 flowchart TD

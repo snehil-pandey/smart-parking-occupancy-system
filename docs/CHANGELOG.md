@@ -231,6 +231,10 @@
 - Simplified user-facing Firestore queries for parking areas, bookings, active QR tickets, reviews, images, and notifications to single-field filters with local sorting to avoid repeated composite-index waits.
 - Replaced raw/index-specific Firebase error text with a short user-friendly retry message.
 
+### fix(user): hide regions from bookable parking results
+- Added user-facing parking area validation so region-like documents cannot appear as Home/Explore cards, map selections, search results, route destinations, or booking targets.
+- Kept `/regions` as admin boundary containers only and documented that user booking flows must use `/parking_areas`.
+
 ### refactor(admin-ui): separate admin app into focused sections
 - Split the admin screen internals into feature sections for auth, dashboard, region, parking areas, bookings, issues, and shared widgets while preserving the existing Firebase-backed controller.
 

@@ -137,6 +137,7 @@ class LocalSitTumkurPlaceSearchService implements PlaceSearchService {
       return const [];
     }
     return parkingAreas
+        .where((area) => area.isUserVisibleParkingArea)
         .where((area) {
           final text = '${area.name} ${area.description} ${area.address}'
               .toLowerCase();

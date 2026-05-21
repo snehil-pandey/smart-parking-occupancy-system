@@ -69,7 +69,7 @@ class FirebaseParkingRepository implements ParkingRepository {
   @override
   Future<List<ParkingLocation>> getOpenAreas({int limit = 100}) async {
     final snapshot = await _areas.where('isOpen', isEqualTo: true).get();
-    return _sortedAreas(snapshot).take(limit).toList();
+    return _userVisibleAreas(snapshot).take(limit).toList();
   }
 
   @override
@@ -77,7 +77,7 @@ class FirebaseParkingRepository implements ParkingRepository {
     return _areas
         .where('isOpen', isEqualTo: true)
         .snapshots()
-        .map((snapshot) => _sortedAreas(snapshot).take(limit).toList());
+        .map((snapshot) => _userVisibleAreas(snapshot).take(limit).toList());
   }
 
   @override
@@ -97,7 +97,7 @@ class FirebaseParkingRepository implements ParkingRepository {
         throw StateError('Parking area $areaId was not found.');
       }
       final area = FirestoreModelMapper.parkingAreaFromDoc(snapshot);
-      if (!area.isOpen || area.availableSpaces < 1) {
+      if (!area.isBookable) {
         throw StateError('Parking area $areaId has no available slots.');
       }
       final updated = area.copyWith(
@@ -190,5 +190,13 @@ class FirebaseParkingRepository implements ParkingRepository {
             return b.updatedAt.compareTo(a.updatedAt);
           });
     return areas;
+  }
+
+  List<ParkingLocation> _userVisibleAreas(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    return _sortedAreas(
+      snapshot,
+    ).where((area) => area.isUserVisibleParkingArea).toList();
   }
 }

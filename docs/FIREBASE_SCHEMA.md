@@ -67,6 +67,8 @@ Unknown values fall back to `car` and print a debug warning instead of crashing.
 
 `/parking_locations` is the legacy model name in parts of the local code. Firestore should use `/parking_areas` for the region-aware model. Keep `parkingLocationId` on bookings as a compatibility field, but treat it as the booked `areaId`.
 
+User-facing parking discovery, search, route destinations, bookings, QR tickets, reviews, and issue reports must use `/parking_areas` documents only. `/regions` documents describe admin-controlled boundaries and must not be copied into `/parking_areas` as fake bookable places. The user app rejects region-like area documents where `areaId` is missing/empty, equals `regionId`, starts with `region_`, has no `adminId`, or has invalid capacity values.
+
 | Field | Type | Notes |
 | --- | --- | --- |
 | `areaId` | string | Parking area id |
@@ -113,6 +115,7 @@ Admin geometry editing rules:
 
 - `boundaryPoints` must contain at least three points before saving final area geometry.
 - New admins must save one controlled region before creating parking areas.
+- Regions are admin containers only. Users may see parking areas inside regions, but cannot select, route to, or book a region document.
 - `gatePoints` are optional but recommended because user routing targets the nearest valid gate before falling back to area center.
 - Gate `type` must be `entry`, `exit`, or `both`.
 - Admin editor drafts are local until Save; Save updates the `/parking_areas/{areaId}` document and Firestore streams refresh the UI.

@@ -58,6 +58,20 @@ void main() {
     );
   });
 
+  test('region-like parking documents are not user-visible or bookable', () {
+    final area = _area(id: 'region_sit_tumkur', regionId: 'region_sit_tumkur');
+
+    expect(area.isUserVisibleParkingArea, isFalse);
+    expect(area.isBookable, isFalse);
+  });
+
+  test('only valid parking area documents are user-visible and bookable', () {
+    final area = _area(id: 'area_test', regionId: 'region_sit_tumkur');
+
+    expect(area.isUserVisibleParkingArea, isTrue);
+    expect(area.isBookable, isTrue);
+  });
+
   test('pointInPolygon includes interior and boundary points', () {
     expect(
       GeometryUtils.pointInPolygon(
@@ -485,13 +499,16 @@ ParkingRegion _boxRegion({
 }
 
 ParkingLocation _area({
+  String id = 'area_test',
+  String regionId = 'region_sit_tumkur',
   int availableSpaces = 3,
   double pricePerHour = 20,
   List<GatePoint> gatePoints = const [],
 }) {
   final now = DateTime.now();
   return ParkingLocation(
-    id: 'area_test',
+    id: id,
+    regionId: regionId,
     adminId: 'admin_test',
     name: 'Test Area',
     address: 'SIT Tumkur',

@@ -69,7 +69,21 @@ class ParkingLocation {
 
   bool supports(VehicleType type) => vehicleTypes.contains(type);
 
-  bool get isBookable => isOpen && availableSpaces > 0;
+  bool get isUserVisibleParkingArea {
+    final normalizedId = id.trim();
+    final normalizedRegionId = regionId.trim();
+    return normalizedId.isNotEmpty &&
+        normalizedRegionId.isNotEmpty &&
+        adminId.trim().isNotEmpty &&
+        normalizedId != normalizedRegionId &&
+        !normalizedId.startsWith('region_') &&
+        totalSpaces > 0 &&
+        availableSpaces >= 0 &&
+        availableSpaces <= totalSpaces;
+  }
+
+  bool get isBookable =>
+      isUserVisibleParkingArea && isOpen && availableSpaces > 0;
 
   String get availabilityLabel {
     if (!isOpen) {
