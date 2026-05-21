@@ -506,6 +506,33 @@ flutter run -d <android-device-id>
 
 - If the same root-mismatch error persists, clear the affected package folders from `%LOCALAPPDATA%\Pub\Cache\hosted\pub.dev` and run `flutter pub get` again. Do not downgrade packages first; treat this as a stale Kotlin/Pub cache problem unless a real compiler error remains after cleaning.
 
+User Android build fails with Kotlin incremental cache root errors:
+
+- The user app can hit the same Windows Kotlin daemon cache issue when Android plugins such as `screen_brightness_android`, `package_info_plus`, or Firebase plugins compile from the Pub cache while the app lives on another path/root.
+- The user app disables Kotlin incremental compilation and Gradle build caching in `apps/park_here_user/android/gradle.properties`:
+
+```properties
+kotlin.incremental=false
+kotlin.incremental.useClasspathSnapshot=false
+org.gradle.caching=false
+```
+
+- Clean the local user build state from the project root:
+
+```powershell
+cd apps\park_here_user\android
+.\gradlew.bat --stop
+cd ..\..\..
+Remove-Item -Recurse -Force apps\park_here_user\build -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force apps\park_here_user\.dart_tool -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force apps\park_here_user\android\.gradle -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force apps\park_here_user\android\app\build -ErrorAction SilentlyContinue
+cd apps\park_here_user
+flutter clean
+flutter pub get
+flutter build apk --debug
+```
+
 Firestore asks for an index:
 
 - This usually appears as a `FAILED_PRECONDITION` error.
