@@ -1,5 +1,6 @@
 import '../models/parking_region.dart';
 import '../utils/demo_seed.dart';
+import '../utils/geometry_utils.dart';
 import 'region_repository.dart';
 
 class InMemoryRegionRepository implements RegionRepository {
@@ -38,7 +39,25 @@ class InMemoryRegionRepository implements RegionRepository {
       Stream.value(_region?.createdByAdminId == adminId ? _region : null);
 
   @override
+  Future<List<ParkingRegion>> getAllRegions() async {
+    final region = _region;
+    return region == null ? const [] : [region];
+  }
+
+  @override
+  Stream<List<ParkingRegion>> watchAllRegions() {
+    return Stream.fromFuture(getAllRegions());
+  }
+
+  @override
   Future<void> upsertRegion(ParkingRegion region) async {
+    final conflict = GeometryUtils.validateRegionDoesNotConflict(
+      region,
+      await getAllRegions(),
+    );
+    if (conflict != null) {
+      throw StateError(conflict.message);
+    }
     _region = region;
   }
 }

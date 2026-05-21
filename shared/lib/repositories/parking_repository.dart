@@ -10,6 +10,10 @@ abstract interface class ParkingRepository {
 
   Stream<List<ParkingLocation>> watchByAdmin(String adminId, {int limit = 50});
 
+  Future<List<ParkingLocation>> getAllAreas({int limit = 500});
+
+  Stream<List<ParkingLocation>> watchAllAreas({int limit = 500});
+
   Future<List<ParkingLocation>> getByRegion(String regionId, {int limit = 30});
 
   Stream<List<ParkingLocation>> watchByRegion(

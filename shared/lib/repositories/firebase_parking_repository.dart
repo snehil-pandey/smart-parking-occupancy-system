@@ -23,26 +23,27 @@ class FirebaseParkingRepository implements ParkingRepository {
 
   @override
   Future<List<ParkingLocation>> getByAdmin(String adminId) async {
-    final snapshot = await _areas
-        .where('adminId', isEqualTo: adminId)
-        .orderBy('updatedAt', descending: true)
-        .limit(50)
-        .get();
-    return snapshot.docs.map(FirestoreModelMapper.parkingAreaFromDoc).toList();
+    final snapshot = await _areas.where('adminId', isEqualTo: adminId).get();
+    return _sortedAreas(snapshot).take(50).toList();
   }
 
   @override
   Stream<List<ParkingLocation>> watchByAdmin(String adminId, {int limit = 50}) {
     return _areas
         .where('adminId', isEqualTo: adminId)
-        .orderBy('updatedAt', descending: true)
-        .limit(limit)
         .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map(FirestoreModelMapper.parkingAreaFromDoc)
-              .toList(),
-        );
+        .map((snapshot) => _sortedAreas(snapshot).take(limit).toList());
+  }
+
+  @override
+  Future<List<ParkingLocation>> getAllAreas({int limit = 500}) async {
+    final snapshot = await _areas.limit(limit).get();
+    return _sortedAreas(snapshot);
+  }
+
+  @override
+  Stream<List<ParkingLocation>> watchAllAreas({int limit = 500}) {
+    return _areas.limit(limit).snapshots().map(_sortedAreas);
   }
 
   @override
@@ -161,7 +162,7 @@ class FirebaseParkingRepository implements ParkingRepository {
   Future<void> upsert(ParkingLocation location) async {
     ParkingLocation.validatePrice(location.pricePerHour);
     if (location.boundaryPoints.length >= 3) {
-      final existingAreas = await getByRegion(location.regionId, limit: 500);
+      final existingAreas = await getAllAreas(limit: 500);
       const ParkingAreaConflictService().throwIfConflicting(
         candidateArea: location,
         existingAreas: existingAreas,
@@ -177,4 +178,20 @@ class FirebaseParkingRepository implements ParkingRepository {
 
   CollectionReference<Map<String, dynamic>> get _areas =>
       _firestore.collection(FirebaseCollectionPaths.parkingAreas);
+
+  List<ParkingLocation> _sortedAreas(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    final locations = snapshot.docs
+        .map(FirestoreModelMapper.parkingAreaFromDoc)
+        .toList();
+    locations.sort((a, b) {
+      final updatedCompare = b.updatedAt.compareTo(a.updatedAt);
+      if (updatedCompare != 0) {
+        return updatedCompare;
+      }
+      return b.availableSpaces.compareTo(a.availableSpaces);
+    });
+    return locations;
+  }
 }

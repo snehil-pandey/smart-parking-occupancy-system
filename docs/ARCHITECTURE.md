@@ -104,7 +104,7 @@ flowchart TD
   Bookings --> Complete["Complete booking or consume QR"]
 ```
 
-Admins must define one controlled region before the dashboard opens. New admins see Region Setup after sign-in and cannot create parking areas until the region document is saved to Firestore. Existing demo admins still load the seeded SIT Tumkur region from Firebase.
+Admins must define one controlled region before the dashboard opens. New admins see Region Setup after sign-in and cannot create parking areas until the region document is saved to Firestore. Region setup streams existing `/regions` as muted, public name-only polygons on the OSM map so admins can avoid already controlled zones. Existing demo admins still load the seeded SIT Tumkur region from Firebase.
 
 ## Admin App Navigation
 
@@ -152,11 +152,15 @@ flowchart TD
   UserBookings --> UserQR["active_qr_tickets: bookingId + active"]
   UserHome --> Reviews["reviews: areaId + limit"]
   UserHome --> Notifications["notifications: userId + limit"]
-  AdminHome["Admin Dashboard"] --> AdminAreas["parking_areas: adminId + limit"]
-  AdminHome --> AdminBookings["bookings: adminId + limit"]
-  AdminHome --> AdminIssues["issue_reports: adminId + limit"]
+  AdminHome["Admin Dashboard"] --> AdminAreas["parking_areas: adminId"]
+  AdminHome --> ReferenceAreas["parking_areas: global reference snapshot"]
+  AdminHome --> ReferenceRegions["regions: global reference snapshot"]
+  AdminHome --> AdminBookings["bookings: adminId"]
+  AdminHome --> AdminIssues["issue_reports: adminId"]
   UserAreas --> Riverpod["Riverpod state"]
-  AdminAreas --> Riverpod
+AdminAreas --> Riverpod
+ReferenceAreas --> Riverpod
+ReferenceRegions --> Riverpod
   UserQR --> Riverpod
   Notifications --> Riverpod
 ```
@@ -247,17 +251,17 @@ flowchart TD
 
 Poor GPS accuracy is shown in the Admin app. The seeded SIT Tumkur coordinates are approximate and should be corrected using this flow before real operation.
 
-The admin region and parking-area editors now use real `flutter_map` OpenStreetMap tiles. Region setup focuses on the region draft polygon. Parking-area creation and editing fit the map to the controlled region, render the region boundary, render the area polygon, and show gate markers.
+The admin region and parking-area editors now use real `flutter_map` OpenStreetMap tiles. Region setup focuses on the region draft polygon and overlays existing regions from Firebase as muted public reference zones with region names only. Parking-area creation and editing fit the map to the controlled region, render the region boundary, render the area polygon, show gate markers, and overlay all existing parking areas from Firebase as name-only reference zones.
 
 The current editor uses explicit tap-to-select/tap-to-move interactions instead of true draggable markers. This keeps Android and Web behavior predictable with the current map package integration. If draggable markers are added later, they should preserve the same repository and validation rules.
 
-Before saving geometry, the controller validates that the selected area belongs to the signed-in admin's controlled region, has at least three polygon corners, every corner/gate/center is inside the region, uses a price within `0..100`, and has `availableSpaces` between `0` and `totalSpaces`. Draft edits remain local until Save writes the updated area document to Firebase, after which the Firestore stream refreshes the selected area.
+Before saving region or area geometry, the controller validates polygons against the latest Firebase snapshots. Regions must have at least three points and cannot overlap, touch, contain, or be contained by another saved region. Parking areas must belong to the signed-in admin's controlled region, have at least three polygon corners, keep every corner/gate/center inside the region, avoid all existing parking areas across admins, use a price within `0..100`, and keep `availableSpaces` between `0` and `totalSpaces`. Draft edits remain local until Save writes to Firebase, after which Firestore streams refresh the selected data.
 
-Parking area creation and editing also check candidate polygons against existing parking areas in the same region, including areas owned by other admins. The admin map renders those existing zones as references: the signed-in admin's other areas use the normal outline, other-admin areas use a muted outline, and only the area name is shown. Other admins' regions, admin identity, income, bookings, and user details are never shown in this reference layer.
+Parking area creation and editing check candidate polygons against existing parking areas across Firebase, including areas owned by other admins. The admin map renders those existing zones as references: the signed-in admin's other areas use the normal outline, other-admin areas use a muted outline, and only the area name is shown. Other admins' admin identity, income, bookings, users, and private details are never shown in this reference layer.
 
-The shared geometry utilities treat boundary touching as a conflict. They reject overlapping polygons, crossing edges, one area fully containing another, and one area being fully contained inside another. The currently edited `areaId` is ignored so an admin can save unchanged geometry while editing that same area.
+The shared geometry utilities treat boundary touching as a conflict. They reject overlapping polygons, crossing edges, one polygon fully containing another, and one polygon being fully contained inside another. The currently edited `areaId` or `regionId` is ignored so an admin can save unchanged geometry while editing that same zone.
 
-Firestore security rules cannot reliably enforce polygon intersection, so conflict prevention lives in shared geometry utilities and the parking repository/service layer. The Admin UI warns while drawing and disables Save when a conflict is visible, but `ParkingRepository.upsert` performs a final validation immediately before writing to Firestore. Parking area documents store optional `minLat`, `maxLat`, `minLng`, and `maxLng` bounds so future spatial filtering can pre-check bounding boxes before running polygon intersection.
+Firestore security rules cannot reliably enforce polygon intersection, so conflict prevention lives in shared geometry utilities and the repository/service layer. The Admin UI warns while drawing and disables Save when a conflict is visible, but `RegionRepository.upsertRegion` and `ParkingRepository.upsert` perform final validation immediately before writing to Firestore. Parking area documents store optional `minLat`, `maxLat`, `minLng`, and `maxLng` bounds so future spatial filtering can pre-check bounding boxes before running polygon intersection.
 
 ## Firestore-Only Image Flow
 

@@ -34,11 +34,8 @@ class FirebaseIssueRepository implements IssueRepository {
     if (status != null) {
       query = query.where('status', isEqualTo: status.label);
     }
-    final snapshot = await query
-        .orderBy('createdAt', descending: true)
-        .limit(50)
-        .get();
-    return snapshot.docs.map(FirestoreModelMapper.issueFromDoc).toList();
+    final snapshot = await query.get();
+    return _sortedIssues(snapshot).take(50).toList();
   }
 
   @override
@@ -53,14 +50,9 @@ class FirebaseIssueRepository implements IssueRepository {
     if (status != null) {
       query = query.where('status', isEqualTo: status.label);
     }
-    return query
-        .orderBy('createdAt', descending: true)
-        .limit(50)
-        .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs.map(FirestoreModelMapper.issueFromDoc).toList(),
-        );
+    return query.snapshots().map(
+      (snapshot) => _sortedIssues(snapshot).take(50).toList(),
+    );
   }
 
   @override
@@ -76,4 +68,11 @@ class FirebaseIssueRepository implements IssueRepository {
 
   CollectionReference<Map<String, dynamic>> get _issues =>
       _firestore.collection(FirebaseCollectionPaths.issueReports);
+
+  List<IssueReport> _sortedIssues(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    return snapshot.docs.map(FirestoreModelMapper.issueFromDoc).toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
 }
