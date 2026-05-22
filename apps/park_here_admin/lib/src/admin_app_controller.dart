@@ -454,12 +454,17 @@ class AdminAppController extends StateNotifier<AdminAppState> {
   StreamSubscription<List<IssueReport>>? _issueSubscription;
 
   Future<void> load() async {
-    state = state.copyWith(isLoading: true, error: null);
-    final admin = await _auth.loadCurrentAdmin();
-    if (admin == null) {
+    state = state.copyWith(
+      isLoading: true,
+      error: null,
+      regionStatusMessage: 'Restoring admin workspace...',
+    );
+    final loadedAdmin = await _auth.loadCurrentAdmin();
+    if (loadedAdmin == null) {
       state = AdminAppState.signedOut();
       return;
     }
+    var admin = loadedAdmin;
     await _resetRealtimeListeners();
     var region = state.region;
     var locations = state.locations;
@@ -468,9 +473,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     var bookings = state.bookings;
     var issues = state.issues;
     try {
-      final controlledRegion = await _regionRepository.getControlledRegion(
-        admin.id,
-      );
+      final controlledRegion = await _resolveControlledRegion(admin);
       if (controlledRegion == null) {
         _startReferenceRegionUpdates(admin.id);
         referenceRegions = (await _regionRepository.getAllRegions())
@@ -503,6 +506,11 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       }
 
       region = controlledRegion;
+      if (admin.regionId != region.regionId || !admin.onboardingCompleted) {
+        admin = await _auth.saveAdminProfile(
+          admin.copyWith(regionId: region.regionId, onboardingCompleted: true),
+        );
+      }
       _startRealtimeListeners(admin.id);
       referenceRegions = (await _regionRepository.getAllRegions())
           .where((region) => region.createdByAdminId != admin.id)
@@ -553,6 +561,18 @@ class AdminAppController extends StateNotifier<AdminAppState> {
         error: FirebaseErrorMessages.friendlyMessage(error),
       );
     }
+  }
+
+  Future<ParkingRegion?> _resolveControlledRegion(AdminProfile admin) async {
+    final assignedRegionId = admin.regionId;
+    if (assignedRegionId != null && assignedRegionId.trim().isNotEmpty) {
+      final assignedRegion = await _regionRepository.findById(assignedRegionId);
+      if (assignedRegion != null &&
+          assignedRegion.createdByAdminId == admin.id) {
+        return assignedRegion;
+      }
+    }
+    return _regionRepository.getControlledRegion(admin.id);
   }
 
   Future<void> signIn({required String email, required String password}) async {
@@ -813,7 +833,11 @@ class AdminAppController extends StateNotifier<AdminAppState> {
         updatedAt: now,
       );
       await _regionRepository.upsertRegion(region);
+      final updatedAdmin = await _auth.saveAdminProfile(
+        admin.copyWith(regionId: region.regionId, onboardingCompleted: true),
+      );
       state = state.copyWith(
+        admin: updatedAdmin,
         region: region,
         hasControlledRegion: true,
         regionDraftBoundaryPoints: region.boundaryPoints,

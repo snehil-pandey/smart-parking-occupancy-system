@@ -17,6 +17,8 @@ class LocalAuthService implements AuthService {
         ownerName: 'Ravi Kumar',
         phone: '+91 90000 22222',
         upiId: 'metropark@upi',
+        regionId: 'region_sit_tumkur',
+        onboardingCompleted: true,
       );
 
   AppUser _currentUser;
@@ -120,7 +122,15 @@ class LocalAuthService implements AuthService {
       ownerName: ownerName,
       phone: phone,
       upiId: upiId,
+      regionId: _currentAdmin.regionId,
+      onboardingCompleted: _currentAdmin.onboardingCompleted,
     );
+    return _currentAdmin;
+  }
+
+  @override
+  Future<AdminProfile> saveAdminProfile(AdminProfile profile) async {
+    _currentAdmin = profile;
     return _currentAdmin;
   }
 

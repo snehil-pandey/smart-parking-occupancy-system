@@ -30,7 +30,7 @@ class AdminDashboardScreen extends ConsumerWidget {
     final controller = ref.read(adminAppControllerProvider.notifier);
 
     if (state.isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: _AdminLoadingScreen());
     }
 
     if (state.authStatus == AdminAuthStatus.signedOut) {

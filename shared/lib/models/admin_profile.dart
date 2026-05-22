@@ -5,6 +5,8 @@ class AdminProfile {
     required this.phone,
     required this.ownerName,
     this.upiId,
+    this.regionId,
+    this.onboardingCompleted = false,
     this.role = 'admin',
   });
 
@@ -13,6 +15,8 @@ class AdminProfile {
   final String phone;
   final String ownerName;
   final String? upiId;
+  final String? regionId;
+  final bool onboardingCompleted;
   final String role;
 
   AdminProfile copyWith({
@@ -21,6 +25,8 @@ class AdminProfile {
     String? phone,
     String? ownerName,
     String? upiId,
+    String? regionId,
+    bool? onboardingCompleted,
     String? role,
   }) {
     return AdminProfile(
@@ -29,6 +35,8 @@ class AdminProfile {
       phone: phone ?? this.phone,
       ownerName: ownerName ?? this.ownerName,
       upiId: upiId ?? this.upiId,
+      regionId: regionId ?? this.regionId,
+      onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
       role: role ?? this.role,
     );
   }
@@ -39,6 +47,8 @@ class AdminProfile {
     'phone': phone,
     'ownerName': ownerName,
     'upiId': upiId,
+    'regionId': regionId,
+    'onboardingCompleted': onboardingCompleted,
     'role': role,
   };
 
@@ -48,6 +58,8 @@ class AdminProfile {
     phone: json['phone'] as String,
     ownerName: json['ownerName'] as String? ?? '',
     upiId: json['upiId'] as String?,
+    regionId: json['regionId'] as String?,
+    onboardingCompleted: json['onboardingCompleted'] as bool? ?? false,
     role: json['role'] as String? ?? 'admin',
   );
 }

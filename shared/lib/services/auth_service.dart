@@ -56,5 +56,7 @@ abstract interface class AuthService {
     String? upiId,
   });
 
+  Future<AdminProfile> saveAdminProfile(AdminProfile profile);
+
   Future<void> signOut();
 }

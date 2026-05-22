@@ -1,5 +1,55 @@
 part of '../admin_dashboard_screen.dart';
 
+class _AdminLoadingScreen extends StatelessWidget {
+  const _AdminLoadingScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFD84D),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(
+                  Icons.local_parking,
+                  size: 38,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 22),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 18),
+              Text(
+                'Restoring admin workspace...',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Checking your session and controlled region.',
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SetupBanner extends StatelessWidget {
   const _SetupBanner({required this.firebase, required this.admin});
 

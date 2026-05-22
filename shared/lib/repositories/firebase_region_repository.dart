@@ -61,6 +61,18 @@ class FirebaseRegionRepository implements RegionRepository {
   }
 
   @override
+  Future<ParkingRegion?> findById(String regionId) async {
+    final doc = await _firestore
+        .collection(FirebaseCollectionPaths.regions)
+        .doc(regionId)
+        .get();
+    if (!doc.exists || doc.data() == null) {
+      return null;
+    }
+    return FirestoreModelMapper.regionFromDoc(doc);
+  }
+
+  @override
   Stream<ParkingRegion?> watchControlledRegion(String adminId) {
     return _firestore
         .collection(FirebaseCollectionPaths.regions)
