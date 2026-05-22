@@ -1,4 +1,12 @@
-enum BookingStatus { pending, active, completed, cancelled, expired }
+enum BookingStatus {
+  pending,
+  confirmed,
+  active,
+  activeParking,
+  completed,
+  cancelled,
+  expired,
+}
 
 class Booking {
   const Booking({
@@ -8,6 +16,8 @@ class Booking {
     required this.parkingLocationId,
     this.qrId,
     this.qrUsedAt,
+    this.entryVerified = false,
+    this.entryScannedAt,
     required this.vehicleNumber,
     required this.startTime,
     required this.endTime,
@@ -28,6 +38,8 @@ class Booking {
   final String parkingLocationId;
   final String? qrId;
   final DateTime? qrUsedAt;
+  final bool entryVerified;
+  final DateTime? entryScannedAt;
   final String vehicleNumber;
   final DateTime startTime;
   final DateTime endTime;
@@ -43,6 +55,14 @@ class Booking {
 
   int get durationHours => endTime.difference(startTime).inHours;
 
+  bool get isAwaitingEntry =>
+      status == BookingStatus.active || status == BookingStatus.confirmed;
+
+  bool get isParkingActive =>
+      status == BookingStatus.activeParking || entryVerified;
+
+  bool get isCurrentSession => isAwaitingEntry || isParkingActive;
+
   Booking copyWith({
     String? id,
     String? userId,
@@ -50,6 +70,8 @@ class Booking {
     String? parkingLocationId,
     String? qrId,
     DateTime? qrUsedAt,
+    bool? entryVerified,
+    DateTime? entryScannedAt,
     String? vehicleNumber,
     DateTime? startTime,
     DateTime? endTime,
@@ -70,6 +92,8 @@ class Booking {
       parkingLocationId: parkingLocationId ?? this.parkingLocationId,
       qrId: qrId ?? this.qrId,
       qrUsedAt: qrUsedAt ?? this.qrUsedAt,
+      entryVerified: entryVerified ?? this.entryVerified,
+      entryScannedAt: entryScannedAt ?? this.entryScannedAt,
       vehicleNumber: vehicleNumber ?? this.vehicleNumber,
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
@@ -93,11 +117,15 @@ class Booking {
     'areaId': parkingLocationId,
     'qrId': qrId,
     'qrUsedAt': qrUsedAt?.toIso8601String(),
+    'entryVerified': entryVerified,
+    'entryScannedAt': entryScannedAt?.toIso8601String(),
     'vehicleNumber': vehicleNumber,
     'startTime': startTime.toIso8601String(),
     'endTime': endTime.toIso8601String(),
     'price': price,
-    'status': status.name,
+    'status': status == BookingStatus.activeParking
+        ? 'active_parking'
+        : status.name,
     'qrPayload': qrPayload,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),

@@ -20,6 +20,8 @@ class FirestoreModelMapper {
     'endTime',
     'expiresAt',
     'qrUsedAt',
+    'entryScannedAt',
+    'usedAt',
     'cancelledAt',
   };
 
@@ -110,11 +112,17 @@ class FirestoreModelMapper {
           (json['areaId'] ?? json['parkingLocationId']) as String,
       qrId: json['qrId'] as String?,
       qrUsedAt: _nullableDate(json['qrUsedAt']),
+      entryVerified: json['entryVerified'] as bool? ?? false,
+      entryScannedAt: _nullableDate(json['entryScannedAt']),
       vehicleNumber: json['vehicleNumber'] as String,
       startTime: _requiredDate(json['startTime']),
       endTime: _requiredDate(json['endTime']),
       price: (json['price'] as num).toDouble(),
-      status: BookingStatus.values.byName(json['status'] as String),
+      status: _enumByName(
+        BookingStatus.values,
+        json['status'] as String,
+        BookingStatus.expired,
+      ),
       qrPayload: json['qrPayload'] as String,
       createdAt: _requiredDate(json['createdAt']),
       updatedAt: _requiredDate(json['updatedAt']),
@@ -135,7 +143,11 @@ class FirestoreModelMapper {
       userId: json['userId'] as String,
       adminId: json['adminId'] as String,
       areaId: json['areaId'] as String,
-      status: ActiveQrStatus.values.byName(json['status'] as String),
+      status: _enumByName(
+        ActiveQrStatus.values,
+        json['status'] as String,
+        ActiveQrStatus.expired,
+      ),
       createdAt: _requiredDate(json['createdAt']),
       expiresAt: _requiredDate(json['expiresAt']),
     );
@@ -232,6 +244,26 @@ class FirestoreModelMapper {
     return IssueStatus.values.firstWhere(
       (status) => status.label == value || status.name == value,
       orElse: () => IssueStatus.open,
+    );
+  }
+
+  static T _enumByName<T extends Enum>(
+    List<T> values,
+    String value,
+    T fallback,
+  ) {
+    for (final item in values) {
+      if (item.name == value || _snakeCase(item.name) == value) {
+        return item;
+      }
+    }
+    return fallback;
+  }
+
+  static String _snakeCase(String value) {
+    return value.replaceAllMapped(
+      RegExp(r'([A-Z])'),
+      (match) => '_${match.group(1)!.toLowerCase()}',
     );
   }
 }

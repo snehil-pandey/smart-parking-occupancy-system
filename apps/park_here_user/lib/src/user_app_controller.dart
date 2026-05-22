@@ -348,9 +348,8 @@ class UserAppState {
   final String? actionMessage;
   final String? error;
 
-  Booking? get activeBooking => bookings
-      .where((booking) => booking.status == BookingStatus.active)
-      .firstOrNull;
+  Booking? get activeBooking =>
+      bookings.where((booking) => booking.isCurrentSession).firstOrNull;
 
   double? distanceKmFor(ParkingLocation location) =>
       position?.distanceKmTo(location);
@@ -581,9 +580,10 @@ class UserAppController extends StateNotifier<UserAppState> {
       );
       bookings = await _bookingRepository.getForUser(user.id);
       final activeBooking = bookings
-          .where((booking) => booking.status == BookingStatus.active)
+          .where((booking) => booking.isCurrentSession)
           .firstOrNull;
-      final activeQrTicket = activeBooking == null
+      final activeQrTicket =
+          activeBooking == null || activeBooking.isParkingActive
           ? null
           : await _bookingRepository.getActiveQrForBooking(activeBooking.id);
       state = state.copyWith(
@@ -1278,10 +1278,14 @@ class UserAppController extends StateNotifier<UserAppState> {
         .listen(
           (bookings) {
             final activeBooking = bookings
-                .where((booking) => booking.status == BookingStatus.active)
+                .where((booking) => booking.isCurrentSession)
                 .firstOrNull;
             state = state.copyWith(bookings: bookings);
-            _startActiveQrUpdates(activeBooking?.id);
+            _startActiveQrUpdates(
+              activeBooking == null || activeBooking.isParkingActive
+                  ? null
+                  : activeBooking.id,
+            );
             if (activeBooking == null) {
               _qrExpiryNotificationService.cancelScheduled();
               _qrCountdownTimer?.cancel();

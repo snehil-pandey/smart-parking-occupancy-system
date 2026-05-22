@@ -79,29 +79,33 @@ class _ActiveBookingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final parkingActive = booking.isParkingActive;
     return Material(
       color: const Color(0xFFFFF9E2),
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: () => _openQrViewer(context),
+        onTap: parkingActive ? null : () => _openQrViewer(context),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Active booking',
+                parkingActive ? 'Parking Active' : 'Active booking',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  QrImageView(
-                    data: _qrData,
-                    size: 118,
-                    backgroundColor: Colors.white,
-                  ),
+                  if (parkingActive)
+                    const _ParkingActiveBadge()
+                  else
+                    QrImageView(
+                      data: _qrData,
+                      size: 118,
+                      backgroundColor: Colors.white,
+                    ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
@@ -115,7 +119,13 @@ class _ActiveBookingCard extends StatelessWidget {
                         Text(
                           '${formatInr(booking.price)} - ${booking.durationHours} hours',
                         ),
-                        if (activeQrTicket == null)
+                        if (parkingActive) ...[
+                          const Text('Entry verified by scanner.'),
+                          if (booking.entryScannedAt != null)
+                            Text(
+                              'Entry at ${_dateTime(booking.entryScannedAt!)}',
+                            ),
+                        ] else if (activeQrTicket == null)
                           const Padding(
                             padding: EdgeInsets.only(top: 6),
                             child: InlineParkHereLoading(
@@ -132,11 +142,12 @@ class _ActiveBookingCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: () => _confirmCancel(context),
-                icon: const Icon(Icons.cancel_outlined),
-                label: const Text('Cancel booking'),
-              ),
+              if (!parkingActive)
+                OutlinedButton.icon(
+                  onPressed: () => _confirmCancel(context),
+                  icon: const Icon(Icons.cancel_outlined),
+                  label: const Text('Cancel booking'),
+                ),
             ],
           ),
         ),
@@ -150,6 +161,9 @@ class _ActiveBookingCard extends StatelessWidget {
 
   String _time(DateTime value) =>
       '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+
+  String _dateTime(DateTime value) =>
+      '${value.day}/${value.month} ${_time(value)}';
 
   void _openQrViewer(BuildContext context) {
     showModalBottomSheet<void>(
@@ -224,6 +238,38 @@ class _QrTicketViewer extends StatefulWidget {
 
   @override
   State<_QrTicketViewer> createState() => _QrTicketViewerState();
+}
+
+class _ParkingActiveBadge extends StatelessWidget {
+  const _ParkingActiveBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 118,
+      height: 118,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1F8A4C),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.local_parking, color: Colors.white, size: 42),
+          SizedBox(height: 8),
+          Text(
+            'ENTRY\nVERIFIED',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              height: 1.1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _QrTicketViewerState extends State<_QrTicketViewer> {

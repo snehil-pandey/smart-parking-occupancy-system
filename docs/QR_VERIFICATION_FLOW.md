@@ -1,6 +1,6 @@
 # QR Verification Flow
 
-The MVP creates a privacy-preserving QR ticket in the user app. Hardware gate scanning is intentionally outside this repository, but the data shape is ready for it.
+The user app creates a privacy-preserving QR ticket and the standalone scanner app consumes it through the same Firebase project. ESP32 hardware remains the primary gate path, while the Android scanner app is the fallback verifier.
 
 ## Payload
 
@@ -26,22 +26,22 @@ It must not contain `userId`, `adminId`, `areaId`, vehicle number, booking JSON,
 
 The parser remains migration-safe for old JSON QR payloads: it extracts `qrId` when present and never crashes. New QR generation always writes opaque ids only.
 
-## MVP Verification Idea
+## Verification Flow
 
 1. The app reserves one parking area slot.
 2. The app creates `/bookings/{bookingId}` with `status: active`, `qrId`, and `qrPayload`.
 3. The app creates `/active_qr_tickets/{qrId}` with `status: active`.
 4. The driver shows the QR at the entry gate.
-5. A future scanner reads only `qrId`.
-6. The scanner calls Firestore or a small API to fetch the active QR and booking records.
+5. The standalone scanner reads only `qrId`.
+6. The scanner fetches the active QR and booking records from Firebase.
 7. The scanner compares:
    - booking exists
    - active QR ticket exists
    - QR ticket status is `active`
-   - booking status is `active`
+   - booking status is `active` or `confirmed`
    - `areaId` / `parkingLocationId` matches the gate
    - current time is between `startTime` and `endTime`
-8. On success, the scanner/API consumes the QR ticket and keeps booking history.
+8. On success, the scanner consumes the QR ticket, marks entry verified, and keeps booking history.
 
 ## Active QR Lifecycle
 
@@ -57,20 +57,24 @@ sequenceDiagram
   App->>Firestore: Create booking + active_qr_ticket
   App-->>User: Show QR
   Gate->>Firestore: Read active_qr_tickets/{qrId}
-  Gate->>Firestore: Transaction marks QR used and booking completed
+  Gate->>Firestore: Transaction marks QR used and booking active_parking
   Firestore-->>Gate: allow
+  Firestore-->>App: Snapshot updates parking active state
 ```
 
-`/active_qr_tickets/{qrId}` may be marked `used` or `expired`. The permanent booking remains in `/bookings/{bookingId}` for user/admin history and income reporting.
+`/active_qr_tickets/{qrId}` may be marked `active`, `used`, `expired`, or `cancelled`. The permanent booking remains in `/bookings/{bookingId}` for user/admin history and income reporting.
 
 Firestore verification should use a transaction or callable API so two scanners cannot consume the same QR at the same time:
 
 1. Read `active_qr_tickets/{qrId}`.
 2. Reject if missing, not `active`, or expired.
 3. Read linked `/bookings/{bookingId}`.
-4. Reject if booking is not `active`.
+4. Reject if booking is not `active` or `confirmed`.
 5. Update QR status to `used`.
-6. Update booking status to `completed` and set `qrUsedAt`.
+6. Update booking status to `active_parking`.
+7. Set `entryVerified = true`, `entryScannedAt`, and `qrUsedAt`.
+
+The scanner re-reads the QR state inside the transaction. A second scan of the same QR sees `used` and is rejected. The user app listens to booking snapshots, so it changes from the QR ticket state to `Parking Active` without a reload once the scanner writes `active_parking`.
 
 ## QR Expiry Alerts
 

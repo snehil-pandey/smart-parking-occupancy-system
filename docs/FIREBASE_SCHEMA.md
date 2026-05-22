@@ -153,12 +153,14 @@ Recommended query pattern:
 | `parkingLocationId` | string | Booked area id, kept for compatibility |
 | `areaId` | string | Booked parking area id |
 | `qrId` | string/null | Active QR ticket id while booking is active |
-| `qrUsedAt` | timestamp/string/null | Set when the QR is consumed |
+| `qrUsedAt` | timestamp/string/null | Set when the entry QR is consumed |
+| `entryVerified` | boolean | `true` after scanner entry verification |
+| `entryScannedAt` | timestamp/string/null | Entry scan timestamp |
 | `vehicleNumber` | string | Vehicle allowed through gate |
 | `startTime` | timestamp/string | Booking start |
 | `endTime` | timestamp/string | Booking end |
 | `price` | number | Calculated booking amount |
-| `status` | string | `pending`, `active`, `completed`, `cancelled`, `expired` |
+| `status` | string | `pending`, `confirmed`, `active`, `active_parking`, `completed`, `cancelled`, `expired` |
 | `qrPayload` | string | Opaque QR id only, same value as `qrId` for new bookings |
 | `cancellationFine` | number | `10` when area `pricePerHour > 10`, otherwise `0` |
 | `cancelledAt` | timestamp/string/null | Set when user cancels |
@@ -178,11 +180,11 @@ Active QR documents are short-lived operational records. Do not delete the booki
 | `userId` | string | Driver id |
 | `adminId` | string | Parking owner id |
 | `areaId` | string | Parking area id |
-| `status` | string | `active`, `used`, or `expired` |
+| `status` | string | `active`, `used`, `expired`, or `cancelled` |
 | `createdAt` | timestamp/string | Ticket creation time |
 | `expiresAt` | timestamp/string | End of QR validity window |
 
-QR privacy rule: QR images should encode only the opaque `qrId`, for example `qr_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`. They must not encode `userId`, `adminId`, `areaId`, vehicle number, booking JSON, or timestamps. Those fields are resolved from Firestore by a future gate/API.
+QR privacy rule: QR images should encode only the opaque `qrId`, for example `qr_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`. They must not encode `userId`, `adminId`, `areaId`, vehicle number, booking JSON, or timestamps. Those fields are resolved from Firestore by the standalone scanner, ESP32 flow, or a future gate/API.
 
 ## `/notifications/{notificationId}`
 

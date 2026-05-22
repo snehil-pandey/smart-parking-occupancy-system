@@ -31,9 +31,11 @@ void main() {
     await repository.consumeQrTicket(ticket.qrId);
 
     expect(await repository.getActiveQrForBooking(booking.id), isNull);
-    final completed = (await repository.getForUser(booking.userId)).first;
-    expect(completed.status, BookingStatus.completed);
-    expect(completed.qrUsedAt, isNotNull);
+    final activeParking = (await repository.getForUser(booking.userId)).first;
+    expect(activeParking.status, BookingStatus.activeParking);
+    expect(activeParking.entryVerified, isTrue);
+    expect(activeParking.entryScannedAt, isNotNull);
+    expect(activeParking.qrUsedAt, isNotNull);
     expect(
       () => repository.consumeQrTicket(ticket.qrId),
       throwsA(isA<StateError>()),

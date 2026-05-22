@@ -1,4 +1,4 @@
-enum ActiveQrStatus { active, used, expired }
+enum ActiveQrStatus { active, used, expired, cancelled }
 
 class ActiveQrTicket {
   const ActiveQrTicket({
