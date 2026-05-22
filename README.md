@@ -36,6 +36,28 @@ flutter build apk --dart-define=NO_ESP=true
 
 `NO_ESP=true` means this APK is the Android fallback scanner mode and verifies directly through Firebase instead of ESP32 hardware.
 
+### Windows Kotlin Build Troubleshooting
+
+On Windows, Kotlin incremental compilation can occasionally crash while compiling Android plugins such as `mobile_scanner` with an error like `this and base files have different roots`. The scanner disables Kotlin incremental compilation in `android/gradle.properties`:
+
+```properties
+kotlin.incremental=false
+kotlin.incremental.useClasspathSnapshot=false
+org.gradle.caching=false
+```
+
+If the cache issue appears again, reset only generated files:
+
+```powershell
+cd android
+.\gradlew --stop
+cd ..
+flutter clean
+Remove-Item -Recurse -Force .dart_tool, build, android\.gradle, android\app\build -ErrorAction SilentlyContinue
+flutter pub get
+flutter build apk --release --dart-define=NO_ESP=true
+```
+
 ## Firebase Setup
 
 This branch does not commit real Firebase secrets. Add Android Firebase configuration locally before running on a device:
