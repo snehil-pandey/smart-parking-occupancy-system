@@ -14,6 +14,7 @@ The primary Park Here gate flow is still ESP32-based QR hardware. This app exist
 - Optionally fetches `/parking_areas/{areaId}` for display
 - Shows a simple gate-staff result
 - Confirms entry with a Firestore transaction
+- Marks the booking as `active_parking` after entry verification
 
 ## QR Privacy Rule
 
@@ -77,11 +78,13 @@ Confirm Entry runs a Firestore transaction:
 3. Read linked `/bookings/{bookingId}`.
 4. Reject missing or inactive bookings.
 5. Mark the ticket `used`.
-6. Update booking `status` to `completed`.
-7. Set booking `qrUsedAt`.
+6. Update booking `status` to `active_parking`.
+7. Set booking `entryVerified`, `entryScannedAt`, and `qrUsedAt`.
 8. Write a minimal `/qr_scan_logs/{scanId}` record.
 
 This prevents double-scan/double-entry behavior.
+
+The used QR is never reactivated. A user receives another scannable QR only after completing the parking cycle and creating a new booking.
 
 ## Project Structure
 

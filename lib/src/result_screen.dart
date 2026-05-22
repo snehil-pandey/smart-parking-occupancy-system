@@ -134,6 +134,7 @@ class _ResultScreenState extends State<ResultScreen> {
       QrScanStatus.consumed => Icons.verified,
       QrScanStatus.expired => Icons.timer_off,
       QrScanStatus.alreadyUsed => Icons.block,
+      QrScanStatus.parkingActive => Icons.local_parking,
       QrScanStatus.invalidQr => Icons.error_outline,
       QrScanStatus.notFound => Icons.search_off,
       QrScanStatus.bookingNotFound => Icons.link_off,
@@ -144,7 +145,9 @@ class _ResultScreenState extends State<ResultScreen> {
 
   Color _colorFor(QrScanStatus status) {
     return switch (status) {
-      QrScanStatus.valid || QrScanStatus.consumed => Colors.green,
+      QrScanStatus.valid ||
+      QrScanStatus.consumed ||
+      QrScanStatus.parkingActive => Colors.green,
       QrScanStatus.expired ||
       QrScanStatus.alreadyUsed ||
       QrScanStatus.invalidQr => Colors.red,

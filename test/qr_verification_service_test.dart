@@ -52,6 +52,18 @@ void main() {
     expect(result.canConfirm, isFalse);
   });
 
+  test('cancelled QR is rejected', () {
+    final result = service.evaluateResolved(
+      qrId: qrId,
+      ticket: _ticket(qrId: qrId, now: now, status: ActiveQrStatus.cancelled),
+      booking: _booking(now: now),
+      now: now,
+    );
+
+    expect(result.status, QrScanStatus.bookingNotActive);
+    expect(result.canConfirm, isFalse);
+  });
+
   test('active QR with active booking is accepted', () {
     final result = service.evaluateResolved(
       qrId: qrId,
@@ -73,6 +85,18 @@ void main() {
     );
 
     expect(result.status, QrScanStatus.bookingNotActive);
+    expect(result.canConfirm, isFalse);
+  });
+
+  test('booking already in parking session is not entry-confirmable again', () {
+    final result = service.evaluateResolved(
+      qrId: qrId,
+      ticket: _ticket(qrId: qrId, now: now),
+      booking: _booking(now: now, status: BookingStatus.activeParking),
+      now: now,
+    );
+
+    expect(result.status, QrScanStatus.parkingActive);
     expect(result.canConfirm, isFalse);
   });
 }

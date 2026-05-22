@@ -1,6 +1,6 @@
 # Firebase Setup
 
-This addon branch intentionally does not include real Firebase secrets.
+This addon branch initializes Firebase with the same `park-here-dev` FlutterFire project options used by the Park Here user/admin apps. Firebase API keys and app ids are client configuration, not service-account secrets. Do not commit service account JSON files or private admin credentials.
 
 ## Required Firebase Services
 
@@ -19,7 +19,7 @@ This addon branch intentionally does not include real Firebase secrets.
    android/app/google-services.json
    ```
 
-5. If you use FlutterFire CLI, generate local Firebase options as needed. Do not commit real secrets unless the project policy allows it.
+5. If you use FlutterFire CLI, regenerate `lib/firebase_options.dart` against the same Park Here Firebase project if the Android app id changes.
 
 ## Firestore Collections Used
 
@@ -32,7 +32,7 @@ This addon branch intentionally does not include real Firebase secrets.
 
 ## Firestore Transaction
 
-Confirm Entry reads the QR ticket and booking in one transaction, rejects invalid states, marks the QR ticket `used`, updates booking `qrUsedAt`, and writes a minimal scan log.
+Confirm Entry reads the QR ticket and booking in one transaction, rejects invalid states, marks the QR ticket `used`, sets the booking to `active_parking`, records `entryVerified`, `entryScannedAt`, and `qrUsedAt`, then writes a minimal scan log.
 
 ## Security Note
 

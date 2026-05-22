@@ -105,6 +105,15 @@ class QrVerificationService {
         ticket: ticket,
       );
     }
+    if (ticket.status == ActiveQrStatus.cancelled) {
+      return _rejected(
+        status: QrScanStatus.bookingNotActive,
+        title: 'Cancelled Ticket',
+        message: 'This ticket was cancelled and cannot be used.',
+        qrId: qrId,
+        ticket: ticket,
+      );
+    }
     if (ticket.status == ActiveQrStatus.expired ||
         !ticket.expiresAt.isAfter(now ?? DateTime.now())) {
       return _rejected(
@@ -122,6 +131,17 @@ class QrVerificationService {
         message: 'The linked booking could not be found.',
         qrId: qrId,
         ticket: ticket,
+      );
+    }
+    if (booking.isParkingActive) {
+      return QrScanResult(
+        status: QrScanStatus.parkingActive,
+        title: 'Parking Active',
+        message: 'Entry has already been verified for this booking.',
+        qrId: qrId,
+        ticket: ticket,
+        booking: booking,
+        parkingArea: parkingArea,
       );
     }
     if (!booking.isGateValid) {
@@ -167,6 +187,9 @@ class QrVerificationService {
         if (ticket.status == ActiveQrStatus.used) {
           throw const QrConsumeException('This ticket has already been used.');
         }
+        if (ticket.status == ActiveQrStatus.cancelled) {
+          throw const QrConsumeException('This ticket was cancelled.');
+        }
         if (ticket.status != ActiveQrStatus.active ||
             !ticket.expiresAt.isAfter(DateTime.now())) {
           transaction.update(ticketRef, {
@@ -182,6 +205,11 @@ class QrVerificationService {
         }
 
         final booking = BookingSummary.fromDoc(bookingDoc);
+        if (booking.isParkingActive) {
+          throw const QrConsumeException(
+            'Entry is already verified for this booking.',
+          );
+        }
         if (!booking.isGateValid) {
           throw const QrConsumeException('The linked booking is not active.');
         }
@@ -193,7 +221,9 @@ class QrVerificationService {
           'scannerMode': 'android_fallback',
         });
         transaction.update(bookingRef, {
-          'status': BookingStatus.completed.name,
+          'status': 'active_parking',
+          'entryVerified': true,
+          'entryScannedAt': now,
           'qrUsedAt': now,
           'updatedAt': now,
         });
@@ -209,7 +239,7 @@ class QrVerificationService {
       return current.copyWith(
         status: QrScanStatus.consumed,
         title: 'Entry Confirmed',
-        message: 'QR marked used and booking updated.',
+        message: 'Parking is now active. This QR cannot be reused.',
       );
     } on QrConsumeException catch (error) {
       return current.copyWith(

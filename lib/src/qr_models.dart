@@ -1,8 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum ActiveQrStatus { active, used, expired }
+enum ActiveQrStatus { active, used, expired, cancelled }
 
-enum BookingStatus { pending, active, confirmed, completed, cancelled, expired }
+enum BookingStatus {
+  pending,
+  active,
+  confirmed,
+  activeParking,
+  completed,
+  cancelled,
+  expired,
+}
 
 enum QrScanStatus {
   valid,
@@ -12,6 +20,7 @@ enum QrScanStatus {
   expired,
   bookingNotFound,
   bookingNotActive,
+  parkingActive,
   networkError,
   consumed,
 }
@@ -86,6 +95,8 @@ class BookingSummary {
 
   bool get isGateValid =>
       status == BookingStatus.active || status == BookingStatus.confirmed;
+
+  bool get isParkingActive => status == BookingStatus.activeParking;
 }
 
 class ParkingAreaSummary {
@@ -148,11 +159,18 @@ T _enumByName<T extends Enum>(List<T> values, String? name, T fallback) {
     return fallback;
   }
   for (final value in values) {
-    if (value.name == name) {
+    if (value.name == name || _snakeCase(value.name) == name) {
       return value;
     }
   }
   return fallback;
+}
+
+String _snakeCase(String value) {
+  return value.replaceAllMapped(
+    RegExp(r'([A-Z])'),
+    (match) => '_${match.group(1)!.toLowerCase()}',
+  );
 }
 
 DateTime _date(Object? value) {

@@ -1,5 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 
+import '../firebase_options.dart';
+
 class FirebaseBootstrapResult {
   const FirebaseBootstrapResult({required this.ready, this.error});
 
@@ -12,7 +14,9 @@ class FirebaseBootstrap {
 
   Future<FirebaseBootstrapResult> initialize() async {
     try {
-      await Firebase.initializeApp();
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
       return const FirebaseBootstrapResult(ready: true);
     } on Object catch (error) {
       return FirebaseBootstrapResult(ready: false, error: error);
