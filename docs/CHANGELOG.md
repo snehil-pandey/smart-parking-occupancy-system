@@ -235,6 +235,10 @@
 - Added user-facing parking area validation so region-like documents cannot appear as Home/Explore cards, map selections, search results, route destinations, or booking targets.
 - Kept `/regions` as admin boundary containers only and documented that user booking flows must use `/parking_areas`.
 
+### fix(user): sync QR lifecycle with scanner verification
+- Added `active_parking`, `entryVerified`, and `entryScannedAt` booking state so the user app reflects scanner entry verification through Firestore snapshots.
+- Kept QR payloads opaque and prevented used scanner QR tickets from being shown as reusable entry QR codes.
+
 ### refactor(admin-ui): separate admin app into focused sections
 - Split the admin screen internals into feature sections for auth, dashboard, region, parking areas, bookings, issues, and shared widgets while preserving the existing Firebase-backed controller.
 

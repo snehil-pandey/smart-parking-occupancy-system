@@ -18,7 +18,7 @@ class FirebaseBookingRepository implements BookingRepository {
     final snapshot = await _bookings.where('userId', isEqualTo: userId).get();
     return _sortedBookings(
       snapshot,
-    ).where((booking) => booking.status == BookingStatus.active).firstOrNull;
+    ).where((booking) => booking.isCurrentSession).firstOrNull;
   }
 
   @override
@@ -192,9 +192,14 @@ class FirebaseBookingRepository implements BookingRepository {
         throw StateError('QR ticket $qrId is not active.');
       }
       final now = DateTime.now();
-      transaction.update(ticketRef, {'status': ActiveQrStatus.used.name});
+      transaction.update(ticketRef, {
+        'status': ActiveQrStatus.used.name,
+        'usedAt': Timestamp.fromDate(now),
+      });
       transaction.update(_bookings.doc(ticket.bookingId), {
-        'status': BookingStatus.completed.name,
+        'status': 'active_parking',
+        'entryVerified': true,
+        'entryScannedAt': Timestamp.fromDate(now),
         'qrUsedAt': Timestamp.fromDate(now),
         'updatedAt': Timestamp.fromDate(now),
       });
@@ -235,7 +240,9 @@ class FirebaseBookingRepository implements BookingRepository {
     required BookingStatus status,
   }) async {
     await _bookings.doc(bookingId).update({
-      'status': status.name,
+      'status': status == BookingStatus.activeParking
+          ? 'active_parking'
+          : status.name,
       'updatedAt': Timestamp.fromDate(DateTime.now()),
     });
     if (status == BookingStatus.completed ||

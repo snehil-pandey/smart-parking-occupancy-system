@@ -15,7 +15,7 @@ class InMemoryBookingRepository implements BookingRepository {
       _bookings.addAll(DemoSeed.bookings());
     }
     for (final booking in _bookings.where(
-      (booking) => booking.status == BookingStatus.active,
+      (booking) => booking.isAwaitingEntry,
     )) {
       _activeQrTickets.add(
         ActiveQrTicket(
@@ -40,9 +40,7 @@ class InMemoryBookingRepository implements BookingRepository {
   Future<Booking?> activeForUser(String userId) async {
     return _bookings
         .where(
-          (booking) =>
-              booking.userId == userId &&
-              booking.status == BookingStatus.active,
+          (booking) => booking.userId == userId && booking.isCurrentSession,
         )
         .firstOrNull;
   }
@@ -113,7 +111,9 @@ class InMemoryBookingRepository implements BookingRepository {
     _replaceBookingById(
       ticket.bookingId,
       (booking) => booking.copyWith(
-        status: BookingStatus.completed,
+        status: BookingStatus.activeParking,
+        entryVerified: true,
+        entryScannedAt: now,
         qrUsedAt: now,
         updatedAt: now,
       ),
