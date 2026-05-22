@@ -195,6 +195,7 @@ class FirebaseAuthService implements AuthService {
       ownerName: ownerName,
       phone: phone,
       upiId: upiId,
+      onboardingCompleted: false,
     );
     await _firestore.collection(FirebaseCollectionPaths.admins).doc(uid).set({
       ...profile.toJson(),
@@ -253,13 +254,21 @@ class FirebaseAuthService implements AuthService {
       ownerName: ownerName,
       phone: phone,
       upiId: upiId,
+      regionId: _currentAdmin?.regionId,
+      onboardingCompleted: _currentAdmin?.onboardingCompleted ?? false,
     );
+    await saveAdminProfile(profile);
+    return profile;
+  }
+
+  @override
+  Future<AdminProfile> saveAdminProfile(AdminProfile profile) async {
     await _firestore
         .collection(FirebaseCollectionPaths.admins)
-        .doc(firebaseUser.uid)
+        .doc(profile.id)
         .set({
           ...profile.toJson(),
-          'adminId': firebaseUser.uid,
+          'adminId': profile.id,
           'updatedAt': Timestamp.fromDate(DateTime.now()),
         }, SetOptions(merge: true));
     _currentAdmin = profile;

@@ -35,6 +35,15 @@ class InMemoryRegionRepository implements RegionRepository {
   }
 
   @override
+  Future<ParkingRegion?> findById(String regionId) async {
+    final region = _region;
+    if (region == null || region.regionId != regionId) {
+      return null;
+    }
+    return region;
+  }
+
+  @override
   Stream<ParkingRegion?> watchControlledRegion(String adminId) =>
       Stream.value(_region?.createdByAdminId == adminId ? _region : null);
 

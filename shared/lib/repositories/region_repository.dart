@@ -5,6 +5,8 @@ abstract interface class RegionRepository {
 
   Stream<ParkingRegion> watchMainRegion();
 
+  Future<ParkingRegion?> findById(String regionId);
+
   Future<ParkingRegion?> getControlledRegion(String adminId);
 
   Stream<ParkingRegion?> watchControlledRegion(String adminId);

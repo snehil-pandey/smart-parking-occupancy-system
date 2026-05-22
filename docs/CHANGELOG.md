@@ -284,3 +284,9 @@
 - Prevented new/edited regions from overlapping, touching, containing, or being contained by existing regions before Firestore writes.
 - Expanded parking-area conflict checks to all existing Firebase parking areas, not only areas in the current admin region.
 - Simplified admin area, booking, and issue streams to single-field Firestore filters with local sorting and trimmed obsolete composite indexes.
+
+### fix(admin-auth): stabilize onboarding and session restore
+- Persisted admin `regionId` and `onboardingCompleted` on profile records after controlled-region setup.
+- Restored cached admin sessions through Firebase Auth, admin profile, and assigned region before showing dashboard or setup screens.
+- Added a legacy repair path so existing admins with region documents are marked onboarded instead of being sent through setup again.
+- Added a branded admin restore loading state to avoid login or region-setup flicker during startup.
