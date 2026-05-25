@@ -66,7 +66,7 @@ class _BootstrapScreenState extends State<BootstrapScreen> {
           return _SetupErrorScreen(onRetry: _retry);
         }
 
-        return const ScannerScreen();
+        return ScannerScreen(projectId: result.projectId);
       },
     );
   }
@@ -128,14 +128,14 @@ class _SetupErrorScreen extends StatelessWidget {
                 const Icon(Icons.cloud_off, size: 64),
                 const SizedBox(height: 16),
                 Text(
-                  'Firebase setup needed',
+                  'Unable to connect to Park Here services',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  'Add Android Firebase configuration before using the scanner.',
+                  'Check the scanner Firebase configuration and try again.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 18),

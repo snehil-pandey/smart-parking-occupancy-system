@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 import 'qr_models.dart';
 
@@ -12,6 +13,13 @@ class QrVerificationService {
 
   String? normalizeQrId(String raw) {
     final trimmed = raw.trim();
+    if (trimmed.isEmpty ||
+        trimmed.startsWith('{') ||
+        trimmed.startsWith('[') ||
+        trimmed.startsWith('http://') ||
+        trimmed.startsWith('https://')) {
+      return null;
+    }
     if (!qrIdPattern.hasMatch(trimmed)) {
       return null;
     }
@@ -32,8 +40,11 @@ class QrVerificationService {
     }
 
     try {
+      debugPrint('Park Here Scanner: parsed qrId: $qrId');
+      debugPrint('Park Here Scanner: Firestore lookup started for $qrId.');
       final ticketDoc = await _activeQrTickets.doc(qrId).get();
       if (!ticketDoc.exists || ticketDoc.data() == null) {
+        debugPrint('Park Here Scanner: active QR ticket not found.');
         return QrScanResult(
           status: QrScanStatus.notFound,
           title: 'Invalid QR',
@@ -43,15 +54,23 @@ class QrVerificationService {
       }
 
       final ticket = ActiveQrTicket.fromDoc(ticketDoc);
-      final earlyResult = evaluateResolved(qrId: qrId, ticket: ticket);
-      if (!earlyResult.canConfirm) {
+      final earlyResult = evaluateTicketOnly(qrId: qrId, ticket: ticket);
+      if (earlyResult != null) {
         return earlyResult;
       }
 
+      debugPrint(
+        'Park Here Scanner: reading booking ${ticket.bookingId} for QR $qrId.',
+      );
       final bookingDoc = await _bookings.doc(ticket.bookingId).get();
       final booking = bookingDoc.exists && bookingDoc.data() != null
           ? BookingSummary.fromDoc(bookingDoc)
           : null;
+      debugPrint(
+        booking == null
+            ? 'Park Here Scanner: booking not found.'
+            : 'Park Here Scanner: booking found with status ${booking.status.name}.',
+      );
       final areaId = ticket.areaId ?? booking?.parkingAreaId;
       final areaDoc = areaId == null || areaId.isEmpty
           ? null
@@ -59,6 +78,11 @@ class QrVerificationService {
       final area = areaDoc != null && areaDoc.exists && areaDoc.data() != null
           ? ParkingAreaSummary.fromDoc(areaDoc)
           : null;
+      debugPrint(
+        area == null
+            ? 'Park Here Scanner: parking area not found or not needed.'
+            : 'Park Here Scanner: parking area found: ${area.name}.',
+      );
 
       return evaluateResolved(
         qrId: qrId,
@@ -73,29 +97,11 @@ class QrVerificationService {
     }
   }
 
-  QrScanResult evaluateResolved({
+  QrScanResult? evaluateTicketOnly({
     required String qrId,
-    ActiveQrTicket? ticket,
-    BookingSummary? booking,
-    ParkingAreaSummary? parkingArea,
+    required ActiveQrTicket ticket,
     DateTime? now,
   }) {
-    if (!isValidQrId(qrId)) {
-      return const QrScanResult(
-        status: QrScanStatus.invalidQr,
-        title: 'Invalid QR',
-        message: 'Scan a current Park Here QR ticket.',
-        qrId: '',
-      );
-    }
-    if (ticket == null) {
-      return QrScanResult(
-        status: QrScanStatus.notFound,
-        title: 'Invalid QR',
-        message: 'Ticket was not found in Firebase.',
-        qrId: qrId,
-      );
-    }
     if (ticket.status == ActiveQrStatus.used) {
       return _rejected(
         status: QrScanStatus.alreadyUsed,
@@ -123,6 +129,40 @@ class QrVerificationService {
         qrId: qrId,
         ticket: ticket,
       );
+    }
+    return null;
+  }
+
+  QrScanResult evaluateResolved({
+    required String qrId,
+    ActiveQrTicket? ticket,
+    BookingSummary? booking,
+    ParkingAreaSummary? parkingArea,
+    DateTime? now,
+  }) {
+    if (!isValidQrId(qrId)) {
+      return const QrScanResult(
+        status: QrScanStatus.invalidQr,
+        title: 'Invalid QR',
+        message: 'Scan a current Park Here QR ticket.',
+        qrId: '',
+      );
+    }
+    if (ticket == null) {
+      return QrScanResult(
+        status: QrScanStatus.notFound,
+        title: 'Invalid QR',
+        message: 'Ticket was not found in Firebase.',
+        qrId: qrId,
+      );
+    }
+    final ticketOnlyResult = evaluateTicketOnly(
+      qrId: qrId,
+      ticket: ticket,
+      now: now,
+    );
+    if (ticketOnlyResult != null) {
+      return ticketOnlyResult;
     }
     if (booking == null) {
       return _rejected(
@@ -180,41 +220,67 @@ class QrVerificationService {
         final ticketRef = _activeQrTickets.doc(qrId);
         final ticketDoc = await transaction.get(ticketRef);
         if (!ticketDoc.exists || ticketDoc.data() == null) {
-          throw const QrConsumeException('Ticket was not found.');
+          throw const QrConsumeException(
+            status: QrScanStatus.notFound,
+            title: 'Invalid QR',
+            message: 'Ticket was not found.',
+          );
         }
 
         final ticket = ActiveQrTicket.fromDoc(ticketDoc);
         if (ticket.status == ActiveQrStatus.used) {
-          throw const QrConsumeException('This ticket has already been used.');
+          throw const QrConsumeException(
+            status: QrScanStatus.alreadyUsed,
+            title: 'Already Used',
+            message: 'This ticket has already been used.',
+          );
         }
         if (ticket.status == ActiveQrStatus.cancelled) {
-          throw const QrConsumeException('This ticket was cancelled.');
+          throw const QrConsumeException(
+            status: QrScanStatus.bookingNotActive,
+            title: 'Cancelled Ticket',
+            message: 'This ticket was cancelled.',
+          );
         }
         if (ticket.status != ActiveQrStatus.active ||
             !ticket.expiresAt.isAfter(DateTime.now())) {
           transaction.update(ticketRef, {
             'status': ActiveQrStatus.expired.name,
           });
-          throw const QrConsumeException('This ticket has expired.');
+          throw const QrConsumeException(
+            status: QrScanStatus.expired,
+            title: 'Expired Ticket',
+            message: 'This ticket has expired.',
+          );
         }
 
         final bookingRef = _bookings.doc(ticket.bookingId);
         final bookingDoc = await transaction.get(bookingRef);
         if (!bookingDoc.exists || bookingDoc.data() == null) {
-          throw const QrConsumeException('The linked booking was not found.');
+          throw const QrConsumeException(
+            status: QrScanStatus.bookingNotFound,
+            title: 'Booking Not Found',
+            message: 'The linked booking was not found.',
+          );
         }
 
         final booking = BookingSummary.fromDoc(bookingDoc);
         if (booking.isParkingActive) {
           throw const QrConsumeException(
-            'Entry is already verified for this booking.',
+            status: QrScanStatus.parkingActive,
+            title: 'Parking Active',
+            message: 'Entry is already verified for this booking.',
           );
         }
         if (!booking.isGateValid) {
-          throw const QrConsumeException('The linked booking is not active.');
+          throw const QrConsumeException(
+            status: QrScanStatus.bookingNotActive,
+            title: 'Booking Not Active',
+            message: 'The linked booking is not active.',
+          );
         }
 
-        final now = Timestamp.fromDate(DateTime.now());
+        final now = FieldValue.serverTimestamp();
         transaction.update(ticketRef, {
           'status': ActiveQrStatus.used.name,
           'usedAt': now,
@@ -243,8 +309,8 @@ class QrVerificationService {
       );
     } on QrConsumeException catch (error) {
       return current.copyWith(
-        status: QrScanStatus.alreadyUsed,
-        title: 'Could Not Confirm',
+        status: error.status,
+        title: error.title,
         message: error.message,
       );
     } on FirebaseException catch (error) {
@@ -272,8 +338,7 @@ class QrVerificationService {
 
   QrScanResult _networkError(String qrId, String? detail) {
     // Keep raw errors out of the UI while preserving enough text for debug logs.
-    // ignore: avoid_print
-    print('QR scanner Firebase error: $detail');
+    debugPrint('Park Here Scanner: Firebase error: $detail');
     return QrScanResult(
       status: QrScanStatus.networkError,
       title: 'Network Error',
@@ -298,7 +363,13 @@ class QrVerificationService {
 }
 
 class QrConsumeException implements Exception {
-  const QrConsumeException(this.message);
+  const QrConsumeException({
+    required this.status,
+    required this.title,
+    required this.message,
+  });
 
+  final QrScanStatus status;
+  final String title;
   final String message;
 }

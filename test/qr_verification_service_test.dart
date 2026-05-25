@@ -9,7 +9,12 @@ void main() {
 
   test('qrId format validation accepts only opaque Park Here ids', () {
     expect(service.isValidQrId(qrId), isTrue);
+    expect(service.normalizeQrId('  $qrId  '), qrId);
     expect(service.isValidQrId('not-a-ticket'), isFalse);
+    expect(
+      service.isValidQrId('https://parkhere.example/ticket/$qrId'),
+      isFalse,
+    );
     expect(
       service.isValidQrId('{"qrId":"qr_live_abcdefghijklmnopqrstuvwxyz"}'),
       isFalse,
@@ -74,6 +79,16 @@ void main() {
 
     expect(result.status, QrScanStatus.valid);
     expect(result.canConfirm, isTrue);
+  });
+
+  test('active ticket-only precheck allows booking lookup to continue', () {
+    final result = service.evaluateTicketOnly(
+      qrId: qrId,
+      ticket: _ticket(qrId: qrId, now: now),
+      now: now,
+    );
+
+    expect(result, isNull);
   });
 
   test('active QR with inactive booking is rejected', () {

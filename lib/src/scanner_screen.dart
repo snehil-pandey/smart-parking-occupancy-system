@@ -5,7 +5,9 @@ import 'qr_verification_service.dart';
 import 'result_screen.dart';
 
 class ScannerScreen extends StatefulWidget {
-  const ScannerScreen({super.key});
+  const ScannerScreen({this.projectId, super.key});
+
+  final String? projectId;
 
   @override
   State<ScannerScreen> createState() => _ScannerScreenState();
@@ -38,12 +40,16 @@ class _ScannerScreenState extends State<ScannerScreen> {
       return;
     }
 
+    debugPrint('Park Here Scanner: raw QR scanned: $raw');
     setState(() {
       _busy = true;
       _status = 'Verifying ticket...';
     });
     await _controller.stop();
     final result = await _service.verify(raw);
+    debugPrint(
+      'Park Here Scanner: verification result for ${result.qrId}: ${result.status.name}',
+    );
     if (!mounted) {
       return;
     }
@@ -103,7 +109,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      _status,
+                      widget.projectId == null
+                          ? _status
+                          : '$_status (${widget.projectId})',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),

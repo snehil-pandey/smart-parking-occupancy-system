@@ -21,6 +21,15 @@ This addon branch initializes Firebase with the same `park-here-dev` FlutterFire
 
 5. If you use FlutterFire CLI, regenerate `lib/firebase_options.dart` against the same Park Here Firebase project if the Android app id changes.
 
+The scanner currently initializes Firebase with explicit FlutterFire options in `lib/firebase_options.dart`. A local `google-services.json` is still useful for Android tooling, but it must match the scanner package if you later enable the Google Services Gradle plugin. A file downloaded for the admin or user app can point at the correct project while still having the wrong Android package registration.
+
+On startup the scanner logs:
+
+- Firebase initialized
+- Firebase project id
+- Firestore instance ready
+- Auth not used in fallback mode
+
 ## Firestore Collections Used
 
 ```text

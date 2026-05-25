@@ -10,7 +10,7 @@ Park Here Scanner is a standalone Android fallback for gate verification. ESP32 
 4. Accept only opaque `qr_live_...` ids.
 5. Fetch `/active_qr_tickets/{qrId}`.
 6. Verify the ticket exists, is `active`, and `expiresAt` is in the future.
-7. Fetch `/bookings/{bookingId}`.
+7. Fetch `/bookings/{bookingId}`. Active tickets must not be rejected as booking-missing until this read completes.
 8. Accept only `active` or `confirmed` bookings.
 9. Show the parking area, vehicle number, validity, and status.
 10. On Confirm Entry, consume the QR in a transaction.
@@ -63,3 +63,7 @@ The used QR is never made active again. The user must complete the current parki
 ## Privacy
 
 The scanner never trusts QR contents beyond `qrId`. It does not parse JSON QR payloads. User, admin, booking, vehicle, and parking data are resolved from Firebase only after the QR id is validated.
+
+## Debug Logging
+
+Debug logs include the raw scanned payload, normalized `qrId`, Firestore lookup start, booking lookup result, parking-area lookup result, and transaction outcome. These logs are for device debugging and should not be shown directly in gate-staff UI.

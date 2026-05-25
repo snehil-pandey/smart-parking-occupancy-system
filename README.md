@@ -12,6 +12,7 @@ The primary Park Here gate flow is still ESP32-based QR hardware. This app exist
 - Fetches `/active_qr_tickets/{qrId}` from Firebase
 - Fetches the linked `/bookings/{bookingId}`
 - Optionally fetches `/parking_areas/{areaId}` for display
+- Logs the Firebase project id, parsed QR id, lookup steps, and transaction result with `debugPrint`
 - Shows a simple gate-staff result
 - Confirms entry with a Firestore transaction
 - Marks the booking as `active_parking` after entry verification
@@ -68,6 +69,8 @@ This branch does not commit real Firebase secrets. Add Android Firebase configur
 3. Download `google-services.json`.
 4. Place it at `android/app/google-services.json`.
 5. Follow `docs/FIREBASE_SETUP.md` if your FlutterFire setup requires generated options or Gradle plugin changes.
+
+The scanner initializes Firebase from `lib/firebase_options.dart`. Keep those options and any local `google-services.json` pointed at the same Park Here Firebase project.
 
 ## Transaction Behavior
 
