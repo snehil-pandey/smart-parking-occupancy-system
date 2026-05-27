@@ -296,6 +296,51 @@ void main() {
     );
   });
 
+  test('parking area geometry requires at least one gate', () {
+    final area = _boxArea(
+      id: 'candidate',
+      name: 'Candidate',
+      points: _box(0, 0, 1, 1),
+      gatePoints: const [],
+    );
+
+    expect(
+      const ParkingAreaConflictService().validateGateRequirements(area),
+      ParkingAreaConflictService.requiredGateMessage,
+    );
+  });
+
+  test('parking area gates must stay inside polygon', () {
+    final area = _boxArea(
+      id: 'candidate',
+      name: 'Candidate',
+      points: _box(0, 0, 1, 1),
+      gatePoints: [_gate(latitude: 2, longitude: 2)],
+    );
+
+    expect(
+      const ParkingAreaConflictService().validateGateRequirements(area),
+      ParkingAreaConflictService.gateInsideAreaMessage,
+    );
+  });
+
+  test('parking area duplicate gates are rejected', () {
+    final area = _boxArea(
+      id: 'candidate',
+      name: 'Candidate',
+      points: _box(0, 0, 1, 1),
+      gatePoints: [
+        _gate(latitude: 0.5, longitude: 0.5),
+        _gate(gateId: 'gate_b', latitude: 0.5, longitude: 0.5),
+      ],
+    );
+
+    expect(
+      const ParkingAreaConflictService().validateGateRequirements(area),
+      ParkingAreaConflictService.duplicateGateMessage,
+    );
+  });
+
   test('overlapping regions are rejected with public region name', () {
     final candidate = _boxRegion(
       id: 'candidate',
@@ -435,6 +480,7 @@ ParkingLocation _boxArea({
   required String name,
   required List<GeoPointValue> points,
   String adminId = 'admin_test',
+  List<GatePoint>? gatePoints,
 }) {
   final now = DateTime.now();
   final center = points.length >= 3
@@ -447,7 +493,11 @@ ParkingLocation _boxArea({
     name: name,
     address: 'Test',
     boundaryPoints: points,
-    gatePoints: const [],
+    gatePoints:
+        gatePoints ??
+        (points.length >= 3
+            ? [_gate(latitude: center.latitude, longitude: center.longitude)]
+            : const []),
     latitude: center.latitude,
     longitude: center.longitude,
     totalSpaces: 10,
@@ -461,6 +511,21 @@ ParkingLocation _boxArea({
     closingTime: '22:00',
     createdAt: now,
     updatedAt: now,
+  );
+}
+
+GatePoint _gate({
+  String gateId = 'gate_a',
+  required double latitude,
+  required double longitude,
+}) {
+  return GatePoint(
+    gateId: gateId,
+    name: 'Gate',
+    latitude: latitude,
+    longitude: longitude,
+    type: GatePointType.both,
+    createdAt: DateTime.now(),
   );
 }
 

@@ -76,7 +76,7 @@ Unknown values fall back to `car` and print a debug warning instead of crashing.
 | `description` | string | Short user-facing detail |
 | `address` | string | Human readable address |
 | `boundaryPoints` | array | Parking area polygon corner points: `{latitude, longitude}` |
-| `gatePoints` | array | Entry/exit markers for the area |
+| `gatePoints` | array | Required entry/exit markers for final area geometry |
 | `centerLat` / `latitude` | number | Map coordinate |
 | `centerLng` / `longitude` | number | Map coordinate |
 | `minLat` | number/null | Optional polygon bounding box minimum latitude |
@@ -113,7 +113,8 @@ Admin geometry editing rules:
 
 - `boundaryPoints` must contain at least three points before saving final area geometry.
 - New admins must save one controlled region before creating parking areas.
-- `gatePoints` are optional but recommended because user routing targets the nearest valid gate before falling back to area center.
+- At least one `gatePoints` entry is required before final area geometry can be saved or opened.
+- Gates must be unique by coordinate and must sit inside the parking area polygon.
 - Gate `type` must be `entry`, `exit`, or `both`.
 - Admin editor drafts are local until Save; Save updates the `/parking_areas/{areaId}` document and Firestore streams refresh the UI.
 - Admin map editing uses OSM tiles with Add Point/Add Corner/Add Gate and Move Point/Move Corner/Move Gate modes.

@@ -149,6 +149,17 @@ class FirebaseParkingRepository implements ParkingRepository {
     required double pricePerHour,
   }) async {
     ParkingLocation.validatePrice(pricePerHour);
+    if (isOpen) {
+      final location = await findById(locationId);
+      if (location == null) {
+        throw StateError('Parking area $locationId was not found.');
+      }
+      final gateError = const ParkingAreaConflictService()
+          .validateGateRequirements(location);
+      if (gateError != null) {
+        throw StateError(gateError);
+      }
+    }
     await _areas.doc(locationId).update({
       'totalSpaces': totalSpaces,
       'availableSpaces': availableSpaces.clamp(0, totalSpaces),
@@ -162,6 +173,11 @@ class FirebaseParkingRepository implements ParkingRepository {
   Future<void> upsert(ParkingLocation location) async {
     ParkingLocation.validatePrice(location.pricePerHour);
     if (location.boundaryPoints.length >= 3) {
+      final gateError = const ParkingAreaConflictService()
+          .validateGateRequirements(location);
+      if (gateError != null) {
+        throw StateError(gateError);
+      }
       final existingAreas = await getAllAreas(limit: 500);
       const ParkingAreaConflictService().throwIfConflicting(
         candidateArea: location,
