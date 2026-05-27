@@ -5,15 +5,18 @@ Park Here Scanner is a standalone Android fallback for gate verification. ESP32 
 ## Runtime Flow
 
 1. Initialize Firebase.
-2. Open the camera scanner.
-3. Read the QR payload.
-4. Accept only opaque `qr_live_...` ids.
-5. Fetch `/active_qr_tickets/{qrId}`.
-6. Verify the ticket exists, is `active`, and `expiresAt` is in the future.
-7. Fetch `/bookings/{bookingId}`. Active tickets must not be rejected as booking-missing until this read completes.
-8. Accept only `active` or `confirmed` bookings.
-9. Show the parking area, vehicle number, validity, and status.
-10. On Confirm Entry, consume the QR in a transaction.
+2. Load Firebase regions, parking areas, and gate points.
+3. Staff selects the scanner's simulated region, parking area, and gate.
+4. Open the camera scanner.
+5. Read the QR payload.
+6. Accept only opaque `qr_live_...` ids.
+7. Fetch `/active_qr_tickets/{qrId}`.
+8. Verify the ticket exists, is `active`, and `expiresAt` is in the future.
+9. Fetch `/bookings/{bookingId}`. Active tickets must not be rejected as booking-missing until this read completes.
+10. Reject the scan if the booking area does not match the selected scanner area.
+11. Accept only `active` or `confirmed` bookings.
+12. Show the parking area, vehicle number, validity, and status.
+13. On Confirm Entry, consume the QR in a transaction.
 
 ## Canonical States
 
@@ -43,6 +46,7 @@ Park Here Scanner is a standalone Android fallback for gate verification. ESP32 
 - `Cancelled Ticket`: ticket status is `cancelled`.
 - `Booking Not Found`: linked booking is missing.
 - `Booking Not Active`: linked booking is cancelled, completed, pending, or expired.
+- `Wrong Location`: scanned QR belongs to a different parking area than the selected scanner location.
 - `Network Error`: Firebase read/write failed.
 
 ## Double Scan Prevention
@@ -56,7 +60,12 @@ Inside the transaction the scanner re-reads `/active_qr_tickets/{qrId}` and `/bo
 - `/bookings/{bookingId}.status = active_parking`
 - `/bookings/{bookingId}.entryVerified = true`
 - `/bookings/{bookingId}.entryScannedAt = server scan time`
+- `/bookings/{bookingId}.entryVerifiedAt = server scan time`
+- `/bookings/{bookingId}.entryGateId = selected gate id`
+- `/bookings/{bookingId}.entryScannerMode = android_fallback`
 - `/bookings/{bookingId}.qrUsedAt = server scan time`
+- `/qr_scan_logs/{scanId}.areaId = selected area id`
+- `/qr_scan_logs/{scanId}.gateId = selected gate id`
 
 The used QR is never made active again. The user must complete the current parking cycle or create a new booking to receive a fresh QR id.
 

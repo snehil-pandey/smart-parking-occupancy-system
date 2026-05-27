@@ -28,7 +28,10 @@ class QrVerificationService {
 
   bool isValidQrId(String raw) => normalizeQrId(raw) != null;
 
-  Future<QrScanResult> verify(String rawPayload) async {
+  Future<QrScanResult> verify(
+    String rawPayload, {
+    ScannerLocationContext? scannerContext,
+  }) async {
     final qrId = normalizeQrId(rawPayload);
     if (qrId == null) {
       return const QrScanResult(
@@ -89,6 +92,7 @@ class QrVerificationService {
         ticket: ticket,
         booking: booking,
         parkingArea: area,
+        scannerContext: scannerContext,
       );
     } on FirebaseException catch (error) {
       return _networkError(qrId, error.message);
@@ -138,6 +142,7 @@ class QrVerificationService {
     ActiveQrTicket? ticket,
     BookingSummary? booking,
     ParkingAreaSummary? parkingArea,
+    ScannerLocationContext? scannerContext,
     DateTime? now,
   }) {
     if (!isValidQrId(qrId)) {
@@ -173,6 +178,19 @@ class QrVerificationService {
         ticket: ticket,
       );
     }
+    if (scannerContext != null &&
+        scannerContext.areaId.isNotEmpty &&
+        booking.parkingAreaId != scannerContext.areaId) {
+      return QrScanResult(
+        status: QrScanStatus.wrongLocation,
+        title: 'Wrong Location',
+        message: 'This QR belongs to another parking location.',
+        qrId: qrId,
+        ticket: ticket,
+        booking: booking,
+        parkingArea: parkingArea,
+      );
+    }
     if (booking.isParkingActive) {
       return QrScanResult(
         status: QrScanStatus.parkingActive,
@@ -205,7 +223,10 @@ class QrVerificationService {
     );
   }
 
-  Future<QrScanResult> consume(QrScanResult current) async {
+  Future<QrScanResult> consume(
+    QrScanResult current, {
+    ScannerLocationContext? scannerContext,
+  }) async {
     final qrId = current.qrId;
     if (!current.canConfirm || qrId.isEmpty) {
       return current.copyWith(
@@ -279,17 +300,35 @@ class QrVerificationService {
             message: 'The linked booking is not active.',
           );
         }
+        if (scannerContext != null &&
+            scannerContext.areaId.isNotEmpty &&
+            booking.parkingAreaId != scannerContext.areaId) {
+          throw const QrConsumeException(
+            status: QrScanStatus.wrongLocation,
+            title: 'Wrong Location',
+            message: 'This QR belongs to another parking location.',
+          );
+        }
 
         final now = FieldValue.serverTimestamp();
         transaction.update(ticketRef, {
           'status': ActiveQrStatus.used.name,
           'usedAt': now,
           'scannerMode': 'android_fallback',
+          if (scannerContext != null) ...{
+            'scannedAtAreaId': scannerContext.areaId,
+            'scannedAtGateId': scannerContext.gateId,
+          },
         });
         transaction.update(bookingRef, {
           'status': 'active_parking',
           'entryVerified': true,
           'entryScannedAt': now,
+          'entryVerifiedAt': now,
+          if (scannerContext != null) ...{
+            'entryGateId': scannerContext.gateId,
+            'entryScannerMode': 'android_fallback',
+          },
           'qrUsedAt': now,
           'updatedAt': now,
         });
@@ -299,6 +338,11 @@ class QrVerificationService {
           'scannedAt': now,
           'result': QrScanStatus.consumed.name,
           'scannerMode': 'android_fallback',
+          if (scannerContext != null) ...{
+            'areaId': scannerContext.areaId,
+            'gateId': scannerContext.gateId,
+            'gateName': scannerContext.gateName,
+          },
         });
       });
 

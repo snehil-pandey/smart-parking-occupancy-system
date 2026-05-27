@@ -39,9 +39,11 @@ On startup the scanner logs:
 /qr_scan_logs/{scanId}
 ```
 
+The scanner reads `regions` and `parking_areas.gatePoints` at startup so the Android device can emulate a specific physical gate. If no parking areas or gates exist, the scanner shows an empty state until the Admin app creates them.
+
 ## Firestore Transaction
 
-Confirm Entry reads the QR ticket and booking in one transaction, rejects invalid states, marks the QR ticket `used`, sets the booking to `active_parking`, records `entryVerified`, `entryScannedAt`, and `qrUsedAt`, then writes a minimal scan log.
+Confirm Entry reads the QR ticket and booking in one transaction, rejects invalid states, rejects wrong-location scans, marks the QR ticket `used`, sets the booking to `active_parking`, records `entryVerified`, `entryScannedAt`, `entryVerifiedAt`, `entryGateId`, `entryScannerMode`, and `qrUsedAt`, then writes a minimal scan log.
 
 ## Security Note
 

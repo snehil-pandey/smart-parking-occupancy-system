@@ -12,6 +12,8 @@ The primary Park Here gate flow is still ESP32-based QR hardware. This app exist
 - Fetches `/active_qr_tickets/{qrId}` from Firebase
 - Fetches the linked `/bookings/{bookingId}`
 - Optionally fetches `/parking_areas/{areaId}` for display
+- Lets staff select the region, parking area, and gate this Android scanner is emulating
+- Rejects tickets that belong to a different parking location
 - Logs the Firebase project id, parsed QR id, lookup steps, and transaction result with `debugPrint`
 - Shows a simple gate-staff result
 - Confirms entry with a Firestore transaction
@@ -82,7 +84,7 @@ Confirm Entry runs a Firestore transaction:
 4. Reject missing or inactive bookings.
 5. Mark the ticket `used`.
 6. Update booking `status` to `active_parking`.
-7. Set booking `entryVerified`, `entryScannedAt`, and `qrUsedAt`.
+7. Set booking `entryVerified`, `entryScannedAt`, `entryVerifiedAt`, `entryGateId`, `entryScannerMode`, and `qrUsedAt`.
 8. Write a minimal `/qr_scan_logs/{scanId}` record.
 
 This prevents double-scan/double-entry behavior.

@@ -4,9 +4,14 @@ import 'qr_models.dart';
 import 'qr_verification_service.dart';
 
 class ResultScreen extends StatefulWidget {
-  const ResultScreen({required this.initialResult, super.key});
+  const ResultScreen({
+    required this.initialResult,
+    this.scannerContext,
+    super.key,
+  });
 
   final QrScanResult initialResult;
+  final ScannerLocationContext? scannerContext;
 
   @override
   State<ResultScreen> createState() => _ResultScreenState();
@@ -28,7 +33,10 @@ class _ResultScreenState extends State<ResultScreen> {
       return;
     }
     setState(() => _confirming = true);
-    final next = await _service.consume(_result);
+    final next = await _service.consume(
+      _result,
+      scannerContext: widget.scannerContext,
+    );
     if (!mounted) {
       return;
     }
@@ -57,6 +65,14 @@ class _ResultScreenState extends State<ResultScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (widget.scannerContext != null) ...[
+                        _InfoRow(
+                          label: 'Scanner',
+                          value:
+                              '${widget.scannerContext!.areaName} / ${widget.scannerContext!.gateName}',
+                        ),
+                        const Divider(height: 28),
+                      ],
                       Row(
                         children: [
                           Icon(
@@ -137,6 +153,7 @@ class _ResultScreenState extends State<ResultScreen> {
       QrScanStatus.parkingActive => Icons.local_parking,
       QrScanStatus.invalidQr => Icons.error_outline,
       QrScanStatus.notFound => Icons.search_off,
+      QrScanStatus.wrongLocation => Icons.wrong_location,
       QrScanStatus.bookingNotFound => Icons.link_off,
       QrScanStatus.bookingNotActive => Icons.info_outline,
       QrScanStatus.networkError => Icons.wifi_off,
@@ -150,7 +167,8 @@ class _ResultScreenState extends State<ResultScreen> {
       QrScanStatus.parkingActive => Colors.green,
       QrScanStatus.expired ||
       QrScanStatus.alreadyUsed ||
-      QrScanStatus.invalidQr => Colors.red,
+      QrScanStatus.invalidQr ||
+      QrScanStatus.wrongLocation => Colors.red,
       QrScanStatus.notFound ||
       QrScanStatus.bookingNotFound ||
       QrScanStatus.bookingNotActive => Colors.orange,

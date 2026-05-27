@@ -16,6 +16,7 @@ enum QrScanStatus {
   valid,
   invalidQr,
   notFound,
+  wrongLocation,
   alreadyUsed,
   expired,
   bookingNotFound,
@@ -23,6 +24,81 @@ enum QrScanStatus {
   parkingActive,
   networkError,
   consumed,
+}
+
+class ParkingRegionSummary {
+  const ParkingRegionSummary({required this.regionId, required this.name});
+
+  final String regionId;
+  final String name;
+
+  factory ParkingRegionSummary.fromDoc(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data()!;
+    return ParkingRegionSummary(
+      regionId: (data['regionId'] as String?) ?? doc.id,
+      name: data['name'] as String? ?? doc.id,
+    );
+  }
+}
+
+class GatePointSummary {
+  const GatePointSummary({
+    required this.gateId,
+    required this.name,
+    required this.type,
+  });
+
+  final String gateId;
+  final String name;
+  final String type;
+
+  factory GatePointSummary.fromJson(Map<String, Object?> json) {
+    return GatePointSummary(
+      gateId: json['gateId'] as String? ?? '',
+      name: json['name'] as String? ?? 'Gate',
+      type: json['type'] as String? ?? 'both',
+    );
+  }
+}
+
+class ScannerLocationContext {
+  const ScannerLocationContext({
+    required this.regionId,
+    required this.regionName,
+    required this.areaId,
+    required this.areaName,
+    required this.gateId,
+    required this.gateName,
+  });
+
+  final String regionId;
+  final String regionName;
+  final String areaId;
+  final String areaName;
+  final String gateId;
+  final String gateName;
+
+  Map<String, String> toJson() => {
+    'regionId': regionId,
+    'regionName': regionName,
+    'areaId': areaId,
+    'areaName': areaName,
+    'gateId': gateId,
+    'gateName': gateName,
+  };
+
+  factory ScannerLocationContext.fromJson(Map<String, Object?> json) {
+    return ScannerLocationContext(
+      regionId: json['regionId'] as String? ?? '',
+      regionName: json['regionName'] as String? ?? '',
+      areaId: json['areaId'] as String? ?? '',
+      areaName: json['areaName'] as String? ?? '',
+      gateId: json['gateId'] as String? ?? '',
+      gateName: json['gateName'] as String? ?? '',
+    );
+  }
 }
 
 class ActiveQrTicket {
@@ -100,18 +176,36 @@ class BookingSummary {
 }
 
 class ParkingAreaSummary {
-  const ParkingAreaSummary({required this.areaId, required this.name});
+  const ParkingAreaSummary({
+    required this.areaId,
+    required this.regionId,
+    required this.name,
+    required this.gatePoints,
+  });
 
   final String areaId;
+  final String regionId;
   final String name;
+  final List<GatePointSummary> gatePoints;
 
   factory ParkingAreaSummary.fromDoc(
     DocumentSnapshot<Map<String, dynamic>> doc,
   ) {
     final data = doc.data()!;
+    final gates = (data['gatePoints'] as List<Object?>? ?? const [])
+        .whereType<Map>()
+        .map(
+          (gate) => GatePointSummary.fromJson(
+            gate.map((key, value) => MapEntry(key.toString(), value)),
+          ),
+        )
+        .where((gate) => gate.gateId.isNotEmpty)
+        .toList();
     return ParkingAreaSummary(
       areaId: (data['areaId'] as String?) ?? doc.id,
+      regionId: data['regionId'] as String? ?? '',
       name: data['name'] as String? ?? doc.id,
+      gatePoints: gates,
     );
   }
 }
@@ -141,6 +235,7 @@ class QrScanResult {
     QrScanStatus? status,
     String? title,
     String? message,
+    ParkingAreaSummary? parkingArea,
   }) {
     return QrScanResult(
       status: status ?? this.status,
@@ -149,7 +244,7 @@ class QrScanResult {
       qrId: qrId,
       ticket: ticket,
       booking: booking,
-      parkingArea: parkingArea,
+      parkingArea: parkingArea ?? this.parkingArea,
     );
   }
 }

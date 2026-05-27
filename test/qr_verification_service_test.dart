@@ -114,6 +114,26 @@ void main() {
     expect(result.status, QrScanStatus.parkingActive);
     expect(result.canConfirm, isFalse);
   });
+
+  test('wrong scanner location is rejected', () {
+    final result = service.evaluateResolved(
+      qrId: qrId,
+      ticket: _ticket(qrId: qrId, now: now),
+      booking: _booking(now: now, areaId: 'area_a'),
+      scannerContext: const ScannerLocationContext(
+        regionId: 'region_test',
+        regionName: 'Test Region',
+        areaId: 'area_b',
+        areaName: 'Other Area',
+        gateId: 'gate_1',
+        gateName: 'Main Gate',
+      ),
+      now: now,
+    );
+
+    expect(result.status, QrScanStatus.wrongLocation);
+    expect(result.canConfirm, isFalse);
+  });
 }
 
 ActiveQrTicket _ticket({
@@ -134,11 +154,12 @@ ActiveQrTicket _ticket({
 BookingSummary _booking({
   required DateTime now,
   BookingStatus status = BookingStatus.active,
+  String areaId = 'area_test',
 }) {
   return BookingSummary(
     bookingId: 'booking_test',
     status: status,
-    parkingAreaId: 'area_test',
+    parkingAreaId: areaId,
     vehicleNumber: 'KA 06 TEST',
     endTime: now.add(const Duration(hours: 1)),
   );
