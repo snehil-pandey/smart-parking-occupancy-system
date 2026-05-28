@@ -5,6 +5,7 @@
 **/.flutter-plugins-dependencies
 **/build/
 **/coverage/
+apks/
 *.apk
 *.aab
 *.appbundle
