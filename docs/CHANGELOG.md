@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### feat(admin): simplify map setup and require gates
+- Added clearer region and parking-area map guidance with step chips for boundary, point movement, and gate placement.
+- Parking area geometry now requires at least one non-duplicate gate inside the parking polygon before Save is enabled.
+- Shared parking repositories validate gate requirements before final geometry writes or opening an area, keeping Firebase writes aligned with the admin UI.
+
 ## 0.1.0
 
 ### chore: initialize monorepo structure

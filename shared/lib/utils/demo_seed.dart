@@ -4,12 +4,13 @@ import 'package:image/image.dart' as img;
 
 import '../models/app_user.dart';
 import '../models/booking.dart';
+import '../models/gate_point.dart';
+import '../models/geo_point.dart';
+import '../models/issue_report.dart';
 import '../models/parking_area_image.dart';
 import '../models/parking_location.dart';
 import '../models/parking_region.dart';
 import '../models/parking_review.dart';
-import '../models/issue_report.dart';
-import '../models/geo_point.dart';
 import '../routing/dijkstra_route_engine.dart';
 import '../routing/route_provider.dart';
 import '../services/qr_payload_service.dart';
@@ -52,6 +53,16 @@ class DemoSeed {
         GeoPointValue(latitude: 13.3505, longitude: 77.1021),
         GeoPointValue(latitude: 13.3502, longitude: 77.1012),
       ],
+      gatePoints: [
+        GatePoint(
+          gateId: 'gate_loc_metro_park_main',
+          name: 'Main Gate',
+          latitude: 13.3508,
+          longitude: 77.1015,
+          type: GatePointType.both,
+          createdAt: now.subtract(const Duration(days: 20)),
+        ),
+      ],
       latitude: 13.3508,
       longitude: 77.1015,
       totalSpaces: 80,
@@ -80,6 +91,16 @@ class DemoSeed {
         GeoPointValue(latitude: 13.3498, longitude: 77.1037),
         GeoPointValue(latitude: 13.3489, longitude: 77.1038),
         GeoPointValue(latitude: 13.3486, longitude: 77.1029),
+      ],
+      gatePoints: [
+        GatePoint(
+          gateId: 'gate_loc_cubbon_square_main',
+          name: 'Workshop Gate',
+          latitude: 13.3492,
+          longitude: 77.1032,
+          type: GatePointType.both,
+          createdAt: now.subtract(const Duration(days: 15)),
+        ),
       ],
       latitude: 13.3492,
       longitude: 77.1032,
@@ -111,6 +132,16 @@ class DemoSeed {
         GeoPointValue(latitude: 13.3511, longitude: 77.1042),
         GeoPointValue(latitude: 13.3508, longitude: 77.1033),
       ],
+      gatePoints: [
+        GatePoint(
+          gateId: 'gate_loc_lakeview_ev_main',
+          name: 'Library Gate',
+          latitude: 13.3514,
+          longitude: 77.1036,
+          type: GatePointType.both,
+          createdAt: now.subtract(const Duration(days: 8)),
+        ),
+      ],
       latitude: 13.3514,
       longitude: 77.1036,
       totalSpaces: 42,
@@ -139,6 +170,16 @@ class DemoSeed {
         GeoPointValue(latitude: 13.3491, longitude: 77.1015),
         GeoPointValue(latitude: 13.3482, longitude: 77.1016),
         GeoPointValue(latitude: 13.3479, longitude: 77.1008),
+      ],
+      gatePoints: [
+        GatePoint(
+          gateId: 'gate_loc_sit_auditorium_main',
+          name: 'Auditorium Gate',
+          latitude: 13.3485,
+          longitude: 77.1011,
+          type: GatePointType.both,
+          createdAt: now.subtract(const Duration(days: 4)),
+        ),
       ],
       latitude: 13.3485,
       longitude: 77.1011,

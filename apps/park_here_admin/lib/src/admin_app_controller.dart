@@ -910,7 +910,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
         AdminGeometryMode.moveCorner =>
           'Move Corner mode active. Select a corner, then tap its new location.',
         AdminGeometryMode.addGate =>
-          'Add Gate mode active. Tap inside your region to add a gate.',
+          'Add Gate mode active. Tap inside the parking polygon to add a gate.',
         AdminGeometryMode.moveGate =>
           'Move Gate mode active. Select a gate, then tap its new location.',
       },
@@ -1021,6 +1021,11 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       );
       return;
     }
+    final gateError = _validateGatePoint(point);
+    if (gateError != null) {
+      state = state.copyWith(error: gateError);
+      return;
+    }
     _pushGeometryUndo('Undo add gate');
     final gateIndex = state.draftGatePoints.length + 1;
     final gate = GatePoint(
@@ -1075,6 +1080,14 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     }
     if (selected.index >= state.draftGatePoints.length) {
       state = state.copyWith(selectedGeometryPoint: null);
+      return;
+    }
+    final gateError = _validateGatePoint(
+      point,
+      ignoreGateIndex: selected.index,
+    );
+    if (gateError != null) {
+      state = state.copyWith(error: gateError);
       return;
     }
     _pushGeometryUndo('Undo move gate');
@@ -1213,6 +1226,11 @@ class AdminAppController extends StateNotifier<AdminAppState> {
         lastGpsPosition: position,
         error: 'Gate must be inside your controlled region.',
       );
+      return;
+    }
+    final gateError = _validateGatePoint(position.toGeoPoint());
+    if (gateError != null) {
+      state = state.copyWith(lastGpsPosition: position, error: gateError);
       return;
     }
     _pushGeometryUndo('Undo GPS gate');
@@ -1447,7 +1465,7 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       vehicleTypes: vehicleTypes,
       thumbnailRefs: const [],
       imagePreviewRefs: const [],
-      isOpen: true,
+      isOpen: false,
       openingTime: openingTime,
       closingTime: closingTime,
       createdAt: now,
@@ -1483,18 +1501,32 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       );
       return;
     }
-    await _parkingRepository.updateAvailability(
-      locationId: location.id,
-      totalSpaces: totalSpaces,
-      availableSpaces: availableSpaces,
-      isOpen: isOpen,
-      pricePerHour: pricePerHour,
-    );
-    await load();
-    final refreshed = await _parkingRepository.findById(location.id);
-    if (refreshed != null) {
-      state = state.copyWith(selectedLocation: refreshed);
-      await _loadSelectedImages();
+    if (isOpen) {
+      final gateError = const ParkingAreaConflictService()
+          .validateGateRequirements(location);
+      if (gateError != null) {
+        state = state.copyWith(error: gateError);
+        return;
+      }
+    }
+    try {
+      await _parkingRepository.updateAvailability(
+        locationId: location.id,
+        totalSpaces: totalSpaces,
+        availableSpaces: availableSpaces,
+        isOpen: isOpen,
+        pricePerHour: pricePerHour,
+      );
+      await load();
+      final refreshed = await _parkingRepository.findById(location.id);
+      if (refreshed != null) {
+        state = state.copyWith(selectedLocation: refreshed);
+        await _loadSelectedImages();
+      }
+    } on Object catch (error) {
+      state = state.copyWith(
+        error: FirebaseErrorMessages.friendlyMessage(error),
+      );
     }
   }
 
@@ -1561,6 +1593,16 @@ class AdminAppController extends StateNotifier<AdminAppState> {
     if (state.draftBoundaryPoints.length < 3) {
       return 'Parking area polygon must have at least 3 points.';
     }
+    final gateError = const ParkingAreaConflictService()
+        .validateGateRequirements(
+          location.copyWith(
+            boundaryPoints: state.draftBoundaryPoints,
+            gatePoints: state.draftGatePoints,
+          ),
+        );
+    if (gateError != null) {
+      return gateError;
+    }
     if (!GeometryUtils.polygonInsidePolygon(
       state.draftBoundaryPoints,
       state.region.boundaryPoints,
@@ -1586,6 +1628,30 @@ class AdminAppController extends StateNotifier<AdminAppState> {
       totalSpaces: location.totalSpaces,
       availableSpaces: location.availableSpaces,
     );
+  }
+
+  String? _validateGatePoint(GeoPointValue point, {int? ignoreGateIndex}) {
+    if (state.draftBoundaryPoints.length < 3) {
+      return 'Add at least 3 area corners before placing gates.';
+    }
+    if (!GeometryUtils.pointInPolygon(point, state.draftBoundaryPoints)) {
+      return ParkingAreaConflictService.gateInsideAreaMessage;
+    }
+    for (var index = 0; index < state.draftGatePoints.length; index++) {
+      if (ignoreGateIndex == index) {
+        continue;
+      }
+      final gate = state.draftGatePoints[index];
+      final sameLat =
+          (gate.latitude - point.latitude).abs() <= GeometryUtils.epsilon * 100;
+      final sameLng =
+          (gate.longitude - point.longitude).abs() <=
+          GeometryUtils.epsilon * 100;
+      if (sameLat && sameLng) {
+        return ParkingAreaConflictService.duplicateGateMessage;
+      }
+    }
+    return null;
   }
 
   bool _isInsideControlledRegion(GeoPointValue point) {

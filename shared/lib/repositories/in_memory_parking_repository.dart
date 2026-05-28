@@ -99,6 +99,13 @@ class InMemoryParkingRepository implements ParkingRepository {
     if (index == -1) {
       return;
     }
+    if (isOpen) {
+      final gateError = const ParkingAreaConflictService()
+          .validateGateRequirements(_locations[index]);
+      if (gateError != null) {
+        throw StateError(gateError);
+      }
+    }
     _locations[index] = _locations[index].copyWith(
       totalSpaces: totalSpaces,
       availableSpaces: availableSpaces.clamp(0, totalSpaces),
@@ -112,6 +119,11 @@ class InMemoryParkingRepository implements ParkingRepository {
   Future<void> upsert(ParkingLocation location) async {
     ParkingLocation.validatePrice(location.pricePerHour);
     if (location.boundaryPoints.length >= 3) {
+      final gateError = const ParkingAreaConflictService()
+          .validateGateRequirements(location);
+      if (gateError != null) {
+        throw StateError(gateError);
+      }
       const ParkingAreaConflictService().throwIfConflicting(
         candidateArea: location,
         existingAreas: _locations,

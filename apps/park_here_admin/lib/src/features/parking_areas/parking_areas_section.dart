@@ -76,12 +76,28 @@ class _AreaBoundaryEditor extends StatelessWidget {
     final location = state.selectedLocation!;
     final gps = state.lastGpsPosition;
     final conflict = state.draftAreaConflict;
+    final needsGate = state.draftGatePoints.isEmpty;
+    final hasPolygon = state.draftBoundaryPoints.length >= 3;
+    final canSave =
+        !state.isSavingGeometry && conflict == null && hasPolygon && !needsGate;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Area geometry', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 4),
-        const Text('Use point modes to add or move corners and gates.'),
+        const Text(
+          'Draw the parking boundary first, then place at least one gate inside it.',
+        ),
+        const SizedBox(height: 8),
+        const _SetupGuidanceCard(
+          title: 'How to add parking area geometry',
+          steps: [
+            'Select Add Corner and tap the map around the parking area.',
+            'Switch to Move Corner to adjust any misplaced point.',
+            'Select Add Gate and tap inside the finished polygon.',
+            'Save only after the warning chips are clear.',
+          ],
+        ),
         const SizedBox(height: 8),
         _AdminOsmGeometryMap(
           title: location.name,
@@ -178,6 +194,12 @@ class _AreaBoundaryEditor extends StatelessWidget {
           const SizedBox(height: 6),
           _GeometryWarningBanner(message: conflict.message),
         ],
+        if (needsGate) ...[
+          const SizedBox(height: 6),
+          const _GeometryWarningBanner(
+            message: ParkingAreaConflictService.requiredGateMessage,
+          ),
+        ],
         if (gps != null && gps.accuracyMeters > 25) ...[
           const SizedBox(height: 6),
           const Text(
@@ -226,9 +248,7 @@ class _AreaBoundaryEditor extends StatelessWidget {
               label: const Text('Clear Gates'),
             ),
             FilledButton.icon(
-              onPressed: state.isSavingGeometry || conflict != null
-                  ? null
-                  : controller.saveAreaGeometry,
+              onPressed: canSave ? controller.saveAreaGeometry : null,
               icon: const Icon(Icons.save_outlined),
               label: Text(
                 state.isSavingGeometry
@@ -400,7 +420,7 @@ class _GateList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (state.draftGatePoints.isEmpty) {
       return Text(
-        'No gates marked yet. Gates are optional but recommended for routing.',
+        ParkingAreaConflictService.requiredGateMessage,
         style: Theme.of(context).textTheme.bodySmall,
       );
     }
@@ -477,6 +497,60 @@ class _GeometryModeChip extends StatelessWidget {
       label: Text(label),
       selected: selected,
       onSelected: (_) => onSelected(mode),
+    );
+  }
+}
+
+class _SetupGuidanceCard extends StatelessWidget {
+  const _SetupGuidanceCard({required this.title, required this.steps});
+
+  final String title;
+  final List<String> steps;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.info_outline, color: colorScheme.primary, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (var index = 0; index < steps.length; index++)
+                  Chip(
+                    avatar: CircleAvatar(
+                      radius: 10,
+                      child: Text('${index + 1}'),
+                    ),
+                    label: Text(steps[index]),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

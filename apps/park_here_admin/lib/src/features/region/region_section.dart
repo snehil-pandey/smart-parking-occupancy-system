@@ -111,6 +111,8 @@ class _ControlledRegionEditorState extends State<_ControlledRegionEditor> {
                   ? 'Create your region before managing parking areas.'
                   : 'Use Add Point or Move Point mode to update the saved region.',
             ),
+            const SizedBox(height: 10),
+            const _RegionGuidanceCard(),
             const SizedBox(height: 12),
             TextField(
               controller: _name,
@@ -225,6 +227,53 @@ class _ControlledRegionEditorState extends State<_ControlledRegionEditor> {
                     state.isSavingRegion ? 'Saving Region...' : 'Save Region',
                   ),
                 ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RegionGuidanceCard extends StatelessWidget {
+  const _RegionGuidanceCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.info_outline, color: colorScheme.primary, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'How to create region',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                Chip(label: Text('1. Tap to add boundary points')),
+                Chip(label: Text('2. Move points to refine')),
+                Chip(label: Text('3. Avoid existing regions')),
+                Chip(label: Text('4. Save after 3+ points')),
               ],
             ),
           ],
