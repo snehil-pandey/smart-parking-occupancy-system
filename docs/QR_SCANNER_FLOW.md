@@ -1,6 +1,39 @@
 # QR Scanner Flow
 
-Park Here Scanner is a standalone Android fallback for gate verification. ESP32 QR hardware remains the primary flow.
+Park Here Scanner is a standalone Android fallback for gate verification. ESP32 QR hardware remains the primary flow, with `server/parking_server.py` acting as the Firebase verification bridge for the ESP32.
+
+## ESP32 + Python Bridge
+
+The ESP32 never talks to Firebase directly. It calls:
+
+```text
+GET /scan?id=<qrId>&locationId=<parkingAreaId>
+```
+
+The ESP32 forwards that request to the Python server:
+
+```text
+GET /verify?id=<qrId>&locationId=<parkingAreaId>
+```
+
+The Python server returns plain text only:
+
+- `BEFORE_TIME`: QR was scanned earlier than 5 minutes before `bookingStartAt`.
+- `ENTRY`: entry accepted and booking moved to `active_parking`.
+- `USED`: entry QR already scanned or parking already completed.
+- `EXIT`: exit accepted when `mode=exit`.
+- `INVALID`: QR, booking, location, or state is invalid.
+- `EXPIRED`: QR/booking is outside its validity window.
+- `ERROR`: server/Firebase failure.
+
+ESP32 beep behavior:
+
+- `ENTRY`: one short beep.
+- `EXIT`: two short beeps.
+- `BEFORE_TIME`: one long beep.
+- `INVALID`, `USED`, `EXPIRED`, `ERROR`: long error beep.
+
+Exit is explicit: the gate must call `mode=exit`. This keeps a normal second entry scan from completing a booking accidentally.
 
 ## Runtime Flow
 
@@ -56,6 +89,8 @@ The UI ignores additional camera detections while verification is running. The C
 Inside the transaction the scanner re-reads `/active_qr_tickets/{qrId}` and `/bookings/{bookingId}`. A successful entry scan writes:
 
 - `/active_qr_tickets/{qrId}.status = used`
+- `/active_qr_tickets/{qrId}.scannedOnce = true`
+- `/active_qr_tickets/{qrId}.scanPhase = entered`
 - `/active_qr_tickets/{qrId}.usedAt = server scan time`
 - `/bookings/{bookingId}.status = active_parking`
 - `/bookings/{bookingId}.entryVerified = true`
