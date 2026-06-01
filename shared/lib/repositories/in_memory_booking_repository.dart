@@ -27,6 +27,10 @@ class InMemoryBookingRepository implements BookingRepository {
           status: ActiveQrStatus.active,
           createdAt: booking.createdAt,
           expiresAt: booking.endTime,
+          bookingStartAt: booking.startTime,
+          bookingEndAt: booking.endTime,
+          scannedOnce: false,
+          scanPhase: 'entry_pending',
         ),
       );
     }
@@ -71,6 +75,10 @@ class InMemoryBookingRepository implements BookingRepository {
       status: ActiveQrStatus.active,
       createdAt: DateTime.now(),
       expiresAt: booking.endTime,
+      bookingStartAt: booking.startTime,
+      bookingEndAt: booking.endTime,
+      scannedOnce: false,
+      scanPhase: 'entry_pending',
     );
     _activeQrTickets.insert(0, ticket);
     _replaceBooking(booking.copyWith(qrId: qrId, updatedAt: DateTime.now()));
@@ -107,7 +115,12 @@ class InMemoryBookingRepository implements BookingRepository {
     }
     final now = DateTime.now();
     final ticket = _activeQrTickets[index];
-    _activeQrTickets[index] = ticket.copyWith(status: ActiveQrStatus.used);
+    _activeQrTickets[index] = ticket.copyWith(
+      status: ActiveQrStatus.used,
+      scannedOnce: true,
+      scanPhase: 'entered',
+      entryScannedAt: now,
+    );
     _replaceBookingById(
       ticket.bookingId,
       (booking) => booking.copyWith(

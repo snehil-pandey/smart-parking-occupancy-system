@@ -80,12 +80,13 @@ class _ActiveBookingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final parkingActive = booking.isParkingActive;
+    final canShowQr = booking.canShowEntryQr(activeQrTicket);
     return Material(
       color: const Color(0xFFFFF9E2),
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: parkingActive ? null : () => _openQrViewer(context),
+        onTap: canShowQr ? () => _openQrViewer(context) : null,
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
@@ -100,12 +101,14 @@ class _ActiveBookingCard extends StatelessWidget {
                 children: [
                   if (parkingActive)
                     const _ParkingActiveBadge()
-                  else
+                  else if (canShowQr)
                     QrImageView(
                       data: _qrData,
                       size: 118,
                       backgroundColor: Colors.white,
-                    ),
+                    )
+                  else
+                    _QrLockedBadge(unlockAt: booking.qrUnlockAt),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
@@ -132,7 +135,12 @@ class _ActiveBookingCard extends StatelessWidget {
                               message: 'Loading QR...',
                             ),
                           )
-                        else
+                        else if (!canShowQr) ...[
+                          const Text(
+                            'QR will unlock 5 minutes before your booking time.',
+                          ),
+                          _UnlockCountdown(unlockAt: booking.qrUnlockAt),
+                        ] else
                           Text(
                             'QR ${activeQrTicket!.status.name} until ${_time(activeQrTicket!.expiresAt)}',
                           ),
@@ -166,6 +174,9 @@ class _ActiveBookingCard extends StatelessWidget {
       '${value.day}/${value.month} ${_time(value)}';
 
   void _openQrViewer(BuildContext context) {
+    if (!booking.canShowEntryQr(activeQrTicket)) {
+      return;
+    }
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -219,6 +230,66 @@ class _ActiveBookingCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _QrLockedBadge extends StatelessWidget {
+  const _QrLockedBadge({required this.unlockAt});
+
+  final DateTime unlockAt;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 118,
+      height: 118,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1F2937),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.lock_clock, color: Colors.white, size: 36),
+          const SizedBox(height: 8),
+          Text(
+            'QR unlocks\n${unlockAt.hour.toString().padLeft(2, '0')}:${unlockAt.minute.toString().padLeft(2, '0')}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              height: 1.1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UnlockCountdown extends StatelessWidget {
+  const _UnlockCountdown({required this.unlockAt});
+
+  final DateTime unlockAt;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<int>(
+      stream: Stream.periodic(const Duration(seconds: 1), (_) => 0),
+      builder: (context, _) {
+        final remaining = unlockAt.difference(DateTime.now());
+        if (remaining.isNegative) {
+          return const Text('QR is unlocking now.');
+        }
+        final hours = remaining.inHours;
+        final minutes = remaining.inMinutes.remainder(60);
+        final seconds = remaining.inSeconds.remainder(60);
+        final text = hours > 0
+            ? 'Unlocks in ${hours}h ${minutes}m'
+            : 'Unlocks in ${minutes}m ${seconds}s';
+        return Text(text);
+      },
     );
   }
 }

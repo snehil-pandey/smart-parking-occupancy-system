@@ -18,10 +18,13 @@ class FirestoreModelMapper {
     'updatedAt',
     'uploadedAt',
     'startTime',
+    'bookingStartAt',
     'endTime',
+    'bookingEndAt',
     'expiresAt',
     'qrUsedAt',
     'entryScannedAt',
+    'exitScannedAt',
     'usedAt',
     'cancelledAt',
   };
@@ -116,8 +119,8 @@ class FirestoreModelMapper {
       entryVerified: json['entryVerified'] as bool? ?? false,
       entryScannedAt: _nullableDate(json['entryScannedAt']),
       vehicleNumber: json['vehicleNumber'] as String,
-      startTime: _requiredDate(json['startTime']),
-      endTime: _requiredDate(json['endTime']),
+      startTime: _requiredDate(json['bookingStartAt'] ?? json['startTime']),
+      endTime: _requiredDate(json['bookingEndAt'] ?? json['endTime']),
       price: (json['price'] as num).toDouble(),
       status: _enumByName(
         BookingStatus.values,
@@ -151,6 +154,14 @@ class FirestoreModelMapper {
       ),
       createdAt: _requiredDate(json['createdAt']),
       expiresAt: _requiredDate(json['expiresAt']),
+      bookingStartAt: _requiredDate(
+        json['bookingStartAt'] ?? json['createdAt'],
+      ),
+      bookingEndAt: _requiredDate(json['bookingEndAt'] ?? json['expiresAt']),
+      scannedOnce: json['scannedOnce'] as bool? ?? false,
+      scanPhase: json['scanPhase'] as String? ?? 'entry_pending',
+      entryScannedAt: _nullableDate(json['entryScannedAt']),
+      exitScannedAt: _nullableDate(json['exitScannedAt']),
     );
   }
 

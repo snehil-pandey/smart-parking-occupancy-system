@@ -10,6 +10,12 @@ class ActiveQrTicket {
     required this.status,
     required this.createdAt,
     required this.expiresAt,
+    required this.bookingStartAt,
+    required this.bookingEndAt,
+    this.scannedOnce = false,
+    this.scanPhase = 'entry_pending',
+    this.entryScannedAt,
+    this.exitScannedAt,
   });
 
   final String qrId;
@@ -20,6 +26,21 @@ class ActiveQrTicket {
   final ActiveQrStatus status;
   final DateTime createdAt;
   final DateTime expiresAt;
+  final DateTime bookingStartAt;
+  final DateTime bookingEndAt;
+  final bool scannedOnce;
+  final String scanPhase;
+  final DateTime? entryScannedAt;
+  final DateTime? exitScannedAt;
+
+  DateTime get unlockAt => bookingStartAt.subtract(const Duration(minutes: 5));
+
+  bool isUnlockedAt(DateTime now) =>
+      !now.isBefore(unlockAt) &&
+      now.isBefore(bookingEndAt) &&
+      status == ActiveQrStatus.active &&
+      !scannedOnce &&
+      scanPhase == 'entry_pending';
 
   ActiveQrTicket copyWith({
     String? qrId,
@@ -30,6 +51,12 @@ class ActiveQrTicket {
     ActiveQrStatus? status,
     DateTime? createdAt,
     DateTime? expiresAt,
+    DateTime? bookingStartAt,
+    DateTime? bookingEndAt,
+    bool? scannedOnce,
+    String? scanPhase,
+    DateTime? entryScannedAt,
+    DateTime? exitScannedAt,
   }) {
     return ActiveQrTicket(
       qrId: qrId ?? this.qrId,
@@ -40,6 +67,12 @@ class ActiveQrTicket {
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       expiresAt: expiresAt ?? this.expiresAt,
+      bookingStartAt: bookingStartAt ?? this.bookingStartAt,
+      bookingEndAt: bookingEndAt ?? this.bookingEndAt,
+      scannedOnce: scannedOnce ?? this.scannedOnce,
+      scanPhase: scanPhase ?? this.scanPhase,
+      entryScannedAt: entryScannedAt ?? this.entryScannedAt,
+      exitScannedAt: exitScannedAt ?? this.exitScannedAt,
     );
   }
 
@@ -52,5 +85,11 @@ class ActiveQrTicket {
     'status': status.name,
     'createdAt': createdAt.toIso8601String(),
     'expiresAt': expiresAt.toIso8601String(),
+    'bookingStartAt': bookingStartAt.toIso8601String(),
+    'bookingEndAt': bookingEndAt.toIso8601String(),
+    'scannedOnce': scannedOnce,
+    'scanPhase': scanPhase,
+    'entryScannedAt': entryScannedAt?.toIso8601String(),
+    'exitScannedAt': exitScannedAt?.toIso8601String(),
   };
 }

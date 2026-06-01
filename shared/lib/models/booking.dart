@@ -1,3 +1,5 @@
+import 'active_qr_ticket.dart';
+
 enum BookingStatus {
   pending,
   confirmed,
@@ -63,6 +65,18 @@ class Booking {
 
   bool get isCurrentSession => isAwaitingEntry || isParkingActive;
 
+  DateTime get qrUnlockAt => startTime.subtract(const Duration(minutes: 5));
+
+  bool isQrUnlockedAt(DateTime now) =>
+      !now.isBefore(qrUnlockAt) && now.isBefore(endTime);
+
+  bool canShowEntryQr(ActiveQrTicket? ticket, {DateTime? now}) {
+    final currentTime = now ?? DateTime.now();
+    return status == BookingStatus.confirmed &&
+        ticket != null &&
+        ticket.isUnlockedAt(currentTime);
+  }
+
   Booking copyWith({
     String? id,
     String? userId,
@@ -121,7 +135,9 @@ class Booking {
     'entryScannedAt': entryScannedAt?.toIso8601String(),
     'vehicleNumber': vehicleNumber,
     'startTime': startTime.toIso8601String(),
+    'bookingStartAt': startTime.toIso8601String(),
     'endTime': endTime.toIso8601String(),
+    'bookingEndAt': endTime.toIso8601String(),
     'price': price,
     'status': status == BookingStatus.activeParking
         ? 'active_parking'

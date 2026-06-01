@@ -96,6 +96,51 @@ void main() {
       ParkingFilter.all,
     );
   });
+
+  test('state treats confirmed and active parking bookings as active', () {
+    final now = DateTime.now();
+    final confirmed = _booking(
+      id: 'book_confirmed',
+      now: now,
+      status: BookingStatus.confirmed,
+    );
+    final activeParking = _booking(
+      id: 'book_active_parking',
+      now: now,
+      status: BookingStatus.activeParking,
+    );
+
+    expect(
+      UserAppState.signedOut().copyWith(bookings: [confirmed]).activeBooking,
+      confirmed,
+    );
+    expect(
+      UserAppState.signedOut()
+          .copyWith(bookings: [activeParking])
+          .activeBooking,
+      activeParking,
+    );
+  });
+
+  test('entry QR is locked before 5 minute unlock window', () {
+    final now = DateTime.now();
+    final booking = _booking(
+      id: 'book_future',
+      now: now,
+      status: BookingStatus.confirmed,
+      startTime: now.add(const Duration(minutes: 15)),
+    );
+    final ticket = _ticket(booking: booking, now: now);
+
+    expect(booking.canShowEntryQr(ticket, now: now), isFalse);
+    expect(
+      booking.canShowEntryQr(
+        ticket,
+        now: booking.startTime.subtract(const Duration(minutes: 5)),
+      ),
+      isTrue,
+    );
+  });
 }
 
 class _TestLocationService implements UserLocationService {
@@ -161,5 +206,45 @@ ParkingLocation _area({
     closingTime: '22:00',
     createdAt: now,
     updatedAt: now,
+  );
+}
+
+Booking _booking({
+  required String id,
+  required DateTime now,
+  required BookingStatus status,
+  DateTime? startTime,
+}) {
+  final qrId = const QrPayloadService().generateQrId();
+  final start = startTime ?? now;
+  return Booking(
+    id: id,
+    userId: 'user_test',
+    adminId: 'admin_test',
+    parkingLocationId: 'area_test',
+    qrId: qrId,
+    vehicleNumber: 'KA 06 TEST',
+    startTime: start,
+    endTime: start.add(const Duration(hours: 2)),
+    price: 40,
+    status: status,
+    qrPayload: const QrPayloadService().buildPayload(qrId: qrId),
+    createdAt: now,
+    updatedAt: now,
+  );
+}
+
+ActiveQrTicket _ticket({required Booking booking, required DateTime now}) {
+  return ActiveQrTicket(
+    qrId: booking.qrId!,
+    bookingId: booking.id,
+    userId: booking.userId,
+    adminId: booking.adminId,
+    areaId: booking.parkingLocationId,
+    status: ActiveQrStatus.active,
+    createdAt: now,
+    expiresAt: booking.endTime,
+    bookingStartAt: booking.startTime,
+    bookingEndAt: booking.endTime,
   );
 }

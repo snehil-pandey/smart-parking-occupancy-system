@@ -7,6 +7,11 @@
 - Parking area geometry now requires at least one non-duplicate gate inside the parking polygon before Save is enabled.
 - Shared parking repositories validate gate requirements before final geometry writes or opening an area, keeping Firebase writes aligned with the admin UI.
 
+### fix(user): enforce QR unlock and single active booking rules
+- User bookings now start as `confirmed`, expose their QR only during the five-minute pre-entry unlock window, and switch to `active_parking` after scanner verification.
+- Active QR tickets now store `bookingStartAt`, `bookingEndAt`, `scannedOnce`, `scanPhase`, and scan timestamps so the ESP32/Python verifier and user app share one lifecycle.
+- The user app blocks a second active booking while a `confirmed` or `active_parking` booking exists and shows a friendly message instead.
+
 ## 0.1.0
 
 ### chore: initialize monorepo structure

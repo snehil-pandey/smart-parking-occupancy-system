@@ -130,6 +130,10 @@ class FirebaseBookingRepository implements BookingRepository {
         status: ActiveQrStatus.active,
         createdAt: now,
         expiresAt: booking.endTime,
+        bookingStartAt: booking.startTime,
+        bookingEndAt: booking.endTime,
+        scannedOnce: false,
+        scanPhase: 'entry_pending',
       );
       transaction.set(
         ticketRef,
@@ -194,7 +198,10 @@ class FirebaseBookingRepository implements BookingRepository {
       final now = DateTime.now();
       transaction.update(ticketRef, {
         'status': ActiveQrStatus.used.name,
+        'scannedOnce': true,
+        'scanPhase': 'entered',
         'usedAt': Timestamp.fromDate(now),
+        'entryScannedAt': Timestamp.fromDate(now),
       });
       transaction.update(_bookings.doc(ticket.bookingId), {
         'status': 'active_parking',

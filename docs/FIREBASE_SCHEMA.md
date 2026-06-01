@@ -118,6 +118,7 @@ Admin geometry editing rules:
 - Regions are admin containers only. Users may see parking areas inside regions, but cannot select, route to, or book a region document.
 - At least one `gatePoints` entry is required before final area geometry can be saved or opened.
 - Gates must be unique by coordinate and must sit inside the parking area polygon.
+- User routing targets the nearest valid gate before falling back to area center.
 - Gate `type` must be `entry`, `exit`, or `both`.
 - Admin editor drafts are local until Save; Save updates the `/parking_areas/{areaId}` document and Firestore streams refresh the UI.
 - Admin map editing uses OSM tiles with Add Point/Add Corner/Add Gate and Move Point/Move Corner/Move Gate modes.
@@ -166,9 +167,12 @@ Recommended query pattern:
 | `qrUsedAt` | timestamp/string/null | Set when the entry QR is consumed |
 | `entryVerified` | boolean | `true` after scanner entry verification |
 | `entryScannedAt` | timestamp/string/null | Entry scan timestamp |
+| `exitScannedAt` | timestamp/string/null | Exit scan timestamp when the session is completed by a gate |
 | `vehicleNumber` | string | Vehicle allowed through gate |
 | `startTime` | timestamp/string | Booking start |
+| `bookingStartAt` | timestamp/string | Canonical reserved start time used by scanner/ESP32 verification |
 | `endTime` | timestamp/string | Booking end |
+| `bookingEndAt` | timestamp/string | Canonical reserved end time used by scanner/ESP32 verification |
 | `price` | number | Calculated booking amount |
 | `status` | string | `pending`, `confirmed`, `active`, `active_parking`, `completed`, `cancelled`, `expired` |
 | `qrPayload` | string | Opaque QR id only, same value as `qrId` for new bookings |
@@ -193,8 +197,22 @@ Active QR documents are short-lived operational records. Do not delete the booki
 | `status` | string | `active`, `used`, `expired`, or `cancelled` |
 | `createdAt` | timestamp/string | Ticket creation time |
 | `expiresAt` | timestamp/string | End of QR validity window |
+| `bookingStartAt` | timestamp/string | Reserved start time copied from the booking |
+| `bookingEndAt` | timestamp/string | Reserved end time copied from the booking |
+| `scannedOnce` | boolean | `false` until a successful entry scan; prevents QR reuse |
+| `scanPhase` | string | `entry_pending`, `entered`, `exit_pending`, or `exited` |
+| `entryScannedAt` | timestamp/string/null | Entry scan timestamp |
+| `exitScannedAt` | timestamp/string/null | Exit scan timestamp when supported |
 
 QR privacy rule: QR images should encode only the opaque `qrId`, for example `qr_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`. They must not encode `userId`, `adminId`, `areaId`, vehicle number, booking JSON, or timestamps. Those fields are resolved from Firestore by the standalone scanner, ESP32 flow, or a future gate/API.
+
+User QR rules:
+
+- The user app allows only one active parking booking at a time. `confirmed` and `active_parking` are active user sessions.
+- A QR is visible only when the booking is `confirmed`, the linked ticket is `active`, and the current time is at least five minutes before `bookingStartAt`.
+- Before the unlock window, the user app shows a countdown instead of the QR.
+- After a scanner or ESP32 bridge marks the ticket `used`, the user app hides the QR and shows the booking as `active_parking` from Firestore snapshots.
+- New QR ids are generated only for new bookings. Used QR ids must never be reactivated.
 
 ## `/notifications/{notificationId}`
 

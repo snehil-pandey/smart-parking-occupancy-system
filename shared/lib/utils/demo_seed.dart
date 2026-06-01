@@ -351,7 +351,7 @@ class DemoSeed {
         startTime: start,
         endTime: end,
         price: 180,
-        status: BookingStatus.active,
+        status: BookingStatus.confirmed,
         qrPayload: payload,
         createdAt: start,
         updatedAt: now,
