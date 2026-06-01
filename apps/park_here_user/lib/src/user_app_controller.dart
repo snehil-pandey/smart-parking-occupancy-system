@@ -852,12 +852,35 @@ class UserAppController extends StateNotifier<UserAppState> {
       state = state.copyWith(error: 'This parking area is not available now.');
       return;
     }
-
+    if (state.activeBooking != null) {
+      state = state.copyWith(
+        error: 'You already have an active parking booking.',
+      );
+      return;
+    }
     state = state.copyWith(
       isBookingInProgress: true,
       clearBookingConfirmation: true,
       error: null,
     );
+    Booking? existingActive;
+    try {
+      existingActive = await _bookingRepository.activeForUser(user.id);
+    } on Object catch (error) {
+      state = state.copyWith(
+        isBookingInProgress: false,
+        error: FirebaseErrorMessages.friendlyMessage(error),
+      );
+      return;
+    }
+    if (existingActive != null) {
+      state = state.copyWith(
+        isBookingInProgress: false,
+        error: 'You already have an active parking booking.',
+      );
+      return;
+    }
+
     final now = DateTime.now();
     late final ParkingLocation reservedLocation;
     try {
@@ -890,7 +913,7 @@ class UserAppController extends StateNotifier<UserAppState> {
       startTime: now,
       endTime: end,
       price: price,
-      status: BookingStatus.active,
+      status: BookingStatus.confirmed,
       qrPayload: payload,
       createdAt: now,
       updatedAt: now,
