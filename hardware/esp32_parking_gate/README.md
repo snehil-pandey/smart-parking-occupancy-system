@@ -58,7 +58,9 @@ GET /scan?id=<qrId>
 GET /scan?id=<qrId>&locationId=<parkingAreaId>
 GET /scan?id=<qrId>&locationId=<parkingAreaId>&mode=exit
 GET /status
+POST /config
 GET /reset-config
+POST /reset-config
 ```
 
 If `locationId` is omitted from `/scan`, the ESP32 uses the saved default parking area/location id.
@@ -92,15 +94,46 @@ It returns plain text showing:
 - Python server URL
 - default `locationId`
 
+## Configure From Streamlit
+
+When the ESP32 is reachable on the same WiFi network, the Streamlit control panel can update gate configuration with:
+
+```text
+POST http://<esp32-ip>/config
+```
+
+JSON body:
+
+```json
+{
+  "ssid": "Campus WiFi",
+  "password": "wifi-password",
+  "serverIp": "192.168.1.10",
+  "locationId": "area_sit_main_lot"
+}
+```
+
+The ESP32 saves these values to Preferences/NVS, restarts, connects to WiFi, and then uses the saved `locationId` for:
+
+```text
+GET /scan?id=<qrId>
+```
+
+That scan is forwarded to:
+
+```text
+GET http://<python-server-ip>:5000/verify?id=<qrId>&locationId=<saved-locationId>
+```
+
 ## Reset / Change WiFi
 
-To change WiFi, Python server IP, or `locationId`, open:
+To change WiFi, Python server IP, or `locationId`, either use Streamlit or open:
 
 ```text
 http://<esp32-ip>/reset-config
 ```
 
-The endpoint clears saved Preferences/NVS values and restarts the device. After restart, connect again to:
+`POST /reset-config` is also supported for Streamlit. The endpoint clears saved Preferences/NVS values and restarts the device. After restart, connect again to:
 
 ```text
 ParkHere-Gate-Setup
@@ -127,6 +160,7 @@ http://192.168.4.1
 - Firebase truth lives on the Python server, not on the ESP32.
 - There is no camera requirement in this sketch. A serial QR reader, test client, or future hardware reader can call `/scan?id=<qrId>`.
 - During development, use `server/streamlit_qr_control.py` to simulate scans before testing ESP32 hardware.
+- Scans are location-aware. A QR for one parking area is rejected when scanned at a different saved `locationId`.
 - The same QR cannot open entry twice. Normal repeat scans return `USED`.
 - Exit is intentionally explicit through `mode=exit` so an accidental second entry scan cannot complete the booking.
 - The current hardware path uses only a buzzer. Servo/gate motor control can be added later without changing the QR verification endpoint.

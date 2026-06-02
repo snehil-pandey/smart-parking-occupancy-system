@@ -8,6 +8,7 @@ It is no longer a Flutter scanner app. The Android fallback scanner was removed 
 - a Streamlit QR scan simulator for development/testing
 - shared Firebase Admin SDK transaction logic
 - ESP32 WiFi provisioning and buzzer-based gate feedback
+- ESP32 WiFi/server/location configuration from Streamlit
 
 The main Park Here user/admin Flutter apps live on the main project branches. This addon stays separate and should not be merged into `main` unless the project explicitly decides to ship hardware tooling with the app repository.
 
@@ -35,7 +36,7 @@ docs/
 
 1. User books parking in the Park Here user app.
 2. The user app creates `/bookings/{bookingId}` and `/active_qr_tickets/{qrId}` in Firebase.
-3. ESP32 or Streamlit submits only the opaque `qrId` and parking area `locationId`.
+3. ESP32 or Streamlit submits only the opaque `qrId` and selected parking area `locationId`.
 4. Python verifies the QR through Firestore in a transaction.
 5. Python returns a plain command:
 
@@ -64,6 +65,12 @@ streamlit run streamlit_qr_control.py
 
 Use Streamlit when you do not have a physical QR reader yet. It lets you paste a `qrId`, choose a parking area, and simulate entry/exit scans.
 
+Streamlit also includes an **ESP32 Configuration** section. Enter the ESP32 IP address, WiFi SSID/password, Python server IP, and parking area `locationId`, then use:
+
+- **Update ESP32 Config** to POST `/config`
+- **Check ESP32 Status** to GET `/status`
+- **Reset ESP32 Config** to POST `/reset-config`
+
 ## Run Flask Server For ESP32
 
 ```powershell
@@ -77,6 +84,8 @@ The ESP32 calls:
 ```text
 GET http://<python-server>:5000/verify?id=<qrId>&locationId=<areaId>
 ```
+
+The Python verifier rejects scans when the QR ticket or linked booking belongs to a different `areaId` than the scanner `locationId`.
 
 ## Firebase Setup
 

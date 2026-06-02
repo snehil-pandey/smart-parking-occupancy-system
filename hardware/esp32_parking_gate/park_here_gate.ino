@@ -77,6 +77,42 @@ String normalizeServerBaseUrl(String serverInput) {
   return "http://" + serverInput + ":5000";
 }
 
+String jsonStringValue(String json, String key) {
+  String pattern = "\"" + key + "\"";
+  int keyIndex = json.indexOf(pattern);
+  if (keyIndex < 0) {
+    return "";
+  }
+  int colonIndex = json.indexOf(":", keyIndex + pattern.length());
+  if (colonIndex < 0) {
+    return "";
+  }
+  int startQuote = json.indexOf("\"", colonIndex + 1);
+  if (startQuote < 0) {
+    return "";
+  }
+  String value = "";
+  bool escaping = false;
+  for (int i = startQuote + 1; i < json.length(); i++) {
+    char c = json.charAt(i);
+    if (escaping) {
+      value += c;
+      escaping = false;
+      continue;
+    }
+    if (c == '\\') {
+      escaping = true;
+      continue;
+    }
+    if (c == '"') {
+      break;
+    }
+    value += c;
+  }
+  value.trim();
+  return value;
+}
+
 void loadConfig() {
   preferences.begin("parkhere-gate", false);
   wifiSsid = preferences.getString("wifiSsid", "");
@@ -220,9 +256,38 @@ void handleSaveConfig() {
   ESP.restart();
 }
 
+void handleJsonConfig() {
+  String body = server.arg("plain");
+  if (body.length() == 0) {
+    server.send(400, "text/plain", "Missing JSON body.");
+    return;
+  }
+
+  String ssid = jsonStringValue(body, "ssid");
+  String password = jsonStringValue(body, "password");
+  String serverIp = jsonStringValue(body, "serverIp");
+  String locationId = jsonStringValue(body, "locationId");
+
+  if (ssid.length() == 0 || serverIp.length() == 0 || locationId.length() == 0) {
+    server.send(400, "text/plain", "Missing ssid, serverIp, or locationId.");
+    return;
+  }
+
+  saveConfig(ssid, password, serverIp, locationId);
+
+  Serial.println("Saved JSON config from Streamlit. Restarting...");
+  server.send(200, "text/plain", "CONFIG_SAVED_RESTARTING");
+  delay(800);
+  ESP.restart();
+}
+
 void handleResetConfig() {
   clearConfig();
-  server.send(200, "text/html", "<p>Configuration cleared. Restarting setup mode...</p>");
+  const char* contentType = server.method() == HTTP_POST ? "text/plain" : "text/html";
+  const char* message = server.method() == HTTP_POST
+      ? "CONFIG_CLEARED_RESTARTING"
+      : "<p>Configuration cleared. Restarting setup mode...</p>";
+  server.send(200, contentType, message);
   delay(800);
   ESP.restart();
 }
@@ -300,6 +365,8 @@ void registerRoutes() {
   server.on("/", HTTP_GET, handleRoot);
   server.on("/save-config", HTTP_POST, handleSaveConfig);
   server.on("/reset-config", HTTP_GET, handleResetConfig);
+  server.on("/reset-config", HTTP_POST, handleResetConfig);
+  server.on("/config", HTTP_POST, handleJsonConfig);
   server.on("/status", HTTP_GET, handleStatus);
   server.on("/health", HTTP_GET, handleHealth);
   server.on("/scan", HTTP_GET, handleScan);

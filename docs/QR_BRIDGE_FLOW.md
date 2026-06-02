@@ -14,7 +14,7 @@ User app -> Firebase -> Python bridge -> ESP32 buzzer
 - User app creates bookings and active QR ticket documents.
 - Python reads Firebase through Admin SDK and updates scan state transactionally.
 - ESP32 sends QR ids to Python and plays beep feedback.
-- Streamlit simulates QR scans without physical QR hardware.
+- Streamlit simulates QR scans without physical QR hardware and can configure ESP32 gates.
 
 ## QR Privacy
 
@@ -46,12 +46,14 @@ It must not contain JSON, user ids, admin ids, vehicle data, booking details, or
 
 ## Entry Flow
 
-1. ESP32 or Streamlit submits `qrId` and `locationId`.
-2. Python reads `/active_qr_tickets/{qrId}`.
-3. Python reads linked `/bookings/{bookingId}`.
-4. Python verifies location, status, timing, and scan phase.
-5. If too early, Python returns `BEFORE_TIME` and does not change QR state.
-6. If valid, Python transaction updates:
+1. Streamlit selects a parking area from Firebase `parking_areas`, or ESP32 uses its saved `locationId`.
+2. ESP32 or Streamlit submits `qrId` and `locationId`.
+3. Python reads `/active_qr_tickets/{qrId}`.
+4. Python reads linked `/bookings/{bookingId}`.
+5. Python verifies location, status, timing, and scan phase.
+6. If ticket `areaId` or booking `areaId` does not match scanner `locationId`, Python returns `INVALID`.
+7. If too early, Python returns `BEFORE_TIME` and does not change QR state.
+8. If valid, Python transaction updates:
    - `active_qr_tickets.status = used`
    - `active_qr_tickets.scannedOnce = true`
    - `active_qr_tickets.scanPhase = entered`
@@ -59,7 +61,7 @@ It must not contain JSON, user ids, admin ids, vehicle data, booking details, or
    - `bookings.status = active_parking`
    - `bookings.entryVerified = true`
    - `bookings.entryScannedAt = server timestamp`
-7. Python returns `ENTRY`.
+9. Python returns `ENTRY`.
 
 The transaction prevents two devices from confirming entry with the same QR.
 
@@ -92,6 +94,39 @@ Exit updates:
 | `EXIT` | two short beeps |
 | `BEFORE_TIME` | one long beep |
 | `USED`, `EXPIRED`, `INVALID`, `ERROR` | long error beep |
+
+## ESP32 Configuration From Streamlit
+
+Streamlit can configure an ESP32 already connected to the same network:
+
+```text
+GET  http://<esp32-ip>/status
+POST http://<esp32-ip>/config
+POST http://<esp32-ip>/reset-config
+```
+
+`POST /config` body:
+
+```json
+{
+  "ssid": "Campus WiFi",
+  "password": "wifi-password",
+  "serverIp": "192.168.1.10",
+  "locationId": "area_sit_main_lot"
+}
+```
+
+The ESP32 saves the values to Preferences/NVS. Future calls to:
+
+```text
+GET /scan?id=<qrId>
+```
+
+are forwarded as:
+
+```text
+GET http://<python-server-ip>:5000/verify?id=<qrId>&locationId=<saved-locationId>
+```
 
 ## Local Development
 

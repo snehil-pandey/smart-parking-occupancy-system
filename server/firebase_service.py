@@ -143,10 +143,14 @@ def _verify_transaction(
         return RESULT_INVALID
 
     booking = booking_snapshot.to_dict() or {}
-    area_id = str(
-        ticket.get("areaId") or booking.get("areaId") or booking.get("parkingLocationId") or ""
-    )
-    if location_id and area_id and location_id != area_id:
+    ticket_area_id = str(ticket.get("areaId") or "")
+    booking_area_id = str(booking.get("areaId") or booking.get("parkingLocationId") or "")
+    area_id = ticket_area_id or booking_area_id
+    if location_id and (
+        not area_id
+        or (ticket_area_id and ticket_area_id != location_id)
+        or (booking_area_id and booking_area_id != location_id)
+    ):
         _log_scan(
             transaction,
             qr_id=qr_id,

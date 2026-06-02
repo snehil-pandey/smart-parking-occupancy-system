@@ -44,12 +44,35 @@ streamlit run streamlit_qr_control.py
 Features:
 
 - manually enter an opaque `qrId`
-- choose a Firebase parking area/location
+- choose a Firebase parking area/location as the scanner context
 - simulate entry or exit scans
 - call the same `verify_qr_scan` logic used by Flask
+- reject scans where the QR ticket or booking belongs to another parking area
 - show `ENTRY`, `EXIT`, `BEFORE_TIME`, `USED`, `EXPIRED`, `INVALID`, or `ERROR`
 - show a safe ticket/booking summary
 - show recent `/qr_scan_logs`
+- configure ESP32 WiFi/server/location settings over HTTP
+
+The Streamlit **Select Scanner Location** section loads `parking_areas` from Firebase. The selected `areaId` is used as `locationId` for scan simulation, matching a physical gate installed at that parking area.
+
+The **ESP32 Configuration** section calls:
+
+```text
+GET  http://<esp32-ip>/status
+POST http://<esp32-ip>/config
+POST http://<esp32-ip>/reset-config
+```
+
+`POST /config` sends JSON:
+
+```json
+{
+  "ssid": "Campus WiFi",
+  "password": "wifi-password",
+  "serverIp": "192.168.1.10",
+  "locationId": "area_sit_main_lot"
+}
+```
 
 ## Run Flask Server For ESP32
 
@@ -96,6 +119,7 @@ Firestore transactions prevent double entry scans and race conditions when two d
 ## QR Rules
 
 - QR payload is only the opaque `qrId`.
+- Scanner `locationId` must match both the active QR ticket area and the linked booking area when those fields are present.
 - Before `bookingStartAt - 5 minutes`, the result is `BEFORE_TIME`.
 - During the valid entry window, the first scan returns `ENTRY`.
 - Entry marks the QR `used`, `scannedOnce = true`, and `scanPhase = entered`.
