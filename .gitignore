@@ -8,6 +8,7 @@
 build/
 **/coverage/
 apks/
+apk/
 *.apk
 *.aab
 apk/*.apk
@@ -45,6 +46,7 @@ env/
 
 # Android / Gradle
 **/.gradle/
+.gradle/
 **/.kotlin/
 **/android/app/build/
 **/android/build/
