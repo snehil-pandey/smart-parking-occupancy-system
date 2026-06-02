@@ -1,13 +1,16 @@
 # Dart / Flutter
 **/.dart_tool/
+.dart_tool/
 **/.packages
 **/.flutter-plugins
 **/.flutter-plugins-dependencies
 **/build/
+build/
 **/coverage/
 apks/
 *.apk
 *.aab
+apk/*.apk
 *.appbundle
 *.symbols
 app.*.map.json
