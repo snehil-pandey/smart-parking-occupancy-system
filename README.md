@@ -1,106 +1,107 @@
-# Park Here Scanner
+# Park Here QR Bridge Addon
 
-Park Here Scanner is a standalone Android fallback QR scanner for Park Here gate and security verification.
+This `addon` branch is a lightweight Python + ESP32 bridge for Park Here QR gate verification.
 
-The primary Park Here gate flow is still ESP32-based QR hardware. This app exists for the practical case where the ESP32 scanner is unavailable, being repaired, or not yet installed. It is not the Park Here user app, not the admin app, and not a booking interface.
+It is no longer a Flutter scanner app. The Android fallback scanner was removed from this branch so the addon can stay focused on:
 
-## What This App Does
+- a Flask verification endpoint for ESP32 devices
+- a Streamlit QR scan simulator for development/testing
+- shared Firebase Admin SDK transaction logic
+- ESP32 WiFi provisioning and buzzer-based gate feedback
 
-- Opens the Android camera with `mobile_scanner`
-- Reads only an opaque `qrId`
-- Validates the `qr_live_...` format
-- Fetches `/active_qr_tickets/{qrId}` from Firebase
-- Fetches the linked `/bookings/{bookingId}`
-- Optionally fetches `/parking_areas/{areaId}` for display
-- Lets staff select the region, parking area, and gate this Android scanner is emulating
-- Rejects tickets that belong to a different parking location
-- Logs the Firebase project id, parsed QR id, lookup steps, and transaction result with `debugPrint`
-- Shows a simple gate-staff result
-- Confirms entry with a Firestore transaction
-- Marks the booking as `active_parking` after entry verification
+The main Park Here user/admin Flutter apps live on the main project branches. This addon stays separate and should not be merged into `main` unless the project explicitly decides to ship hardware tooling with the app repository.
 
-## QR Privacy Rule
-
-The QR payload must be only the opaque ticket id:
+## Structure
 
 ```text
-qr_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+server/
+  firebase_service.py
+  parking_server.py
+  streamlit_qr_control.py
+  requirements.txt
+  .env.example
+  README.md
+
+hardware/
+  esp32_parking_gate/
+    park_here_gate.ino
+    README.md
+
+docs/
+  QR_BRIDGE_FLOW.md
 ```
 
-The QR must not contain JSON, `userId`, `adminId`, vehicle number, booking details, timestamps, or parking area data. Firebase is the source of truth.
+## What It Does
 
-## Build
+1. User books parking in the Park Here user app.
+2. The user app creates `/bookings/{bookingId}` and `/active_qr_tickets/{qrId}` in Firebase.
+3. ESP32 or Streamlit submits only the opaque `qrId` and parking area `locationId`.
+4. Python verifies the QR through Firestore in a transaction.
+5. Python returns a plain command:
 
-Install Flutter, configure Firebase, then run:
-
-```bash
-flutter pub get
-flutter build apk --dart-define=NO_ESP=true
+```text
+ENTRY
+EXIT
+BEFORE_TIME
+USED
+EXPIRED
+INVALID
+ERROR
 ```
 
-`NO_ESP=true` means this APK is the Android fallback scanner mode and verifies directly through Firebase instead of ESP32 hardware.
+Firebase remains the source of truth. QR payloads must not contain booking JSON, user details, admin details, or vehicle details.
 
-### Windows Kotlin Build Troubleshooting
-
-On Windows, Kotlin incremental compilation can occasionally crash while compiling Android plugins such as `mobile_scanner` with an error like `this and base files have different roots`. The scanner disables Kotlin incremental compilation in `android/gradle.properties`:
-
-```properties
-kotlin.incremental=false
-kotlin.incremental.useClasspathSnapshot=false
-org.gradle.caching=false
-```
-
-If the cache issue appears again, reset only generated files:
+## Run Streamlit Simulator
 
 ```powershell
-cd android
-.\gradlew --stop
-cd ..
-flutter clean
-Remove-Item -Recurse -Force .dart_tool, build, android\.gradle, android\app\build -ErrorAction SilentlyContinue
-flutter pub get
-flutter build apk --release --dart-define=NO_ESP=true
+cd server
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+copy .env.example .env
+streamlit run streamlit_qr_control.py
+```
+
+Use Streamlit when you do not have a physical QR reader yet. It lets you paste a `qrId`, choose a parking area, and simulate entry/exit scans.
+
+## Run Flask Server For ESP32
+
+```powershell
+cd server
+pip install -r requirements.txt
+python parking_server.py
+```
+
+The ESP32 calls:
+
+```text
+GET http://<python-server>:5000/verify?id=<qrId>&locationId=<areaId>
 ```
 
 ## Firebase Setup
 
-This branch does not commit real Firebase secrets. Add Android Firebase configuration locally before running on a device:
-
-1. Create/select the Firebase project used by Park Here.
-2. Add an Android app with package `com.example.park_here_scanner` or update the package name and Firebase app to match.
-3. Download `google-services.json`.
-4. Place it at `android/app/google-services.json`.
-5. Follow `docs/FIREBASE_SETUP.md` if your FlutterFire setup requires generated options or Gradle plugin changes.
-
-The scanner initializes Firebase from `lib/firebase_options.dart`. Keep those options and any local `google-services.json` pointed at the same Park Here Firebase project.
-
-## Transaction Behavior
-
-Confirm Entry runs a Firestore transaction:
-
-1. Read `/active_qr_tickets/{qrId}`.
-2. Reject missing, used, expired, or non-active tickets.
-3. Read linked `/bookings/{bookingId}`.
-4. Reject missing or inactive bookings.
-5. Mark the ticket `used`.
-6. Update booking `status` to `active_parking`.
-7. Set booking `entryVerified`, `entryScannedAt`, `entryVerifiedAt`, `entryGateId`, `entryScannerMode`, and `qrUsedAt`.
-8. Write a minimal `/qr_scan_logs/{scanId}` record.
-
-This prevents double-scan/double-entry behavior.
-
-The used QR is never reactivated. A user receives another scannable QR only after completing the parking cycle and creating a new booking.
-
-## Project Structure
+Create a local `.env` in `server/`:
 
 ```text
-lib/main.dart
-lib/src/app.dart
-lib/src/firebase_bootstrap.dart
-lib/src/scanner_screen.dart
-lib/src/result_screen.dart
-lib/src/qr_models.dart
-lib/src/qr_verification_service.dart
-docs/QR_SCANNER_FLOW.md
-docs/FIREBASE_SETUP.md
+FIREBASE_SERVICE_ACCOUNT_PATH=./serviceAccountKey.json
+FIREBASE_PROJECT_ID=park-here-dev
+PORT=5000
 ```
+
+Place the Firebase Admin SDK service account JSON at `server/serviceAccountKey.json`.
+
+Do not commit `.env` or service account keys.
+
+## ESP32
+
+The ESP32 sketch does not require hardcoded WiFi credentials. On first boot it starts:
+
+```text
+SSID: ParkHere-Gate-Setup
+Password: parkhere123
+Setup page: http://192.168.4.1
+```
+
+Configure WiFi, Python server IP, and parking area `locationId` from the setup page.
+
+See [hardware/esp32_parking_gate/README.md](hardware/esp32_parking_gate/README.md).

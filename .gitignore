@@ -32,6 +32,13 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+__pycache__/
+.venv/
+venv/
+env/
+*.apk
+*.aab
+apk/
 android/app/google-services.json
 .env
 server/.env
@@ -51,7 +58,7 @@ app.*.map.json
 /android/app/release
 
 # Local residue from the main monorepo checkout. The orphan addon branch must
-# stay a standalone scanner app and should never track these folders.
+# stay a standalone Python + ESP32 QR bridge and should never track these folders.
 /.agents/
 /apps/
 /demo/

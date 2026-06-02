@@ -1,6 +1,6 @@
 # ESP32 Park Here Gate
 
-This sketch lets an ESP32 act as a simple Park Here QR gate bridge. It does not control a servo yet. It calls the Python verification server and plays buzzer patterns.
+This sketch lets an ESP32 act as a simple Park Here QR gate bridge. It does not control a servo or camera yet. It accepts a scanned/passed `qrId`, calls the Python verification server, and plays buzzer patterns.
 
 ## First-Time Setup
 
@@ -125,6 +125,8 @@ http://192.168.4.1
 
 - The QR payload must be only the opaque `qrId`.
 - Firebase truth lives on the Python server, not on the ESP32.
+- There is no camera requirement in this sketch. A serial QR reader, test client, or future hardware reader can call `/scan?id=<qrId>`.
+- During development, use `server/streamlit_qr_control.py` to simulate scans before testing ESP32 hardware.
 - The same QR cannot open entry twice. Normal repeat scans return `USED`.
 - Exit is intentionally explicit through `mode=exit` so an accidental second entry scan cannot complete the booking.
 - The current hardware path uses only a buzzer. Servo/gate motor control can be added later without changing the QR verification endpoint.
