@@ -16,6 +16,7 @@ String wifiSsid;
 String wifiPassword;
 String pythonServerBaseUrl;
 String defaultLocationId;
+String defaultCameraType;
 bool setupMode = false;
 
 void beep(int durationMs) {
@@ -119,6 +120,7 @@ void loadConfig() {
   wifiPassword = preferences.getString("wifiPass", "");
   pythonServerBaseUrl = preferences.getString("serverUrl", "");
   defaultLocationId = preferences.getString("locationId", "");
+  defaultCameraType = preferences.getString("cameraType", "entry");
 
   Serial.println("Loaded Park Here gate configuration.");
   Serial.print("Saved WiFi SSID: ");
@@ -127,9 +129,20 @@ void loadConfig() {
   Serial.println(pythonServerBaseUrl.length() > 0 ? pythonServerBaseUrl : "(none)");
   Serial.print("Default locationId: ");
   Serial.println(defaultLocationId.length() > 0 ? defaultLocationId : "(none)");
+  Serial.print("Default cameraType: ");
+  Serial.println(defaultCameraType.length() > 0 ? defaultCameraType : "(none)");
 }
 
-void saveConfig(String ssid, String password, String serverInput, String locationId) {
+String normalizeCameraType(String cameraType) {
+  cameraType.trim();
+  cameraType.toLowerCase();
+  if (cameraType == "exit") {
+    return "exit";
+  }
+  return "entry";
+}
+
+void saveConfig(String ssid, String password, String serverInput, String locationId, String cameraType) {
   ssid.trim();
   serverInput.trim();
   locationId.trim();
@@ -138,11 +151,13 @@ void saveConfig(String ssid, String password, String serverInput, String locatio
   wifiPassword = password;
   pythonServerBaseUrl = normalizeServerBaseUrl(serverInput);
   defaultLocationId = locationId;
+  defaultCameraType = normalizeCameraType(cameraType);
 
   preferences.putString("wifiSsid", wifiSsid);
   preferences.putString("wifiPass", wifiPassword);
   preferences.putString("serverUrl", pythonServerBaseUrl);
   preferences.putString("locationId", defaultLocationId);
+  preferences.putString("cameraType", defaultCameraType);
 }
 
 void clearConfig() {
@@ -152,12 +167,14 @@ void clearConfig() {
   wifiPassword = "";
   pythonServerBaseUrl = "";
   defaultLocationId = "";
+  defaultCameraType = "entry";
 }
 
 bool hasRequiredConfig() {
   return wifiSsid.length() > 0 &&
          pythonServerBaseUrl.length() > 0 &&
-         defaultLocationId.length() > 0;
+         defaultLocationId.length() > 0 &&
+         defaultCameraType.length() > 0;
 }
 
 bool connectToSavedWifi() {
@@ -224,6 +241,10 @@ void sendConfigPage(String message = "") {
   page += "<label>WiFi password</label><input name='password' type='password' value='" + htmlEscape(wifiPassword) + "'>";
   page += "<label>Python server IP or URL</label><input name='server' placeholder='192.168.1.10 or http://192.168.1.10:5000' value='" + htmlEscape(pythonServerBaseUrl) + "' required>";
   page += "<label>Parking area locationId</label><input name='locationId' placeholder='area_sit_main_lot' value='" + htmlEscape(defaultLocationId) + "' required>";
+  page += "<label>Camera type</label><select name='cameraType' style='width:100%;box-sizing:border-box;padding:11px;margin-top:6px;border:1px solid #9ca3af;border-radius:6px;font-size:16px;'>";
+  page += "<option value='entry'" + String(defaultCameraType == "entry" ? " selected" : "") + ">Entry Camera</option>";
+  page += "<option value='exit'" + String(defaultCameraType == "exit" ? " selected" : "") + ">Exit Camera</option>";
+  page += "</select>";
   page += "<button type='submit'>Save and restart</button></form>";
   page += "<a class='button' href='/status'>Status</a> ";
   page += "<a class='button' href='/reset-config' onclick=\"return confirm('Clear saved config and restart setup mode?')\">Reset config</a>";
@@ -247,7 +268,8 @@ void handleSaveConfig() {
     server.arg("ssid"),
     server.arg("password"),
     server.arg("server"),
-    server.arg("locationId")
+    server.arg("locationId"),
+    server.hasArg("cameraType") ? server.arg("cameraType") : "entry"
   );
 
   Serial.println("Saved new Park Here gate configuration. Restarting...");
@@ -267,13 +289,14 @@ void handleJsonConfig() {
   String password = jsonStringValue(body, "password");
   String serverIp = jsonStringValue(body, "serverIp");
   String locationId = jsonStringValue(body, "locationId");
+  String cameraType = jsonStringValue(body, "cameraType");
 
   if (ssid.length() == 0 || serverIp.length() == 0 || locationId.length() == 0) {
     server.send(400, "text/plain", "Missing ssid, serverIp, or locationId.");
     return;
   }
 
-  saveConfig(ssid, password, serverIp, locationId);
+  saveConfig(ssid, password, serverIp, locationId, cameraType);
 
   Serial.println("Saved JSON config from Streamlit. Restarting...");
   server.send(200, "text/plain", "CONFIG_SAVED_RESTARTING");
@@ -299,6 +322,7 @@ void handleStatus() {
   status += "localIp=" + String(setupMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString()) + "\n";
   status += "server=" + pythonServerBaseUrl + "\n";
   status += "locationId=" + defaultLocationId + "\n";
+  status += "cameraType=" + defaultCameraType + "\n";
   server.send(200, "text/plain", status);
 }
 
@@ -320,8 +344,12 @@ void handleScan() {
   if (locationId.length() == 0) {
     locationId = defaultLocationId;
   }
-  String mode = server.arg("mode");
-  mode.trim();
+  String cameraType = server.arg("cameraType");
+  cameraType.trim();
+  if (cameraType.length() == 0) {
+    cameraType = defaultCameraType;
+  }
+  cameraType = normalizeCameraType(cameraType);
 
   if (qrId.length() == 0 || locationId.length() == 0) {
     beepError();
@@ -331,9 +359,7 @@ void handleScan() {
 
   String url = pythonServerBaseUrl + "/verify?id=" + urlEncode(qrId);
   url += "&locationId=" + urlEncode(locationId);
-  if (mode.length() > 0) {
-    url += "&mode=" + urlEncode(mode);
-  }
+  url += "&cameraType=" + urlEncode(cameraType);
 
   Serial.print("Verifying QR through Python server: ");
   Serial.println(url);

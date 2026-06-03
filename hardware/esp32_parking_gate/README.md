@@ -21,6 +21,7 @@ Setup page: http://192.168.4.1
    - WiFi password
    - Python server IP or URL
    - parking area `locationId`
+   - camera type: `entry` or `exit`
 7. Tap **Save and restart**.
 
 The ESP32 stores this configuration in Preferences/NVS. No WiFi SSID or password needs to be hardcoded in the sketch.
@@ -56,21 +57,22 @@ The ESP32 exposes:
 ```text
 GET /scan?id=<qrId>
 GET /scan?id=<qrId>&locationId=<parkingAreaId>
+GET /scan?id=<qrId>&locationId=<parkingAreaId>&cameraType=<entry_or_exit>
 GET /status
 POST /config
 GET /reset-config
 POST /reset-config
 ```
 
-If `locationId` is omitted from `/scan`, the ESP32 uses the saved default parking area/location id.
+If `locationId` or `cameraType` is omitted from `/scan`, the ESP32 uses the saved default parking area/location id and camera type.
 
 The ESP32 forwards verification to:
 
 ```text
-GET <PYTHON_SERVER_BASE_URL>/verify?id=<qrId>&locationId=<parkingAreaId>
+GET <PYTHON_SERVER_BASE_URL>/verify?id=<qrId>&locationId=<parkingAreaId>&cameraType=<entry_or_exit>
 ```
 
-The Python bridge decides the current entry/exit phase from Firebase booking state and timing.
+The Python bridge runs entry logic only for entry cameras and exit logic only for exit cameras.
 
 ## Status
 
@@ -88,6 +90,7 @@ It returns plain text showing:
 - ESP32 local IP
 - Python server URL
 - default `locationId`
+- default `cameraType`
 
 ## Configure From Streamlit
 
@@ -104,11 +107,12 @@ JSON body:
   "ssid": "Campus WiFi",
   "password": "wifi-password",
   "serverIp": "192.168.1.10",
-  "locationId": "area_sit_main_lot"
+  "locationId": "area_sit_main_lot",
+  "cameraType": "entry"
 }
 ```
 
-The ESP32 saves these values to Preferences/NVS, restarts, connects to WiFi, and then uses the saved `locationId` for:
+The ESP32 saves these values to Preferences/NVS, restarts, connects to WiFi, and then uses the saved `locationId` and `cameraType` for:
 
 ```text
 GET /scan?id=<qrId>
@@ -117,7 +121,7 @@ GET /scan?id=<qrId>
 That scan is forwarded to:
 
 ```text
-GET http://<python-server-ip>:5000/verify?id=<qrId>&locationId=<saved-locationId>
+GET http://<python-server-ip>:5000/verify?id=<qrId>&locationId=<saved-locationId>&cameraType=<saved-cameraType>
 ```
 
 ## Reset / Change WiFi
@@ -157,5 +161,6 @@ http://192.168.4.1
 - During development, use `server/streamlit_qr_control.py` to simulate scans before testing ESP32 hardware.
 - Scans are location-aware. A QR for one parking area is rejected when scanned at a different saved `locationId`.
 - The same QR cannot open entry twice.
-- The same QR remains linked to the booking for exit. Exit is accepted only in the configured exit window and then the QR is closed.
+- Entry cameras do not run exit logic, and exit cameras do not run entry logic.
+- The same QR remains linked to the booking for exit. Exit is accepted only by an exit camera after entry and then the QR is closed.
 - The current hardware path uses only a buzzer. Servo/gate motor control can be added later without changing the QR verification endpoint.

@@ -36,7 +36,7 @@ It must not contain JSON, user ids, admin ids, vehicle data, booking details, or
 
 | Result | Meaning |
 | --- | --- |
-| `BEFORE_TIME` | QR is valid but scanned before the entry or exit unlock window |
+| `BEFORE_TIME` | Exit camera scanned a QR that has not completed entry yet |
 | `ENTRY` | Entry accepted and booking moved to `active_parking` |
 | `USED` | Entry or exit for this phase has already been completed |
 | `EXIT` | Exit accepted and booking moved to `completed` |
@@ -47,13 +47,13 @@ It must not contain JSON, user ids, admin ids, vehicle data, booking details, or
 ## Entry Flow
 
 1. Streamlit selects a parking area from Firebase `parking_areas`, or ESP32 uses its saved `locationId`.
-2. ESP32 or Streamlit submits `qrId` and `locationId`.
-3. Python reads `/active_qr_tickets/{qrId}`.
-4. Python reads linked `/bookings/{bookingId}`.
-5. Python verifies location, status, timing, and scan phase.
-6. If ticket `areaId` or booking `areaId` does not match scanner `locationId`, Python returns `INVALID`.
-7. If too early, Python returns `BEFORE_TIME` and does not change QR state.
-8. If valid, Python transaction updates:
+2. Streamlit selects Entry Camera, or ESP32 uses saved `cameraType = entry`.
+3. ESP32 or Streamlit submits `qrId`, `locationId`, and `cameraType`.
+4. Python reads `/active_qr_tickets/{qrId}`.
+5. Python reads linked `/bookings/{bookingId}`.
+6. Python verifies location, ticket status, and scan phase.
+7. If ticket `areaId` or booking `areaId` does not match scanner `locationId`, Python returns `INVALID`.
+8. If `cameraType=entry` and `scanPhase = entry_pending`, Python transaction updates:
    - `active_qr_tickets.scannedOnce = true`
    - `active_qr_tickets.scanPhase = entered`
    - `active_qr_tickets.entryScannedAt = server timestamp`
@@ -68,11 +68,9 @@ The QR ticket stays `status = active` after entry so the same opaque `qrId` can 
 
 Python returns `EXIT` only when:
 
-- booking status is `active_parking`
-- `entryVerified = true`
+- Streamlit or ESP32 uses `cameraType = exit`
 - ticket `scanPhase` is `entered` or `exit_pending`
 - the scan location matches the ticket/booking area
-- current time is within `bookingEndAt - 10 minutes` through `bookingEndAt + 10 minutes`
 
 Exit updates:
 
@@ -82,8 +80,9 @@ Exit updates:
 - `active_qr_tickets.status = used`
 - `active_qr_tickets.exitScannedAt = server timestamp`
 - `active_qr_tickets.completedAt = server timestamp`
+- `parking_areas.availableSpaces` increments by one
 
-Before the exit window opens, the same QR returns `BEFORE_TIME`. After exit, repeat scans return `USED`.
+If an exit camera scans a QR still in `entry_pending`, Python returns `BEFORE_TIME`. After exit, repeat scans return `USED`. Entry cameras never run exit updates, and exit cameras never run entry updates.
 
 ## ESP32 Beep Mapping
 
@@ -111,7 +110,8 @@ POST http://<esp32-ip>/reset-config
   "ssid": "Campus WiFi",
   "password": "wifi-password",
   "serverIp": "192.168.1.10",
-  "locationId": "area_sit_main_lot"
+  "locationId": "area_sit_main_lot",
+  "cameraType": "entry"
 }
 ```
 
@@ -124,7 +124,7 @@ GET /scan?id=<qrId>
 are forwarded as:
 
 ```text
-GET http://<python-server-ip>:5000/verify?id=<qrId>&locationId=<saved-locationId>
+GET http://<python-server-ip>:5000/verify?id=<qrId>&locationId=<saved-locationId>&cameraType=<saved-cameraType>
 ```
 
 ## Local Development

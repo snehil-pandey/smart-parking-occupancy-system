@@ -21,7 +21,11 @@ def health() -> Response:
 def verify() -> Response:
     qr_id = (request.args.get("id") or "").strip()
     location_id = (request.args.get("locationId") or "").strip()
-    mode = (request.args.get("mode") or "auto").strip().lower()
+    camera_type = (
+        request.args.get("cameraType")
+        or request.args.get("mode")
+        or "entry"
+    ).strip().lower()
 
     if not qr_id:
         return _text(RESULT_INVALID)
@@ -31,7 +35,7 @@ def verify() -> Response:
             verify_qr_scan(
                 qr_id=qr_id,
                 location_id=location_id,
-                mode=mode,
+                camera_type=camera_type,
                 source="esp32_python_server",
             )
         )

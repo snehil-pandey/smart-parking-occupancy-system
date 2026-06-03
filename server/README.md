@@ -45,7 +45,8 @@ Features:
 
 - manually enter an opaque `qrId`
 - choose a Firebase parking area/location as the scanner context
-- simulate the same automatic entry/exit phase decision used by ESP32
+- choose Entry Camera or Exit Camera
+- simulate the same Firebase key/value update path used by ESP32
 - call the same `verify_qr_scan` logic used by Flask
 - reject scans where the QR ticket or booking belongs to another parking area
 - show `ENTRY`, `EXIT`, `BEFORE_TIME`, `USED`, `EXPIRED`, `INVALID`, or `ERROR`
@@ -70,7 +71,8 @@ POST http://<esp32-ip>/reset-config
   "ssid": "Campus WiFi",
   "password": "wifi-password",
   "serverIp": "192.168.1.10",
-  "locationId": "area_sit_main_lot"
+  "locationId": "area_sit_main_lot",
+  "cameraType": "entry"
 }
 ```
 
@@ -84,7 +86,7 @@ python parking_server.py
 ESP32 calls:
 
 ```text
-GET /verify?id=<qrId>&locationId=<parkingAreaId>
+GET /verify?id=<qrId>&locationId=<parkingAreaId>&cameraType=<entry_or_exit>
 ```
 
 Responses are plain text only:
@@ -114,10 +116,9 @@ Firestore transactions prevent double entry scans and race conditions when two d
 
 - QR payload is only the opaque `qrId`.
 - Scanner `locationId` must match both the active QR ticket area and the linked booking area when those fields are present.
-- Before `bookingStartAt - 5 minutes`, the result is `BEFORE_TIME`.
-- During the valid entry window, the first scan returns `ENTRY`.
+- `cameraType=entry` only processes `scanPhase = entry_pending`.
 - Entry keeps the same QR active for the booking, sets `scannedOnce = true`, and moves `scanPhase = entered`.
-- A repeated scan before the exit window returns `BEFORE_TIME`; a closed booking returns `USED`.
-- Exit is allowed only from `bookingEndAt - 10 minutes` through `bookingEndAt + 10 minutes`.
-- Exit marks the booking `completed` and the QR ticket `status = used`.
+- `cameraType=exit` only processes `scanPhase = entered` or `exit_pending`.
+- Exit marks the booking `completed`, closes the QR ticket with `status = used`, and increments `parking_areas.availableSpaces`.
+- Exit camera scans before entry return `BEFORE_TIME`; repeat closed scans return `USED`.
 - Expired/cancelled tickets return `EXPIRED` or `INVALID`.

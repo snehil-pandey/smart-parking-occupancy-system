@@ -49,12 +49,13 @@ def main() -> None:
 
     areas = list_parking_areas()
     selected_area_id = _select_scanner_location(areas)
+    selected_camera_type = _select_camera_type()
 
     scan_tab, esp_tab, logs_tab = st.tabs(["Simulate Scan", "ESP32 Configuration", "Scan Logs"])
     with scan_tab:
-        _scan_panel(selected_area_id)
+        _scan_panel(selected_area_id, selected_camera_type)
     with esp_tab:
-        _esp32_config_panel(selected_area_id)
+        _esp32_config_panel(selected_area_id, selected_camera_type)
     with logs_tab:
         _scan_logs_panel()
 
@@ -74,14 +75,29 @@ def _select_scanner_location(areas: list) -> str:
     return selected_area.area_id
 
 
-def _scan_panel(selected_area_id: str) -> None:
+def _select_camera_type() -> str:
+    st.header("Select Camera Type")
+    label = st.radio(
+        "Camera type",
+        ["Entry Camera", "Exit Camera"],
+        horizontal=True,
+    )
+    camera_type = "entry" if label == "Entry Camera" else "exit"
+    st.session_state["selected_camera_type"] = camera_type
+    st.info(f"Current cameraType: {camera_type}")
+    return camera_type
+
+
+def _scan_panel(selected_area_id: str, selected_camera_type: str) -> None:
     st.subheader("Simulate QR Scan")
     with st.form("scan_form"):
         qr_id = st.text_input("QR id", placeholder="qr_live_...")
         submitted = st.form_submit_button("Simulate Scan", type="primary")
 
     if not submitted:
-        st.caption("Scan flow: selected parking area -> qrId input -> Simulate Scan.")
+        st.caption(
+            "Scan flow: selected parking area -> selected camera type -> qrId input -> Simulate Scan."
+        )
         return
 
     if not selected_area_id:
@@ -95,6 +111,7 @@ def _scan_panel(selected_area_id: str) -> None:
         result = verify_qr_scan(
             qr_id=qr_id,
             location_id=selected_area_id,
+            camera_type=selected_camera_type,
             source="streamlit_simulator",
         )
     _show_result(result)
@@ -102,7 +119,7 @@ def _scan_panel(selected_area_id: str) -> None:
     st.json(get_ticket_debug_summary(qr_id), expanded=False)
 
 
-def _esp32_config_panel(selected_area_id: str) -> None:
+def _esp32_config_panel(selected_area_id: str, selected_camera_type: str) -> None:
     st.subheader("ESP32 Configuration")
     st.write("Use this to update a gate device after it is reachable on the same network.")
 
@@ -115,6 +132,11 @@ def _esp32_config_panel(selected_area_id: str) -> None:
             "Parking Area / Location ID",
             value=selected_area_id,
             placeholder="area_sit_main_lot",
+        )
+        camera_type = st.selectbox(
+            "Camera Type",
+            ["entry", "exit"],
+            index=0 if selected_camera_type == "entry" else 1,
         )
         col1, col2, col3 = st.columns(3)
         update_clicked = col1.form_submit_button("Update ESP32 Config", type="primary")
@@ -130,6 +152,7 @@ def _esp32_config_panel(selected_area_id: str) -> None:
             "password": wifi_password,
             "serverIp": python_server_ip,
             "locationId": location_id,
+            "cameraType": camera_type,
         }
         _post_esp_json(esp_ip, "/config", payload)
 

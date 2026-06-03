@@ -36,7 +36,7 @@ docs/
 
 1. User books parking in the Park Here user app.
 2. The user app creates `/bookings/{bookingId}` and `/active_qr_tickets/{qrId}` in Firebase.
-3. ESP32 or Streamlit submits only the opaque `qrId` and selected parking area `locationId`.
+3. ESP32 or Streamlit submits only the opaque `qrId`, selected parking area `locationId`, and configured `cameraType`.
 4. Python verifies the QR through Firestore in a transaction.
 5. Python returns a plain command:
 
@@ -63,9 +63,9 @@ copy .env.example .env
 streamlit run streamlit_qr_control.py
 ```
 
-Use Streamlit when you do not have a physical QR reader yet. It lets you paste a `qrId`, choose a parking area, and simulate the same phase-based scan used by the ESP32 bridge.
+Use Streamlit when you do not have a physical QR reader yet. It lets you paste a `qrId`, choose a parking area, choose Entry Camera or Exit Camera, and simulate the same key/value Firebase updates used by the ESP32 bridge.
 
-Streamlit also includes an **ESP32 Configuration** section. Enter the ESP32 IP address, WiFi SSID/password, Python server IP, and parking area `locationId`, then use:
+Streamlit also includes an **ESP32 Configuration** section. Enter the ESP32 IP address, WiFi SSID/password, Python server IP, parking area `locationId`, and camera type, then use:
 
 - **Update ESP32 Config** to POST `/config`
 - **Check ESP32 Status** to GET `/status`
@@ -82,12 +82,12 @@ python parking_server.py
 The ESP32 calls:
 
 ```text
-GET http://<python-server>:5000/verify?id=<qrId>&locationId=<areaId>
+GET http://<python-server>:5000/verify?id=<qrId>&locationId=<areaId>&cameraType=<entry_or_exit>
 ```
 
 The Python verifier rejects scans when the QR ticket or linked booking belongs to a different `areaId` than the scanner `locationId`.
 
-The same `qrId` stays linked to the booking for both entry and exit. Entry does not close the QR permanently; it marks `scanPhase = entered` and moves the booking to `active_parking`. Exit is allowed only near the reserved end time and then closes the ticket with `status = used`.
+Entry cameras only process `scanPhase = entry_pending` and update it to `entered`. Exit cameras only process `scanPhase = entered` or `exit_pending` and close the ticket as `used`.
 
 ## Firebase Setup
 
@@ -113,6 +113,6 @@ Password: parkhere123
 Setup page: http://192.168.4.1
 ```
 
-Configure WiFi, Python server IP, and parking area `locationId` from the setup page.
+Configure WiFi, Python server IP, parking area `locationId`, and camera type from the setup page.
 
 See [hardware/esp32_parking_gate/README.md](hardware/esp32_parking_gate/README.md).

@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -34,9 +34,10 @@ VALID_RESULTS = {
     RESULT_ERROR,
 }
 
-ENTRY_UNLOCK_WINDOW = timedelta(minutes=5)
-EXIT_WINDOW = timedelta(minutes=10)
 LOG_SOURCE = "esp32_python_server"
+CAMERA_ENTRY = "entry"
+CAMERA_EXIT = "exit"
+VALID_CAMERA_TYPES = {CAMERA_ENTRY, CAMERA_EXIT}
 
 _db: firestore.Client | None = None
 
@@ -92,7 +93,7 @@ def firebase_project_id() -> str:
 def verify_qr_scan(
     qr_id: str,
     location_id: str = "",
-    mode: str = "auto",
+    camera_type: str = CAMERA_ENTRY,
     source: str = LOG_SOURCE,
 ) -> str:
     """Verify a QR scan and atomically update Firestore.
@@ -103,14 +104,14 @@ def verify_qr_scan(
 
     qr_id = (qr_id or "").strip()
     location_id = (location_id or "").strip()
-    mode = (mode or "auto").strip().lower()
+    camera_type = _normalize_camera_type(camera_type)
     source = (source or LOG_SOURCE).strip()
 
-    if not _is_valid_qr_id(qr_id):
+    if not _is_valid_qr_id(qr_id) or camera_type not in VALID_CAMERA_TYPES:
         return RESULT_INVALID
 
     try:
-        return _verify_transaction(qr_id, location_id, mode, source)
+        return _verify_transaction(qr_id, location_id, camera_type, source)
     except Exception:
         return RESULT_ERROR
 
@@ -120,7 +121,7 @@ def _verify_transaction(
     transaction: Transaction,
     qr_id: str,
     location_id: str,
-    mode: str,
+    camera_type: str,
     source: str,
 ) -> str:
     db = get_firestore_client()
@@ -175,17 +176,6 @@ def _verify_transaction(
     ticket_status = str(ticket.get("status") or "")
     booking_status = str(booking.get("status") or "")
     scan_phase = str(ticket.get("scanPhase") or "entry_pending")
-    scanned_once = bool(ticket.get("scannedOnce"))
-    entry_scanned_at = ticket.get("entryScannedAt") or booking.get("entryScannedAt")
-    exit_scanned_at = ticket.get("exitScannedAt") or booking.get("exitScannedAt")
-    entry_verified = bool(booking.get("entryVerified"))
-    now = datetime.now(timezone.utc)
-    start_at = _field_time(ticket, booking, "bookingStartAt", "startTime")
-    end_at = _field_time(ticket, booking, "bookingEndAt", "endTime", "expiresAt")
-    expires_at = _field_time(ticket, booking, "expiresAt", "bookingEndAt", "endTime")
-    entry_unlock_at = start_at - ENTRY_UNLOCK_WINDOW
-    exit_unlock_at = end_at - EXIT_WINDOW
-    exit_expires_at = end_at + EXIT_WINDOW
 
     if ticket_status in {"cancelled", "canceled"} or booking_status == "cancelled":
         _log_scan(
@@ -199,36 +189,6 @@ def _verify_transaction(
             scan_phase=scan_phase,
         )
         return RESULT_INVALID
-
-    if exit_scanned_at or booking_status == "completed" or scan_phase == "exited":
-        _log_scan(
-            transaction,
-            qr_id=qr_id,
-            booking_id=str(booking_id),
-            user_id=str(ticket.get("userId") or booking.get("userId") or ""),
-            area_id=area_id,
-            result=RESULT_USED,
-            location_id=location_id,
-            source=source,
-            scan_phase=scan_phase,
-            message="Booking already exited.",
-        )
-        return RESULT_USED
-
-    if ticket_status == "used":
-        _log_scan(
-            transaction,
-            qr_id=qr_id,
-            booking_id=str(booking_id),
-            user_id=str(ticket.get("userId") or booking.get("userId") or ""),
-            area_id=area_id,
-            result=RESULT_USED,
-            location_id=location_id,
-            source=source,
-            scan_phase=scan_phase,
-            message="Ticket is already closed.",
-        )
-        return RESULT_USED
 
     if ticket_status == "expired" or booking_status == "expired":
         _log_scan(
@@ -244,52 +204,23 @@ def _verify_transaction(
         )
         return RESULT_EXPIRED
 
-    if now > exit_expires_at:
-        transaction.update(
-            ticket_ref,
-            {
-                "status": "expired",
-                "scanPhase": "expired",
-                "updatedAt": firestore.SERVER_TIMESTAMP,
-            },
-        )
-        transaction.update(
-            booking_ref,
-            {
-                "status": "expired",
-                "updatedAt": firestore.SERVER_TIMESTAMP,
-            },
-        )
+    if ticket_status in {"used", "completed"} or booking_status == "completed" or scan_phase == "exited":
         _log_scan(
             transaction,
             qr_id=qr_id,
             booking_id=str(booking_id),
             user_id=str(ticket.get("userId") or booking.get("userId") or ""),
             area_id=area_id,
-            result=RESULT_EXPIRED,
+            result=RESULT_USED,
             location_id=location_id,
             source=source,
             scan_phase=scan_phase,
-            message="Exit window expired without exit scan.",
+            message="Ticket is already closed.",
         )
-        return RESULT_EXPIRED
+        return RESULT_USED
 
-    if mode == "exit" or booking_status == "active_parking" or entry_verified or entry_scanned_at:
-        if now < exit_unlock_at:
-            _log_scan(
-                transaction,
-                qr_id=qr_id,
-                booking_id=str(booking_id),
-                user_id=str(ticket.get("userId") or booking.get("userId") or ""),
-                area_id=area_id,
-                result=RESULT_BEFORE_TIME,
-                location_id=location_id,
-                source=source,
-                scan_phase=scan_phase,
-                message="Exit scan before exit window.",
-            )
-            return RESULT_BEFORE_TIME
-        return _handle_exit(
+    if camera_type == CAMERA_ENTRY:
+        return _handle_entry_camera(
             transaction=transaction,
             ticket_ref=ticket_ref,
             booking_ref=booking_ref,
@@ -297,121 +228,28 @@ def _verify_transaction(
             booking_id=str(booking_id),
             area_id=area_id,
             location_id=location_id,
-            booking_status=booking_status,
+            ticket_status=ticket_status,
             scan_phase=scan_phase,
             source=source,
             user_id=str(ticket.get("userId") or booking.get("userId") or ""),
-            exit_expires_at=exit_expires_at,
         )
 
-    if scanned_once or scan_phase in {"entered", "exit_pending"}:
-        _log_scan(
-            transaction,
-            qr_id=qr_id,
-            booking_id=str(booking_id),
-            user_id=str(ticket.get("userId") or booking.get("userId") or ""),
-            area_id=area_id,
-            result=RESULT_BEFORE_TIME if now < exit_unlock_at else RESULT_USED,
-            location_id=location_id,
-            source=source,
-            scan_phase=scan_phase,
-            message="Entry already scanned.",
-        )
-        return RESULT_BEFORE_TIME if now < exit_unlock_at else RESULT_USED
-
-    if now > expires_at:
-        transaction.update(ticket_ref, {"status": "expired", "updatedAt": firestore.SERVER_TIMESTAMP})
-        _log_scan(
-            transaction,
-            qr_id=qr_id,
-            booking_id=str(booking_id),
-            user_id=str(ticket.get("userId") or booking.get("userId") or ""),
-            area_id=area_id,
-            result=RESULT_EXPIRED,
-            location_id=location_id,
-            source=source,
-            scan_phase=scan_phase,
-        )
-        return RESULT_EXPIRED
-
-    if now < entry_unlock_at:
-        _log_scan(
-            transaction,
-            qr_id=qr_id,
-            booking_id=str(booking_id),
-            user_id=str(ticket.get("userId") or booking.get("userId") or ""),
-            area_id=area_id,
-            result=RESULT_BEFORE_TIME,
-            location_id=location_id,
-            source=source,
-            scan_phase=scan_phase,
-        )
-        return RESULT_BEFORE_TIME
-
-    if now > end_at and booking_status == "confirmed":
-        transaction.update(ticket_ref, {"status": "expired", "updatedAt": firestore.SERVER_TIMESTAMP})
-        transaction.update(booking_ref, {"status": "expired", "updatedAt": firestore.SERVER_TIMESTAMP})
-        _log_scan(
-            transaction,
-            qr_id=qr_id,
-            booking_id=str(booking_id),
-            user_id=str(ticket.get("userId") or booking.get("userId") or ""),
-            area_id=area_id,
-            result=RESULT_EXPIRED,
-            location_id=location_id,
-            source=source,
-            scan_phase=scan_phase,
-            message="Entry was missed before booking end.",
-        )
-        return RESULT_EXPIRED
-
-    if ticket_status != "active" or booking_status != "confirmed":
-        _log_scan(
-            transaction,
-            qr_id=qr_id,
-            booking_id=str(booking_id),
-            user_id=str(ticket.get("userId") or booking.get("userId") or ""),
-            area_id=area_id,
-            result=RESULT_INVALID,
-            location_id=location_id,
-            source=source,
-            scan_phase=scan_phase,
-        )
-        return RESULT_INVALID
-
-    transaction.update(
-        ticket_ref,
-        {
-            "scannedOnce": True,
-            "entryScannedAt": firestore.SERVER_TIMESTAMP,
-            "scanPhase": "entered",
-            "updatedAt": firestore.SERVER_TIMESTAMP,
-        },
-    )
-    transaction.update(
-        booking_ref,
-        {
-            "status": "active_parking",
-            "entryVerified": True,
-            "entryScannedAt": firestore.SERVER_TIMESTAMP,
-            "updatedAt": firestore.SERVER_TIMESTAMP,
-        },
-    )
-    _log_scan(
-        transaction,
+    return _handle_exit_camera(
+        transaction=transaction,
+        ticket_ref=ticket_ref,
+        booking_ref=booking_ref,
         qr_id=qr_id,
         booking_id=str(booking_id),
-        user_id=str(ticket.get("userId") or booking.get("userId") or ""),
         area_id=area_id,
-        result=RESULT_ENTRY,
         location_id=location_id,
+        ticket_status=ticket_status,
+        scan_phase=scan_phase,
         source=source,
-        scan_phase="entered",
+        user_id=str(ticket.get("userId") or booking.get("userId") or ""),
     )
-    return RESULT_ENTRY
 
 
-def _handle_exit(
+def _handle_entry_camera(
     *,
     transaction: Transaction,
     ticket_ref: Any,
@@ -420,36 +258,12 @@ def _handle_exit(
     booking_id: str,
     area_id: str,
     location_id: str,
-    booking_status: str,
+    ticket_status: str,
     scan_phase: str,
     source: str,
     user_id: str,
-    exit_expires_at: datetime,
 ) -> str:
-    now = datetime.now(timezone.utc)
-    if now > exit_expires_at:
-        transaction.update(
-            booking_ref,
-            {"status": "expired", "updatedAt": firestore.SERVER_TIMESTAMP},
-        )
-        transaction.update(
-            ticket_ref,
-            {"status": "expired", "scanPhase": "expired", "updatedAt": firestore.SERVER_TIMESTAMP},
-        )
-        _log_scan(
-            transaction,
-            qr_id=qr_id,
-            booking_id=booking_id,
-            user_id=user_id,
-            area_id=area_id,
-            result=RESULT_EXPIRED,
-            location_id=location_id,
-            source=source,
-            scan_phase=scan_phase,
-            message="Exit window expired.",
-        )
-        return RESULT_EXPIRED
-    if booking_status == "completed" or scan_phase == "exited":
+    if ticket_status not in {"", "active"} or scan_phase != "entry_pending":
         _log_scan(
             transaction,
             qr_id=qr_id,
@@ -460,40 +274,86 @@ def _handle_exit(
             location_id=location_id,
             source=source,
             scan_phase=scan_phase,
+            camera_type=CAMERA_ENTRY,
+            message="Entry camera cannot process current scan phase.",
         )
         return RESULT_USED
-    if booking_status != "active_parking" or scan_phase not in {"entered", "exit_pending"}:
+
+    transaction.update(ticket_ref, {
+        "scannedOnce": True,
+        "entryScannedAt": firestore.SERVER_TIMESTAMP,
+        "scanPhase": "entered",
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    })
+    transaction.update(booking_ref, {
+        "status": "active_parking",
+        "entryVerified": True,
+        "entryScannedAt": firestore.SERVER_TIMESTAMP,
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    })
+    _log_scan(
+        transaction,
+        qr_id=qr_id,
+        booking_id=booking_id,
+        user_id=user_id,
+        area_id=area_id,
+        result=RESULT_ENTRY,
+        location_id=location_id,
+        source=source,
+        scan_phase="entered",
+        camera_type=CAMERA_ENTRY,
+    )
+    return RESULT_ENTRY
+
+
+def _handle_exit_camera(
+    *,
+    transaction: Transaction,
+    ticket_ref: Any,
+    booking_ref: Any,
+    qr_id: str,
+    booking_id: str,
+    area_id: str,
+    location_id: str,
+    ticket_status: str,
+    scan_phase: str,
+    source: str,
+    user_id: str,
+) -> str:
+    if ticket_status not in {"", "active"} or scan_phase not in {"entered", "exit_pending"}:
         _log_scan(
             transaction,
             qr_id=qr_id,
             booking_id=booking_id,
             user_id=user_id,
             area_id=area_id,
-            result=RESULT_INVALID,
+            result=RESULT_BEFORE_TIME if scan_phase == "entry_pending" else RESULT_USED,
             location_id=location_id,
             source=source,
             scan_phase=scan_phase,
+            camera_type=CAMERA_EXIT,
+            message="Exit camera cannot process current scan phase.",
         )
-        return RESULT_INVALID
+        return RESULT_BEFORE_TIME if scan_phase == "entry_pending" else RESULT_USED
 
-    transaction.update(
-        booking_ref,
-        {
-            "status": "completed",
-            "exitScannedAt": firestore.SERVER_TIMESTAMP,
+    transaction.update(booking_ref, {
+        "status": "completed",
+        "exitScannedAt": firestore.SERVER_TIMESTAMP,
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    })
+    transaction.update(ticket_ref, {
+        "scanPhase": "exited",
+        "status": "used",
+        "exitScannedAt": firestore.SERVER_TIMESTAMP,
+        "completedAt": firestore.SERVER_TIMESTAMP,
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    })
+    if area_id:
+        area_ref = get_firestore_client().collection("parking_areas").document(area_id)
+        transaction.update(area_ref, {
+            "availableSpaces": firestore.Increment(1),
             "updatedAt": firestore.SERVER_TIMESTAMP,
-        },
-    )
-    transaction.update(
-        ticket_ref,
-        {
-            "scanPhase": "exited",
-            "status": "used",
-            "exitScannedAt": firestore.SERVER_TIMESTAMP,
-            "completedAt": firestore.SERVER_TIMESTAMP,
-            "updatedAt": firestore.SERVER_TIMESTAMP,
-        },
-    )
+        })
     _log_scan(
         transaction,
         qr_id=qr_id,
@@ -504,6 +364,7 @@ def _handle_exit(
         location_id=location_id,
         source=source,
         scan_phase="exited",
+        camera_type=CAMERA_EXIT,
     )
     return RESULT_EXIT
 
@@ -571,6 +432,7 @@ def latest_scan_logs(limit: int = 20) -> list[dict[str, Any]]:
                 "bookingId": data.get("bookingId"),
                 "areaId": data.get("areaId"),
                 "locationId": data.get("locationId"),
+                "cameraType": data.get("cameraType"),
                 "source": data.get("source"),
                 "scannedAt": _display_time(data.get("scannedAt")),
                 "message": data.get("message"),
@@ -585,6 +447,15 @@ def _is_valid_qr_id(qr_id: str) -> bool:
     if len(qr_id) < 8 or len(qr_id) > 96:
         return False
     return all(ch.isalnum() or ch in {"_", "-"} for ch in qr_id)
+
+
+def _normalize_camera_type(camera_type: str) -> str:
+    value = (camera_type or CAMERA_ENTRY).strip().lower()
+    if value in {"entry", "entry_camera", "entry camera"}:
+        return CAMERA_ENTRY
+    if value in {"exit", "exit_camera", "exit camera"}:
+        return CAMERA_EXIT
+    return value
 
 
 def _field_time(ticket: dict[str, Any], booking: dict[str, Any], *names: str) -> datetime:
@@ -632,6 +503,7 @@ def _log_scan(
     location_id: str = "",
     source: str = LOG_SOURCE,
     scan_phase: str = "",
+    camera_type: str = "",
     message: str = "",
 ) -> None:
     db = get_firestore_client()
@@ -648,6 +520,7 @@ def _log_scan(
             "scannedAt": firestore.SERVER_TIMESTAMP,
             "source": source,
             "locationId": location_id,
+            "cameraType": camera_type,
             "message": message,
         },
     )
