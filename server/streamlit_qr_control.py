@@ -27,8 +27,8 @@ from firebase_service import (
 RESULT_HELP = {
     RESULT_ENTRY: "Entry accepted. Booking is now active parking.",
     RESULT_EXIT: "Exit accepted. Booking is now completed.",
-    RESULT_BEFORE_TIME: "QR is valid, but the current entry/exit scan window is not open yet.",
-    RESULT_USED: "QR cannot be used for this phase again.",
+    RESULT_BEFORE_TIME: "QR is valid, but entry is not unlocked yet.",
+    RESULT_USED: "QR is closed in a legacy state.",
     RESULT_EXPIRED: "Parking session is completed or the QR/booking has expired.",
     RESULT_INVALID: "QR, booking, status, or scanner location did not pass validation.",
     RESULT_ERROR: "Verification failed. Check server logs and Firebase config.",
@@ -78,8 +78,8 @@ def _select_scanner_location(areas: list) -> str:
 def _scan_panel(selected_area_id: str) -> None:
     st.subheader("Simulate QR Scan")
     st.caption(
-        "Entry/exit camera selection is hidden for now; this panel performs a "
-        "location-based QR verification against Firebase."
+        "This panel performs location-based QR verification against Firebase. "
+        "Ticket status decides whether the scan is entry or exit."
     )
 
     decoded_qr = ""
@@ -179,23 +179,25 @@ def _show_result(result: str) -> None:
 
 
 def _show_phase_summary(summary: dict) -> None:
-    phase = summary.get("scanPhase")
+    ticket_status = summary.get("ticketStatus")
     status = summary.get("bookingStatus")
     entry_at = summary.get("entryScannedAt")
     exit_at = summary.get("exitScannedAt")
     if not summary.get("ticketExists"):
         return
 
-    if phase == "entry_pending":
-        st.info("Phase: entry pending.")
-    elif phase == "entered" and status == "active_parking" and not exit_at:
-        st.info("Phase: entry verified; waiting for the exit scan window.")
-    elif phase == "exited" or status == "completed" or exit_at:
+    if ticket_status == "active":
+        st.info("Status: active. Next valid scan is ENTRY.")
+    elif ticket_status == "entry_verified":
+        st.info("Status: entry verified. Next valid scan is EXIT before booking end.")
+    elif ticket_status == "completed" or status == "completed" or exit_at:
         st.success("Phase: parking session completed.")
-    elif status == "expired":
+    elif ticket_status == "expired" or status == "expired":
         st.warning("Phase: expired.")
+    elif ticket_status == "cancelled":
+        st.warning("Phase: cancelled.")
     else:
-        st.info(f"Phase: {phase or 'unknown'}")
+        st.info(f"Status: {ticket_status or 'unknown'}")
 
     if entry_at:
         st.caption(f"Entry scanned at: {entry_at}")

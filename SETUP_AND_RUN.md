@@ -88,7 +88,7 @@ Scan flow:
 selected location -> qrId -> Firebase transaction
 ```
 
-Entry/exit camera controls are intentionally hidden in this Streamlit build. The Python endpoint keeps optional `cameraType` compatibility, but the tester UI stays location-based until the full entry/exit timing flow is verified end-to-end in the deployed apps.
+The Python endpoint uses `active_qr_tickets.status` to decide whether the scan is entry or exit, so no camera type selector is needed.
 
 ## Run Flask Server
 
@@ -182,7 +182,7 @@ streamlit run streamlit_qr_control.py
 6. Click `Simulate Scan`.
 7. Verify the Firebase-backed result.
 9. Check Firebase:
-   - `active_qr_tickets/{qrId}.scanPhase = entered`
+   - `active_qr_tickets/{qrId}.status = entry_verified`
    - `active_qr_tickets/{qrId}.entryScannedAt` is set
    - `bookings/{bookingId}.status = active_parking`
    - `bookings/{bookingId}.entryVerified = true`

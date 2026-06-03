@@ -36,7 +36,7 @@ It must not contain JSON, user ids, admin ids, vehicle data, booking details, or
 
 | Result | Meaning |
 | --- | --- |
-| `BEFORE_TIME` | QR scanned before the currently allowed verification phase |
+| `BEFORE_TIME` | Entry QR scanned before the five-minute unlock window |
 | `ENTRY` | Entry accepted and booking moved to `active_parking` |
 | `USED` | QR is closed in an unsupported legacy state |
 | `EXIT` | Exit accepted and booking moved to `completed` |
@@ -51,41 +51,40 @@ It must not contain JSON, user ids, admin ids, vehicle data, booking details, or
 3. ESP32 or Streamlit submits `qrId` and `locationId`.
 4. Python reads `/active_qr_tickets/{qrId}`.
 5. Python reads linked `/bookings/{bookingId}`.
-6. Python verifies location, ticket status, and scan phase.
+6. Python verifies location, ticket status, booking status, and booking time.
 7. If ticket `areaId` or booking `areaId` does not match scanner `locationId`, Python returns `INVALID`.
-8. If the backend accepts the current phase, Python transaction updates:
-   - `active_qr_tickets.scannedOnce = true`
-   - `active_qr_tickets.scanPhase = entered`
+8. If `active_qr_tickets.status = active` and entry is unlocked, Python transaction updates:
+   - `active_qr_tickets.status = entry_verified`
    - `active_qr_tickets.entryScannedAt = server timestamp`
    - `bookings.status = active_parking`
    - `bookings.entryVerified = true`
    - `bookings.entryScannedAt = server timestamp`
 9. Python returns `ENTRY`.
 
-The QR ticket stays `status = active` after entry so the same opaque `qrId` can be used later for exit. The transaction prevents two devices from confirming entry with the same QR.
+The same opaque `qrId` remains tied to the booking after entry. The single lifecycle key changes from `active` to `entry_verified`, which lets the next scan act as exit.
 
 ## Exit Flow
 
-The default Flask/ESP path does not require `cameraType`. It infers entry or exit from booking status, `scanPhase`, timestamps, and the booking time window.
+The default Flask/ESP path infers entry or exit from `active_qr_tickets.status`.
 
 Python returns `EXIT` only when:
 
-- ticket `scanPhase` is `entered` or `exit_pending`
+- ticket status is `entry_verified`
 - booking status is `active_parking`
-- `bookingEndAt - 10 minutes <= now <= bookingEndAt + 10 minutes`
+- current time is before `bookingEndAt`
 - the scan location matches the ticket/booking area
 
 Exit updates:
 
 - `bookings.status = completed`
 - `bookings.exitScannedAt = server timestamp`
-- `active_qr_tickets.scanPhase = exited`
-- `active_qr_tickets.status = expired`
+- `bookings.completedAt = server timestamp`
+- `active_qr_tickets.status = completed`
 - `active_qr_tickets.exitScannedAt = server timestamp`
 - `active_qr_tickets.completedAt = server timestamp`
 - `parking_areas.availableSpaces` increments by one
 
-Before the exit window, repeat scans after entry return `BEFORE_TIME`. After exit, repeat scans return `EXPIRED`.
+If `now > bookingEndAt`, an `active` or `entry_verified` QR is marked `expired` and the booking is marked `expired`. After exit completion, repeat scans return `EXPIRED`.
 
 ## ESP32 Beep Mapping
 

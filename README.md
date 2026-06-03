@@ -87,7 +87,7 @@ GET http://<python-server>:5000/verify?id=<qrId>&locationId=<areaId>
 
 The Python verifier rejects scans when the QR ticket or linked booking belongs to a different `areaId` than the scanner `locationId`.
 
-The Flask endpoint still accepts optional `cameraType` for backend testing, but Streamlit hides that selector until the full entry/exit timing flow is verified end-to-end in the deployed apps.
+The Flask endpoint uses the ticket status to decide whether a scan is entry or exit; no camera type is required.
 
 ## Firebase Setup
 
