@@ -63,7 +63,7 @@ copy .env.example .env
 streamlit run streamlit_qr_control.py
 ```
 
-Use Streamlit when you do not have a physical QR reader yet. It lets you paste a `qrId`, choose a parking area, and simulate entry/exit scans.
+Use Streamlit when you do not have a physical QR reader yet. It lets you paste a `qrId`, choose a parking area, and simulate the same phase-based scan used by the ESP32 bridge.
 
 Streamlit also includes an **ESP32 Configuration** section. Enter the ESP32 IP address, WiFi SSID/password, Python server IP, and parking area `locationId`, then use:
 
@@ -86,6 +86,8 @@ GET http://<python-server>:5000/verify?id=<qrId>&locationId=<areaId>
 ```
 
 The Python verifier rejects scans when the QR ticket or linked booking belongs to a different `areaId` than the scanner `locationId`.
+
+The same `qrId` stays linked to the booking for both entry and exit. Entry does not close the QR permanently; it marks `scanPhase = entered` and moves the booking to `active_parking`. Exit is allowed only near the reserved end time and then closes the ticket with `status = used`.
 
 ## Firebase Setup
 

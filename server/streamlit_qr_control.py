@@ -78,7 +78,6 @@ def _scan_panel(selected_area_id: str) -> None:
     st.subheader("Simulate QR Scan")
     with st.form("scan_form"):
         qr_id = st.text_input("QR id", placeholder="qr_live_...")
-        scan_mode = st.radio("Scan mode", ["entry", "exit"], horizontal=True)
         submitted = st.form_submit_button("Simulate Scan", type="primary")
 
     if not submitted:
@@ -93,7 +92,11 @@ def _scan_panel(selected_area_id: str) -> None:
         return
 
     with st.spinner("Verifying QR through Firebase transaction..."):
-        result = verify_qr_scan(qr_id=qr_id, location_id=selected_area_id, mode=scan_mode)
+        result = verify_qr_scan(
+            qr_id=qr_id,
+            location_id=selected_area_id,
+            source="streamlit_simulator",
+        )
     _show_result(result)
     st.subheader("Ticket / booking summary")
     st.json(get_ticket_debug_summary(qr_id), expanded=False)

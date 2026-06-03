@@ -36,9 +36,9 @@ It must not contain JSON, user ids, admin ids, vehicle data, booking details, or
 
 | Result | Meaning |
 | --- | --- |
-| `BEFORE_TIME` | QR is valid but scanned earlier than `bookingStartAt - 5 minutes` |
+| `BEFORE_TIME` | QR is valid but scanned before the entry or exit unlock window |
 | `ENTRY` | Entry accepted and booking moved to `active_parking` |
-| `USED` | Entry QR has already been consumed or scan phase is no longer pending |
+| `USED` | Entry or exit for this phase has already been completed |
 | `EXIT` | Exit accepted and booking moved to `completed` |
 | `EXPIRED` | Ticket or booking is expired |
 | `INVALID` | QR, booking, status, or location does not pass validation |
@@ -54,7 +54,6 @@ It must not contain JSON, user ids, admin ids, vehicle data, booking details, or
 6. If ticket `areaId` or booking `areaId` does not match scanner `locationId`, Python returns `INVALID`.
 7. If too early, Python returns `BEFORE_TIME` and does not change QR state.
 8. If valid, Python transaction updates:
-   - `active_qr_tickets.status = used`
    - `active_qr_tickets.scannedOnce = true`
    - `active_qr_tickets.scanPhase = entered`
    - `active_qr_tickets.entryScannedAt = server timestamp`
@@ -63,28 +62,28 @@ It must not contain JSON, user ids, admin ids, vehicle data, booking details, or
    - `bookings.entryScannedAt = server timestamp`
 9. Python returns `ENTRY`.
 
-The transaction prevents two devices from confirming entry with the same QR.
+The QR ticket stays `status = active` after entry so the same opaque `qrId` can be used later for exit. The transaction prevents two devices from confirming entry with the same QR.
 
 ## Exit Flow
-
-Exit mode is explicit:
-
-```text
-GET /verify?id=<qrId>&locationId=<areaId>&mode=exit
-```
 
 Python returns `EXIT` only when:
 
 - booking status is `active_parking`
+- `entryVerified = true`
 - ticket `scanPhase` is `entered` or `exit_pending`
 - the scan location matches the ticket/booking area
+- current time is within `bookingEndAt - 10 minutes` through `bookingEndAt + 10 minutes`
 
 Exit updates:
 
 - `bookings.status = completed`
 - `bookings.exitScannedAt = server timestamp`
 - `active_qr_tickets.scanPhase = exited`
+- `active_qr_tickets.status = used`
 - `active_qr_tickets.exitScannedAt = server timestamp`
+- `active_qr_tickets.completedAt = server timestamp`
+
+Before the exit window opens, the same QR returns `BEFORE_TIME`. After exit, repeat scans return `USED`.
 
 ## ESP32 Beep Mapping
 

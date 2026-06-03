@@ -21,13 +21,20 @@ def health() -> Response:
 def verify() -> Response:
     qr_id = (request.args.get("id") or "").strip()
     location_id = (request.args.get("locationId") or "").strip()
-    mode = (request.args.get("mode") or "entry").strip().lower()
+    mode = (request.args.get("mode") or "auto").strip().lower()
 
     if not qr_id:
         return _text(RESULT_INVALID)
 
     try:
-        return _text(verify_qr_scan(qr_id=qr_id, location_id=location_id, mode=mode))
+        return _text(
+            verify_qr_scan(
+                qr_id=qr_id,
+                location_id=location_id,
+                mode=mode,
+                source="esp32_python_server",
+            )
+        )
     except Exception as exc:
         app.logger.exception("QR verification failed: %s", exc)
         return _text(RESULT_ERROR)

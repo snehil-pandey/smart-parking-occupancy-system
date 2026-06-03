@@ -45,7 +45,7 @@ Features:
 
 - manually enter an opaque `qrId`
 - choose a Firebase parking area/location as the scanner context
-- simulate entry or exit scans
+- simulate the same automatic entry/exit phase decision used by ESP32
 - call the same `verify_qr_scan` logic used by Flask
 - reject scans where the QR ticket or booking belongs to another parking area
 - show `ENTRY`, `EXIT`, `BEFORE_TIME`, `USED`, `EXPIRED`, `INVALID`, or `ERROR`
@@ -87,12 +87,6 @@ ESP32 calls:
 GET /verify?id=<qrId>&locationId=<parkingAreaId>
 ```
 
-Exit mode is explicit:
-
-```text
-GET /verify?id=<qrId>&locationId=<parkingAreaId>&mode=exit
-```
-
 Responses are plain text only:
 
 ```text
@@ -122,7 +116,8 @@ Firestore transactions prevent double entry scans and race conditions when two d
 - Scanner `locationId` must match both the active QR ticket area and the linked booking area when those fields are present.
 - Before `bookingStartAt - 5 minutes`, the result is `BEFORE_TIME`.
 - During the valid entry window, the first scan returns `ENTRY`.
-- Entry marks the QR `used`, `scannedOnce = true`, and `scanPhase = entered`.
-- A repeated entry scan returns `USED`.
+- Entry keeps the same QR active for the booking, sets `scannedOnce = true`, and moves `scanPhase = entered`.
+- A repeated scan before the exit window returns `BEFORE_TIME`; a closed booking returns `USED`.
+- Exit is allowed only from `bookingEndAt - 10 minutes` through `bookingEndAt + 10 minutes`.
+- Exit marks the booking `completed` and the QR ticket `status = used`.
 - Expired/cancelled tickets return `EXPIRED` or `INVALID`.
-- Exit returns `EXIT` only when `mode=exit`, the booking is `active_parking`, and the ticket phase supports exit.

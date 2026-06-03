@@ -56,7 +56,6 @@ The ESP32 exposes:
 ```text
 GET /scan?id=<qrId>
 GET /scan?id=<qrId>&locationId=<parkingAreaId>
-GET /scan?id=<qrId>&locationId=<parkingAreaId>&mode=exit
 GET /status
 POST /config
 GET /reset-config
@@ -71,11 +70,7 @@ The ESP32 forwards verification to:
 GET <PYTHON_SERVER_BASE_URL>/verify?id=<qrId>&locationId=<parkingAreaId>
 ```
 
-Exit checks forward:
-
-```text
-GET <PYTHON_SERVER_BASE_URL>/verify?id=<qrId>&locationId=<parkingAreaId>&mode=exit
-```
+The Python bridge decides the current entry/exit phase from Firebase booking state and timing.
 
 ## Status
 
@@ -161,6 +156,6 @@ http://192.168.4.1
 - There is no camera requirement in this sketch. A serial QR reader, test client, or future hardware reader can call `/scan?id=<qrId>`.
 - During development, use `server/streamlit_qr_control.py` to simulate scans before testing ESP32 hardware.
 - Scans are location-aware. A QR for one parking area is rejected when scanned at a different saved `locationId`.
-- The same QR cannot open entry twice. Normal repeat scans return `USED`.
-- Exit is intentionally explicit through `mode=exit` so an accidental second entry scan cannot complete the booking.
+- The same QR cannot open entry twice.
+- The same QR remains linked to the booking for exit. Exit is accepted only in the configured exit window and then the QR is closed.
 - The current hardware path uses only a buzzer. Servo/gate motor control can be added later without changing the QR verification endpoint.
