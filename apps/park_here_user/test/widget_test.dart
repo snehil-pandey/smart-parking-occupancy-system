@@ -141,6 +141,35 @@ void main() {
       isTrue,
     );
   });
+
+  test('same QR is shown again during exit window after entry', () {
+    final now = DateTime.now();
+    final booking =
+        _booking(
+          id: 'book_exit',
+          now: now,
+          status: BookingStatus.activeParking,
+          startTime: now.subtract(const Duration(minutes: 45)),
+        ).copyWith(
+          entryVerified: true,
+          entryScannedAt: now.subtract(const Duration(minutes: 30)),
+        );
+    final ticket = _ticket(booking: booking, now: now).copyWith(
+      scannedOnce: true,
+      scanPhase: 'entered',
+      entryScannedAt: booking.entryScannedAt,
+    );
+
+    expect(booking.canShowEntryQr(ticket, now: now), isFalse);
+    expect(booking.canShowExitQr(ticket, now: now), isFalse);
+    expect(
+      booking.canShowExitQr(
+        ticket,
+        now: booking.endTime.subtract(const Duration(minutes: 10)),
+      ),
+      isTrue,
+    );
+  });
 }
 
 class _TestLocationService implements UserLocationService {

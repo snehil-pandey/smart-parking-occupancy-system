@@ -34,12 +34,16 @@ void main() {
 
     await repository.consumeQrTicket(ticket.qrId);
 
-    expect(await repository.getActiveQrForBooking(booking.id), isNull);
+    final enteredTicket = await repository.getActiveQrForBooking(booking.id);
+    expect(enteredTicket, isNotNull);
+    expect(enteredTicket!.status, ActiveQrStatus.active);
+    expect(enteredTicket.scannedOnce, isTrue);
+    expect(enteredTicket.scanPhase, 'entered');
     final activeParking = (await repository.getForUser(booking.userId)).first;
     expect(activeParking.status, BookingStatus.activeParking);
     expect(activeParking.entryVerified, isTrue);
     expect(activeParking.entryScannedAt, isNotNull);
-    expect(activeParking.qrUsedAt, isNotNull);
+    expect(activeParking.qrUsedAt, isNull);
     expect(
       () => repository.consumeQrTicket(ticket.qrId),
       throwsA(isA<StateError>()),
@@ -82,27 +86,39 @@ void main() {
     );
   });
 
-  test('QR is disabled after entry scan updates ticket state', () {
+  test('QR waits after entry and reopens during exit window', () {
     final now = DateTime.now();
-    final booking = _booking(
-      id: 'book_scanned',
-      now: now,
-      startTime: now,
-      status: BookingStatus.activeParking,
-    );
+    final startTime = now.subtract(const Duration(minutes: 30));
+    final booking =
+        _booking(
+          id: 'book_scanned',
+          now: now,
+          startTime: startTime,
+          status: BookingStatus.activeParking,
+        ).copyWith(
+          entryVerified: true,
+          entryScannedAt: now.subtract(const Duration(minutes: 20)),
+        );
     final ticket =
         _ticket(
           booking: booking,
           createdAt: now,
           expiresAt: booking.endTime,
         ).copyWith(
-          status: ActiveQrStatus.used,
           scannedOnce: true,
           scanPhase: 'entered',
-          entryScannedAt: now,
+          entryScannedAt: booking.entryScannedAt,
         );
 
     expect(booking.canShowEntryQr(ticket, now: now), isFalse);
+    expect(booking.canShowExitQr(ticket, now: now), isFalse);
+    expect(
+      booking.canShowExitQr(
+        ticket,
+        now: booking.endTime.subtract(const Duration(minutes: 10)),
+      ),
+      isTrue,
+    );
     expect(booking.isParkingActive, isTrue);
   });
 

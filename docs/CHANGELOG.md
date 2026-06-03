@@ -12,6 +12,11 @@
 - Active QR tickets now store `bookingStartAt`, `bookingEndAt`, `scannedOnce`, `scanPhase`, and scan timestamps so the ESP32/Python verifier and user app share one lifecycle.
 - The user app blocks a second active booking while a `confirmed` or `active_parking` booking exists and shows a friendly message instead.
 
+### fix(user): align QR UI with entry exit scan lifecycle
+- User QR UI now keeps the same opaque `qrId` for entry and exit instead of treating entry as permanent QR closure.
+- After entry verification, bookings show `Parking Active`, entry time, and an exit countdown until the ten-minute pre-exit window opens.
+- During the exit window, the same QR is shown as `Scan at exit gate`; completed/expired bookings leave active state and remain in history.
+
 ## 0.1.0
 
 ### chore: initialize monorepo structure

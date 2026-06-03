@@ -129,7 +129,7 @@ class FirebaseBookingRepository implements BookingRepository {
         areaId: booking.parkingLocationId,
         status: ActiveQrStatus.active,
         createdAt: now,
-        expiresAt: booking.endTime,
+        expiresAt: booking.endTime.add(const Duration(minutes: 10)),
         bookingStartAt: booking.startTime,
         bookingEndAt: booking.endTime,
         scannedOnce: false,
@@ -161,7 +161,7 @@ class FirebaseBookingRepository implements BookingRepository {
     if (ticket == null) {
       return null;
     }
-    if (ticket.expiresAt.isBefore(DateTime.now())) {
+    if (ticket.exitClosesAt.isBefore(DateTime.now())) {
       await updateStatus(bookingId: bookingId, status: BookingStatus.expired);
       await _activeQrTickets.doc(ticket.qrId).update({
         'status': ActiveQrStatus.expired.name,
@@ -195,19 +195,20 @@ class FirebaseBookingRepository implements BookingRepository {
       if (ticket.status != ActiveQrStatus.active) {
         throw StateError('QR ticket $qrId is not active.');
       }
+      if (ticket.scannedOnce || ticket.scanPhase != 'entry_pending') {
+        throw StateError('QR ticket $qrId has already verified entry.');
+      }
       final now = DateTime.now();
       transaction.update(ticketRef, {
-        'status': ActiveQrStatus.used.name,
         'scannedOnce': true,
         'scanPhase': 'entered',
-        'usedAt': Timestamp.fromDate(now),
         'entryScannedAt': Timestamp.fromDate(now),
+        'updatedAt': Timestamp.fromDate(now),
       });
       transaction.update(_bookings.doc(ticket.bookingId), {
         'status': 'active_parking',
         'entryVerified': true,
         'entryScannedAt': Timestamp.fromDate(now),
-        'qrUsedAt': Timestamp.fromDate(now),
         'updatedAt': Timestamp.fromDate(now),
       });
     });

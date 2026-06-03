@@ -582,8 +582,7 @@ class UserAppController extends StateNotifier<UserAppState> {
       final activeBooking = bookings
           .where((booking) => booking.isCurrentSession)
           .firstOrNull;
-      final activeQrTicket =
-          activeBooking == null || activeBooking.isParkingActive
+      final activeQrTicket = activeBooking == null
           ? null
           : await _bookingRepository.getActiveQrForBooking(activeBooking.id);
       state = state.copyWith(
@@ -1304,11 +1303,7 @@ class UserAppController extends StateNotifier<UserAppState> {
                 .where((booking) => booking.isCurrentSession)
                 .firstOrNull;
             state = state.copyWith(bookings: bookings);
-            _startActiveQrUpdates(
-              activeBooking == null || activeBooking.isParkingActive
-                  ? null
-                  : activeBooking.id,
-            );
+            _startActiveQrUpdates(activeBooking?.id);
             if (activeBooking == null) {
               _qrExpiryNotificationService.cancelScheduled();
               _qrCountdownTimer?.cancel();
