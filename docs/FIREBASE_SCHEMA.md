@@ -174,7 +174,7 @@ Recommended query pattern:
 
 ## `/active_qr_tickets/{qrId}`
 
-Active QR documents are short-lived operational records. Do not delete the booking record when a QR is used.
+Active QR documents are operational records for the current booking lifecycle. Do not delete the booking record when a QR reaches a final state.
 
 | Field | Type | Notes |
 | --- | --- | --- |
@@ -183,15 +183,15 @@ Active QR documents are short-lived operational records. Do not delete the booki
 | `userId` | string | Driver id |
 | `adminId` | string | Parking owner id |
 | `areaId` | string | Parking area id |
-| `status` | string | `active`, `used`, `expired`, or `cancelled` |
+| `status` | string | `active`, `entry_verified`, `completed`, `expired`, or `cancelled` |
 | `createdAt` | timestamp/string | Ticket creation time |
-| `expiresAt` | timestamp/string | End of QR validity window, normally `bookingEndAt + 10 minutes` |
+| `expiresAt` | timestamp/string | End of QR validity window, normally `bookingEndAt` |
 | `bookingStartAt` | timestamp/string | Reserved start time copied from the booking |
 | `bookingEndAt` | timestamp/string | Reserved end time copied from the booking |
-| `scannedOnce` | boolean | `false` until a successful entry scan; prevents duplicate entry |
-| `scanPhase` | string | `entry_pending`, `entered`, `exit_pending`, or `exited` |
 | `entryScannedAt` | timestamp/string/null | Entry scan timestamp |
-| `exitScannedAt` | timestamp/string/null | Exit scan timestamp when supported |
+| `exitScannedAt` | timestamp/string/null | Exit scan timestamp when the session is completed |
+| `completedAt` | timestamp/string/null | Optional final completion timestamp |
+| `expiredAt` | timestamp/string/null | Optional final expiry timestamp |
 
 QR privacy rule: QR images should encode only the opaque `qrId`, for example `qr_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`. They must not encode `userId`, `adminId`, `areaId`, vehicle number, booking JSON, or timestamps. Those fields are resolved from Firestore by the standalone scanner, ESP32 flow, or a future gate/API.
 
@@ -200,10 +200,10 @@ User QR rules:
 - The user app allows only one active parking booking at a time. `confirmed` and `active_parking` are active user sessions.
 - Entry QR is visible only when the booking is `confirmed`, the linked ticket is `active`, and the current time is at least five minutes before `bookingStartAt`.
 - Before the entry unlock window, the user app shows a countdown instead of the QR.
-- After the ESP32/Python bridge writes `active_parking`, `entryVerified`, and `entryScannedAt`, the user app shows `Parking Active` from Firestore snapshots.
-- The same `qrId` is shown again for exit only from `bookingEndAt - 10 minutes` through `bookingEndAt + 10 minutes` while the booking is `active_parking`.
-- After exit, the bridge writes `bookings.status = completed`, `bookings.exitScannedAt`, `active_qr_tickets.scanPhase = exited`, and `active_qr_tickets.status = used`.
-- New QR ids are generated only for new bookings. Used QR ids must never be reactivated.
+- After scanner verification writes `bookings.status = active_parking`, `entryVerified = true`, `entryScannedAt`, and `active_qr_tickets.status = entry_verified`, the user app shows the same QR for exit until `bookingEndAt`.
+- After exit, the verifier writes `bookings.status = completed`, `bookings.exitScannedAt`, `active_qr_tickets.status = completed`, and optional `completedAt`.
+- If time passes `bookingEndAt` before exit, the verifier/backend should mark the booking and active QR ticket `expired`; the user app hides the active QR and keeps the booking in history.
+- New QR ids are generated only for new bookings. Completed, expired, or cancelled QR ids must never be reactivated.
 
 ## `/notifications/{notificationId}`
 

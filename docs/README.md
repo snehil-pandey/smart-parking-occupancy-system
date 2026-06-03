@@ -23,6 +23,8 @@ Driver app:
 - QR expiry notifications and enlarged scanner-friendly QR view
 - Reviews, comments, and issue reporting
 
+Detailed runtime flow: [USER_APP_FLOW.md](USER_APP_FLOW.md)
+
 Admin app:
 
 - Firebase Auth owner profile
