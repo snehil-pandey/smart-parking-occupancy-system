@@ -20,6 +20,7 @@ class Booking {
     this.qrUsedAt,
     this.entryVerified = false,
     this.entryScannedAt,
+    this.exitScannedAt,
     required this.vehicleNumber,
     required this.startTime,
     required this.endTime,
@@ -42,6 +43,7 @@ class Booking {
   final DateTime? qrUsedAt;
   final bool entryVerified;
   final DateTime? entryScannedAt;
+  final DateTime? exitScannedAt;
   final String vehicleNumber;
   final DateTime startTime;
   final DateTime endTime;
@@ -67,6 +69,10 @@ class Booking {
 
   DateTime get qrUnlockAt => startTime.subtract(const Duration(minutes: 5));
 
+  DateTime get exitQrUnlockAt => endTime.subtract(const Duration(minutes: 10));
+
+  DateTime get exitQrClosesAt => endTime.add(const Duration(minutes: 10));
+
   bool isQrUnlockedAt(DateTime now) =>
       !now.isBefore(qrUnlockAt) && now.isBefore(endTime);
 
@@ -74,7 +80,16 @@ class Booking {
     final currentTime = now ?? DateTime.now();
     return status == BookingStatus.confirmed &&
         ticket != null &&
-        ticket.isUnlockedAt(currentTime);
+        ticket.isEntryUnlockedAt(currentTime);
+  }
+
+  bool canShowExitQr(ActiveQrTicket? ticket, {DateTime? now}) {
+    final currentTime = now ?? DateTime.now();
+    return status == BookingStatus.activeParking &&
+        entryVerified &&
+        exitScannedAt == null &&
+        ticket != null &&
+        ticket.isExitUnlockedAt(currentTime);
   }
 
   Booking copyWith({
@@ -86,6 +101,7 @@ class Booking {
     DateTime? qrUsedAt,
     bool? entryVerified,
     DateTime? entryScannedAt,
+    DateTime? exitScannedAt,
     String? vehicleNumber,
     DateTime? startTime,
     DateTime? endTime,
@@ -108,6 +124,7 @@ class Booking {
       qrUsedAt: qrUsedAt ?? this.qrUsedAt,
       entryVerified: entryVerified ?? this.entryVerified,
       entryScannedAt: entryScannedAt ?? this.entryScannedAt,
+      exitScannedAt: exitScannedAt ?? this.exitScannedAt,
       vehicleNumber: vehicleNumber ?? this.vehicleNumber,
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
@@ -133,6 +150,7 @@ class Booking {
     'qrUsedAt': qrUsedAt?.toIso8601String(),
     'entryVerified': entryVerified,
     'entryScannedAt': entryScannedAt?.toIso8601String(),
+    'exitScannedAt': exitScannedAt?.toIso8601String(),
     'vehicleNumber': vehicleNumber,
     'startTime': startTime.toIso8601String(),
     'bookingStartAt': startTime.toIso8601String(),

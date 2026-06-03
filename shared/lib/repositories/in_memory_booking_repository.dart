@@ -26,7 +26,7 @@ class InMemoryBookingRepository implements BookingRepository {
           areaId: booking.parkingLocationId,
           status: ActiveQrStatus.active,
           createdAt: booking.createdAt,
-          expiresAt: booking.endTime,
+          expiresAt: booking.endTime.add(const Duration(minutes: 10)),
           bookingStartAt: booking.startTime,
           bookingEndAt: booking.endTime,
           scannedOnce: false,
@@ -74,7 +74,7 @@ class InMemoryBookingRepository implements BookingRepository {
       areaId: booking.parkingLocationId,
       status: ActiveQrStatus.active,
       createdAt: DateTime.now(),
-      expiresAt: booking.endTime,
+      expiresAt: booking.endTime.add(const Duration(minutes: 10)),
       bookingStartAt: booking.startTime,
       bookingEndAt: booking.endTime,
       scannedOnce: false,
@@ -97,7 +97,7 @@ class InMemoryBookingRepository implements BookingRepository {
       return null;
     }
     final ticket = _activeQrTickets[index];
-    if (ticket.expiresAt.isBefore(now)) {
+    if (ticket.exitClosesAt.isBefore(now)) {
       _activeQrTickets[index] = ticket.copyWith(status: ActiveQrStatus.expired);
       await updateStatus(bookingId: bookingId, status: BookingStatus.expired);
       return null;
@@ -115,8 +115,10 @@ class InMemoryBookingRepository implements BookingRepository {
     }
     final now = DateTime.now();
     final ticket = _activeQrTickets[index];
+    if (ticket.scannedOnce || ticket.scanPhase != 'entry_pending') {
+      throw StateError('QR ticket $qrId has already verified entry.');
+    }
     _activeQrTickets[index] = ticket.copyWith(
-      status: ActiveQrStatus.used,
       scannedOnce: true,
       scanPhase: 'entered',
       entryScannedAt: now,
@@ -127,7 +129,6 @@ class InMemoryBookingRepository implements BookingRepository {
         status: BookingStatus.activeParking,
         entryVerified: true,
         entryScannedAt: now,
-        qrUsedAt: now,
         updatedAt: now,
       ),
     );

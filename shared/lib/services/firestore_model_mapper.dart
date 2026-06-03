@@ -117,6 +117,7 @@ class FirestoreModelMapper {
       qrUsedAt: _nullableDate(json['qrUsedAt']),
       entryVerified: json['entryVerified'] as bool? ?? false,
       entryScannedAt: _nullableDate(json['entryScannedAt']),
+      exitScannedAt: _nullableDate(json['exitScannedAt']),
       vehicleNumber: json['vehicleNumber'] as String,
       startTime: _requiredDate(json['bookingStartAt'] ?? json['startTime']),
       endTime: _requiredDate(json['bookingEndAt'] ?? json['endTime']),

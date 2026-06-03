@@ -79,8 +79,15 @@ class _ActiveBookingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
     final parkingActive = booking.isParkingActive;
-    final canShowQr = booking.canShowEntryQr(activeQrTicket);
+    final canShowEntryQr = booking.canShowEntryQr(activeQrTicket, now: now);
+    final canShowExitQr = booking.canShowExitQr(activeQrTicket, now: now);
+    final canShowQr = canShowEntryQr || canShowExitQr;
+    final qrLabel = canShowExitQr ? 'Scan at exit gate' : 'Scan at entry gate';
+    final qrValidUntil = canShowExitQr
+        ? booking.exitQrClosesAt
+        : booking.endTime;
     return Material(
       color: const Color(0xFFFFF9E2),
       borderRadius: BorderRadius.circular(8),
@@ -99,14 +106,14 @@ class _ActiveBookingCard extends StatelessWidget {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  if (parkingActive)
-                    const _ParkingActiveBadge()
-                  else if (canShowQr)
+                  if (canShowQr)
                     QrImageView(
                       data: _qrData,
                       size: 118,
                       backgroundColor: Colors.white,
                     )
+                  else if (parkingActive)
+                    const _ParkingActiveBadge()
                   else
                     _QrLockedBadge(unlockAt: booking.qrUnlockAt),
                   const SizedBox(width: 14),
@@ -128,6 +135,16 @@ class _ActiveBookingCard extends StatelessWidget {
                             Text(
                               'Entry at ${_dateTime(booking.entryScannedAt!)}',
                             ),
+                          if (booking.exitScannedAt != null)
+                            Text('Exit at ${_dateTime(booking.exitScannedAt!)}')
+                          else if (canShowExitQr)
+                            Text('$qrLabel. Use the same QR at the gate.')
+                          else ...[
+                            const Text(
+                              'Exit QR opens 10 minutes before booking end.',
+                            ),
+                            _UnlockCountdown(unlockAt: booking.exitQrUnlockAt),
+                          ],
                         ] else if (activeQrTicket == null)
                           const Padding(
                             padding: EdgeInsets.only(top: 6),
@@ -140,10 +157,10 @@ class _ActiveBookingCard extends StatelessWidget {
                             'QR will unlock 5 minutes before your booking time.',
                           ),
                           _UnlockCountdown(unlockAt: booking.qrUnlockAt),
-                        ] else
-                          Text(
-                            'QR ${activeQrTicket!.status.name} until ${_time(activeQrTicket!.expiresAt)}',
-                          ),
+                        ] else ...[
+                          Text(qrLabel),
+                          Text('Valid until ${_time(qrValidUntil)}'),
+                        ],
                       ],
                     ),
                   ),
@@ -174,7 +191,8 @@ class _ActiveBookingCard extends StatelessWidget {
       '${value.day}/${value.month} ${_time(value)}';
 
   void _openQrViewer(BuildContext context) {
-    if (!booking.canShowEntryQr(activeQrTicket)) {
+    if (!booking.canShowEntryQr(activeQrTicket) &&
+        !booking.canShowExitQr(activeQrTicket)) {
       return;
     }
     showModalBottomSheet<void>(
@@ -186,6 +204,12 @@ class _ActiveBookingCard extends StatelessWidget {
         booking: booking,
         activeQrTicket: activeQrTicket,
         location: location,
+        purposeLabel: booking.canShowExitQr(activeQrTicket)
+            ? 'Scan at exit gate'
+            : 'Scan at entry gate',
+        expiresAt: booking.canShowExitQr(activeQrTicket)
+            ? booking.exitQrClosesAt
+            : booking.endTime,
       ),
     );
   }
@@ -300,12 +324,16 @@ class _QrTicketViewer extends StatefulWidget {
     required this.booking,
     required this.activeQrTicket,
     required this.location,
+    required this.purposeLabel,
+    required this.expiresAt,
   });
 
   final String qrData;
   final Booking booking;
   final ActiveQrTicket? activeQrTicket;
   final ParkingLocation? location;
+  final String purposeLabel;
+  final DateTime expiresAt;
 
   @override
   State<_QrTicketViewer> createState() => _QrTicketViewerState();
@@ -360,8 +388,7 @@ class _QrTicketViewerState extends State<_QrTicketViewer> {
 
   @override
   Widget build(BuildContext context) {
-    final expiresAt =
-        widget.activeQrTicket?.expiresAt ?? widget.booking.endTime;
+    final expiresAt = widget.expiresAt;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -386,6 +413,14 @@ class _QrTicketViewerState extends State<_QrTicketViewer> {
             ),
             const SizedBox(height: 8),
             _ExpiryCountdown(expiresAt: expiresAt),
+            const SizedBox(height: 8),
+            Text(
+              widget.purposeLabel,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 20),
             DecoratedBox(
               decoration: BoxDecoration(
@@ -403,7 +438,7 @@ class _QrTicketViewerState extends State<_QrTicketViewer> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Status: ${widget.activeQrTicket?.status.name ?? widget.booking.status.name}',
+              'Booking status: ${widget.booking.status.name}',
               style: const TextStyle(color: Colors.white70),
             ),
             Text(
@@ -470,6 +505,12 @@ class _BookingHistoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scanSummary = [
+      if (booking.entryScannedAt != null)
+        'entry ${_dateTime(booking.entryScannedAt!)}',
+      if (booking.exitScannedAt != null)
+        'exit ${_dateTime(booking.exitScannedAt!)}',
+    ].join(' - ');
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: Icon(
@@ -480,7 +521,8 @@ class _BookingHistoryTile extends StatelessWidget {
       title: Text(location?.name ?? booking.parkingLocationId),
       subtitle: Text(
         '${booking.status.name} - ${formatInr(booking.price)}'
-        '${booking.cancellationFine > 0 ? ' - fine ${formatInr(booking.cancellationFine)}' : ''}',
+        '${booking.cancellationFine > 0 ? ' - fine ${formatInr(booking.cancellationFine)}' : ''}'
+        '${scanSummary.isEmpty ? '' : ' - $scanSummary'}',
       ),
       trailing: Text(
         '${booking.createdAt.day}/${booking.createdAt.month}',
@@ -488,6 +530,9 @@ class _BookingHistoryTile extends StatelessWidget {
       ),
     );
   }
+
+  String _dateTime(DateTime value) =>
+      '${value.day}/${value.month} ${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
 }
 
 class _EmptyBookingState extends StatelessWidget {
