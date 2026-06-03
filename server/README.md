@@ -44,15 +44,15 @@ streamlit run streamlit_qr_control.py
 Features:
 
 - manually enter an opaque `qrId`
+- scan a QR image through the browser camera
 - choose a Firebase parking area/location as the scanner context
-- choose Entry Camera or Exit Camera
 - simulate the same Firebase key/value update path used by ESP32
 - call the same `verify_qr_scan` logic used by Flask
 - reject scans where the QR ticket or booking belongs to another parking area
 - show `ENTRY`, `EXIT`, `BEFORE_TIME`, `USED`, `EXPIRED`, `INVALID`, or `ERROR`
 - show a safe ticket/booking summary
 - show recent `/qr_scan_logs`
-- configure ESP32 WiFi/server/location settings over HTTP
+- configure ESP32 Python server IP and saved location over HTTP
 
 The Streamlit **Select Scanner Location** section loads `parking_areas` from Firebase. The selected `areaId` is used as `locationId` for scan simulation, matching a physical gate installed at that parking area.
 
@@ -60,21 +60,21 @@ The **ESP32 Configuration** section calls:
 
 ```text
 GET  http://<esp32-ip>/status
-POST http://<esp32-ip>/config
-POST http://<esp32-ip>/reset-config
+GET  http://<esp32-ip>/update_config?serverIp=<python-ip>&locationId=<areaId>
+GET  http://<esp32-ip>/reset_config
 ```
 
-`POST /config` sends JSON:
+The ESP32 currently runs AP mode as:
 
-```json
-{
-  "ssid": "Campus WiFi",
-  "password": "wifi-password",
-  "serverIp": "192.168.1.10",
-  "locationId": "area_sit_main_lot",
-  "cameraType": "entry"
-}
+```text
+SSID: SIT-SmartGate
+Password: parkhere123
+Default ESP IP: 192.168.4.1
+Default Python IP: 192.168.4.2
+Default locationId: loc_1779943110578
 ```
+
+The laptop must be connected to `SIT-SmartGate` for Streamlit to reach the ESP32 config endpoints.
 
 ## Run Flask Server For ESP32
 
@@ -86,8 +86,10 @@ python parking_server.py
 ESP32 calls:
 
 ```text
-GET /verify?id=<qrId>&locationId=<parkingAreaId>&cameraType=<entry_or_exit>
+GET /verify?id=<qrId>&locationId=<parkingAreaId>
 ```
+
+`cameraType` remains an optional query parameter for future entry/exit testing, but it is not required by the ESP32 firmware.
 
 Responses are plain text only:
 
@@ -116,7 +118,8 @@ Firestore transactions prevent double entry scans and race conditions when two d
 
 - QR payload is only the opaque `qrId`.
 - Scanner `locationId` must match both the active QR ticket area and the linked booking area when those fields are present.
-- `cameraType=entry` only processes `scanPhase = entry_pending`.
+- Streamlit intentionally hides camera-type controls in this testing build.
+- `cameraType=entry` only processes `scanPhase = entry_pending` when explicitly passed by advanced clients.
 - Entry keeps the same QR active for the booking, sets `scannedOnce = true`, and moves `scanPhase = entered`.
 - `cameraType=exit` only processes `scanPhase = entered` or `exit_pending`.
 - Exit marks the booking `completed`, closes the QR ticket with `status = used`, and increments `parking_areas.availableSpaces`.

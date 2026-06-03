@@ -6,36 +6,34 @@ This sketch lets an ESP32 act as a simple Park Here QR gate bridge. It does not 
 
 1. Upload `park_here_gate.ino` to the ESP32.
 2. Open the Serial Monitor at `115200`.
-3. On first boot, or when saved WiFi fails, the ESP32 starts setup mode:
+3. On boot, the ESP32 starts its local setup/control access point:
 
 ```text
-SSID: ParkHere-Gate-Setup
+SSID: SIT-SmartGate
 Password: parkhere123
-Setup page: http://192.168.4.1
+Device IP: http://192.168.4.1
 ```
 
-4. Connect a phone/laptop to `ParkHere-Gate-Setup`.
-5. Open `http://192.168.4.1`.
-6. Enter:
-   - WiFi SSID
-   - WiFi password
-   - Python server IP or URL
+4. Connect a phone/laptop to `SIT-SmartGate`.
+5. Run the Streamlit control app.
+6. Open the **ESP32 Gate Configuration** tab.
+7. Enter:
+   - ESP32 IP address: `192.168.4.1`
+   - Python server IP: `192.168.4.2` by default
    - parking area `locationId`
-   - camera type: `entry` or `exit`
-7. Tap **Save and restart**.
+8. Click **Update ESP32 Config**.
 
-The ESP32 stores this configuration in Preferences/NVS. No WiFi SSID or password needs to be hardcoded in the sketch.
+The ESP32 stores `serverUrl` and `locationId` in Preferences/NVS. No Python server IP or parking area id needs to be hardcoded in the sketch.
 
 ## Python Server Field
 
-The setup page accepts either a raw IP address or a full URL.
+The Streamlit config panel sends a raw Python server IP address.
 
 ```text
-192.168.1.10
-http://192.168.1.10:5000
+192.168.4.2
 ```
 
-If only an IP address is entered, the ESP32 converts it to:
+The ESP32 converts it to:
 
 ```text
 http://<ip>:5000
@@ -45,10 +43,15 @@ http://<ip>:5000
 
 On boot, the ESP32:
 
-1. Reads saved WiFi/server/location config from NVS.
-2. Tries to connect to saved WiFi.
-3. Starts the QR gate HTTP server if WiFi connects.
-4. Falls back to setup AP mode if credentials are missing or connection fails.
+1. Reads saved server/location config from NVS.
+2. Starts the `SIT-SmartGate` access point.
+3. Starts the QR gate HTTP server at `192.168.4.1`.
+4. Uses defaults when no saved config exists:
+
+```text
+serverUrl: http://192.168.4.2:5000
+locationId: loc_1779943110578
+```
 
 ## Endpoints
 
@@ -56,23 +59,21 @@ The ESP32 exposes:
 
 ```text
 GET /scan?id=<qrId>
-GET /scan?id=<qrId>&locationId=<parkingAreaId>
-GET /scan?id=<qrId>&locationId=<parkingAreaId>&cameraType=<entry_or_exit>
 GET /status
-POST /config
+GET /update_config?serverIp=<ip>&locationId=<parkingAreaId>
+GET /reset_config
 GET /reset-config
-POST /reset-config
 ```
 
-If `locationId` or `cameraType` is omitted from `/scan`, the ESP32 uses the saved default parking area/location id and camera type.
+`/scan` always uses the saved parking area/location id.
 
 The ESP32 forwards verification to:
 
 ```text
-GET <PYTHON_SERVER_BASE_URL>/verify?id=<qrId>&locationId=<parkingAreaId>&cameraType=<entry_or_exit>
+GET <PYTHON_SERVER_BASE_URL>/verify?id=<qrId>&locationId=<parkingAreaId>
 ```
 
-The Python bridge runs entry logic only for entry cameras and exit logic only for exit cameras.
+The Python bridge returns plain text commands consumed by the buzzer logic.
 
 ## Status
 
@@ -82,37 +83,26 @@ Open:
 http://<esp32-ip>/status
 ```
 
-It returns plain text showing:
-
-- setup/gate mode
-- WiFi connection state
-- connected SSID
-- ESP32 local IP
-- Python server URL
-- default `locationId`
-- default `cameraType`
-
-## Configure From Streamlit
-
-When the ESP32 is reachable on the same WiFi network, the Streamlit control panel can update gate configuration with:
-
-```text
-POST http://<esp32-ip>/config
-```
-
-JSON body:
+It returns JSON:
 
 ```json
 {
-  "ssid": "Campus WiFi",
-  "password": "wifi-password",
-  "serverIp": "192.168.1.10",
-  "locationId": "area_sit_main_lot",
-  "cameraType": "entry"
+  "status": "online",
+  "locationId": "loc_1779943110578",
+  "serverUrl": "http://192.168.4.2:5000",
+  "apSsid": "SIT-SmartGate"
 }
 ```
 
-The ESP32 saves these values to Preferences/NVS, restarts, connects to WiFi, and then uses the saved `locationId` and `cameraType` for:
+## Configure From Streamlit
+
+When the laptop is connected to `SIT-SmartGate`, the Streamlit control panel can update gate configuration with:
+
+```text
+GET http://<esp32-ip>/update_config?serverIp=192.168.4.2&locationId=area_sit_main_lot
+```
+
+The ESP32 saves these values to Preferences/NVS and then uses the saved `locationId` for:
 
 ```text
 GET /scan?id=<qrId>
@@ -121,28 +111,20 @@ GET /scan?id=<qrId>
 That scan is forwarded to:
 
 ```text
-GET http://<python-server-ip>:5000/verify?id=<qrId>&locationId=<saved-locationId>&cameraType=<saved-cameraType>
+GET http://<python-server-ip>:5000/verify?id=<qrId>&locationId=<saved-locationId>
 ```
 
 ## Reset / Change WiFi
 
-To change WiFi, Python server IP, or `locationId`, either use Streamlit or open:
+To reset Python server IP and `locationId`, either use Streamlit or open:
 
 ```text
-http://<esp32-ip>/reset-config
+http://<esp32-ip>/reset_config
 ```
 
-`POST /reset-config` is also supported for Streamlit. The endpoint clears saved Preferences/NVS values and restarts the device. After restart, connect again to:
+`/reset-config` is also accepted as a compatibility alias. The endpoint clears saved Preferences/NVS values and reloads defaults.
 
-```text
-ParkHere-Gate-Setup
-```
-
-Then open:
-
-```text
-http://192.168.4.1
-```
+Then use `http://192.168.4.1/status` to confirm the defaults.
 
 ## Beep Patterns
 
@@ -161,6 +143,6 @@ http://192.168.4.1
 - During development, use `server/streamlit_qr_control.py` to simulate scans before testing ESP32 hardware.
 - Scans are location-aware. A QR for one parking area is rejected when scanned at a different saved `locationId`.
 - The same QR cannot open entry twice.
-- Entry cameras do not run exit logic, and exit cameras do not run entry logic.
-- The same QR remains linked to the booking for exit. Exit is accepted only by an exit camera after entry and then the QR is closed.
+- The current ESP32 `/scan` flow is location-based and does not pass camera type.
+- The Flask verifier still accepts optional `cameraType` for future entry/exit testing.
 - The current hardware path uses only a buzzer. Servo/gate motor control can be added later without changing the QR verification endpoint.

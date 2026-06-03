@@ -2,423 +2,171 @@
 #include <WebServer.h>
 #include <HTTPClient.h>
 #include <Preferences.h>
-#include <ctype.h>
 
-const char* SETUP_AP_SSID = "ParkHere-Gate-Setup";
-const char* SETUP_AP_PASSWORD = "parkhere123";
-const int BUZZER_PIN = 25;
-const unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000;
+// --- Network Configuration ---
+const char* AP_SSID = "SIT-SmartGate";
+const char* AP_PASS = "parkhere123";
+const char* DEFAULT_SERVER_URL = "http://192.168.4.2:5000";
+const char* DEFAULT_LOCATION_ID = "loc_1779943110578";
+
+String pythonServerBaseUrl;
+String currentLocationId;
 
 WebServer server(80);
 Preferences preferences;
 
-String wifiSsid;
-String wifiPassword;
-String pythonServerBaseUrl;
-String defaultLocationId;
-String defaultCameraType;
-bool setupMode = false;
+// --- Hardware Pins ---
+const int internalLED = 2;    
+const int ENTRY_SENSOR = 13;  
+const int BUZZER_PIN = 25;
 
-void beep(int durationMs) {
-  digitalWrite(BUZZER_PIN, HIGH);
-  delay(durationMs);
-  digitalWrite(BUZZER_PIN, LOW);
-}
+// --- Hardware States ---
+int entryState = 0; 
+unsigned long entryCountdownTimer = 0;
+const int DELAY_TIME = 10000; 
+int entryDebounceCount = 0;
+bool entryStableState = HIGH;
 
-void beepShort() {
-  beep(120);
-}
-
-void beepLong() {
-  beep(650);
-}
-
-void beepExit() {
-  beepShort();
-  delay(140);
-  beepShort();
-}
-
-void beepError() {
-  beep(900);
-}
-
-String htmlEscape(String value) {
-  value.replace("&", "&amp;");
-  value.replace("<", "&lt;");
-  value.replace(">", "&gt;");
-  value.replace("\"", "&quot;");
-  return value;
-}
+// --- Audio Controls ---
+void beep(int durationMs) { digitalWrite(BUZZER_PIN, HIGH); delay(durationMs); digitalWrite(BUZZER_PIN, LOW); }
+void beepShort() { beep(150); }
+void beepError() { beep(900); }
+void beepClose() { beep(150); delay(100); beep(150); } 
+void beepExit() { beep(100); delay(80); beep(100); }
+void beepSuccess() { beep(100); delay(50); beep(100); delay(50); beep(200); } // Config saved chime
 
 String urlEncode(String value) {
-  String encoded = "";
-  const char* hex = "0123456789ABCDEF";
+  String encoded = ""; const char* hex = "0123456789ABCDEF";
   for (size_t i = 0; i < value.length(); i++) {
     unsigned char c = value.charAt(i);
-    if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
-      encoded += char(c);
-    } else {
-      encoded += '%';
-      encoded += hex[(c >> 4) & 0x0F];
-      encoded += hex[c & 0x0F];
-    }
+    if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') encoded += char(c);
+    else { encoded += '%'; encoded += hex[(c >> 4) & 0x0F]; encoded += hex[c & 0x0F]; }
   }
   return encoded;
 }
 
-String normalizeServerBaseUrl(String serverInput) {
-  serverInput.trim();
-  if (serverInput.length() == 0) {
-    return "";
-  }
-  if (serverInput.startsWith("http://") || serverInput.startsWith("https://")) {
-    return serverInput;
-  }
-  return "http://" + serverInput + ":5000";
-}
-
-String jsonStringValue(String json, String key) {
-  String pattern = "\"" + key + "\"";
-  int keyIndex = json.indexOf(pattern);
-  if (keyIndex < 0) {
-    return "";
-  }
-  int colonIndex = json.indexOf(":", keyIndex + pattern.length());
-  if (colonIndex < 0) {
-    return "";
-  }
-  int startQuote = json.indexOf("\"", colonIndex + 1);
-  if (startQuote < 0) {
-    return "";
-  }
-  String value = "";
-  bool escaping = false;
-  for (int i = startQuote + 1; i < json.length(); i++) {
-    char c = json.charAt(i);
-    if (escaping) {
-      value += c;
-      escaping = false;
-      continue;
-    }
-    if (c == '\\') {
-      escaping = true;
-      continue;
-    }
-    if (c == '"') {
-      break;
-    }
-    value += c;
-  }
-  value.trim();
+String jsonEscape(String value) {
+  value.replace("\\", "\\\\");
+  value.replace("\"", "\\\"");
   return value;
 }
 
-void loadConfig() {
-  preferences.begin("parkhere-gate", false);
-  wifiSsid = preferences.getString("wifiSsid", "");
-  wifiPassword = preferences.getString("wifiPass", "");
-  pythonServerBaseUrl = preferences.getString("serverUrl", "");
-  defaultLocationId = preferences.getString("locationId", "");
-  defaultCameraType = preferences.getString("cameraType", "entry");
-
-  Serial.println("Loaded Park Here gate configuration.");
-  Serial.print("Saved WiFi SSID: ");
-  Serial.println(wifiSsid.length() > 0 ? wifiSsid : "(none)");
-  Serial.print("Python server: ");
-  Serial.println(pythonServerBaseUrl.length() > 0 ? pythonServerBaseUrl : "(none)");
-  Serial.print("Default locationId: ");
-  Serial.println(defaultLocationId.length() > 0 ? defaultLocationId : "(none)");
-  Serial.print("Default cameraType: ");
-  Serial.println(defaultCameraType.length() > 0 ? defaultCameraType : "(none)");
+void loadSavedConfig() {
+  currentLocationId = preferences.getString("locationId", DEFAULT_LOCATION_ID);
+  pythonServerBaseUrl = preferences.getString("serverUrl", DEFAULT_SERVER_URL);
 }
 
-String normalizeCameraType(String cameraType) {
-  cameraType.trim();
-  cameraType.toLowerCase();
-  if (cameraType == "exit") {
-    return "exit";
+// --- Streamlit API Endpoints ---
+
+// 1. Streamlit checks if the gate is alive
+void handleStatus() {
+  String payload = "{";
+  payload += "\"status\":\"online\",";
+  payload += "\"locationId\":\"" + jsonEscape(currentLocationId) + "\",";
+  payload += "\"serverUrl\":\"" + jsonEscape(pythonServerBaseUrl) + "\",";
+  payload += "\"apSsid\":\"" + String(AP_SSID) + "\"";
+  payload += "}";
+  server.send(200, "application/json", payload);
+}
+
+// 2. Streamlit sends new configuration
+void handleUpdateConfig() {
+  if (server.hasArg("locationId")) {
+    currentLocationId = server.arg("locationId");
+    preferences.putString("locationId", currentLocationId);
   }
-  return "entry";
-}
-
-void saveConfig(String ssid, String password, String serverInput, String locationId, String cameraType) {
-  ssid.trim();
-  serverInput.trim();
-  locationId.trim();
-
-  wifiSsid = ssid;
-  wifiPassword = password;
-  pythonServerBaseUrl = normalizeServerBaseUrl(serverInput);
-  defaultLocationId = locationId;
-  defaultCameraType = normalizeCameraType(cameraType);
-
-  preferences.putString("wifiSsid", wifiSsid);
-  preferences.putString("wifiPass", wifiPassword);
-  preferences.putString("serverUrl", pythonServerBaseUrl);
-  preferences.putString("locationId", defaultLocationId);
-  preferences.putString("cameraType", defaultCameraType);
-}
-
-void clearConfig() {
-  Serial.println("Clearing saved Park Here gate configuration.");
-  preferences.clear();
-  wifiSsid = "";
-  wifiPassword = "";
-  pythonServerBaseUrl = "";
-  defaultLocationId = "";
-  defaultCameraType = "entry";
-}
-
-bool hasRequiredConfig() {
-  return wifiSsid.length() > 0 &&
-         pythonServerBaseUrl.length() > 0 &&
-         defaultLocationId.length() > 0 &&
-         defaultCameraType.length() > 0;
-}
-
-bool connectToSavedWifi() {
-  if (wifiSsid.length() == 0) {
-    Serial.println("No saved WiFi credentials found.");
-    return false;
+  
+  if (server.hasArg("serverIp")) {
+    pythonServerBaseUrl = "http://" + server.arg("serverIp") + ":5000";
+    preferences.putString("serverUrl", pythonServerBaseUrl);
   }
 
-  Serial.print("Connecting to saved WiFi SSID: ");
-  Serial.println(wifiSsid);
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(wifiSsid.c_str(), wifiPassword.c_str());
-
-  const unsigned long startedAt = millis();
-  while (WiFi.status() != WL_CONNECTED &&
-         millis() - startedAt < WIFI_CONNECT_TIMEOUT_MS) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println();
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("WiFi connected.");
-    Serial.print("Gate local IP: ");
-    Serial.println(WiFi.localIP());
-    return true;
-  }
-
-  Serial.println("Saved WiFi connection failed. Starting setup AP.");
-  WiFi.disconnect(true);
-  return false;
-}
-
-void startSetupAccessPoint() {
-  setupMode = true;
-  WiFi.mode(WIFI_AP);
-  WiFi.softAP(SETUP_AP_SSID, SETUP_AP_PASSWORD);
-
-  Serial.println("Park Here gate setup mode started.");
-  Serial.print("AP SSID: ");
-  Serial.println(SETUP_AP_SSID);
-  Serial.print("AP password: ");
-  Serial.println(SETUP_AP_PASSWORD);
-  Serial.print("Open setup page: http://");
-  Serial.println(WiFi.softAPIP());
-}
-
-void sendConfigPage(String message = "") {
-  const String ipText = setupMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString();
-  String page = "<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>";
-  page += "<title>Park Here Gate Setup</title>";
-  page += "<style>body{font-family:Arial,sans-serif;background:#fff8dc;color:#111827;margin:0;padding:24px;}";
-  page += ".card{max-width:560px;margin:auto;background:#fff;border:2px solid #111827;border-radius:10px;padding:20px;box-shadow:6px 6px 0 #facc15;}";
-  page += "label{display:block;font-weight:700;margin-top:14px;}input{width:100%;box-sizing:border-box;padding:11px;margin-top:6px;border:1px solid #9ca3af;border-radius:6px;font-size:16px;}";
-  page += "button,.button{display:inline-block;margin-top:18px;background:#111827;color:#facc15;border:0;border-radius:6px;padding:12px 16px;font-weight:800;text-decoration:none;}";
-  page += ".muted{color:#4b5563}.warn{background:#fee2e2;padding:10px;border-radius:6px;}</style></head><body><div class='card'>";
-  page += "<h1>Park Here Gate Setup</h1>";
-  page += "<p class='muted'>Device IP: " + htmlEscape(ipText) + "</p>";
-  if (message.length() > 0) {
-    page += "<p class='warn'>" + htmlEscape(message) + "</p>";
-  }
-  page += "<form method='POST' action='/save-config'>";
-  page += "<label>WiFi SSID</label><input name='ssid' value='" + htmlEscape(wifiSsid) + "' required>";
-  page += "<label>WiFi password</label><input name='password' type='password' value='" + htmlEscape(wifiPassword) + "'>";
-  page += "<label>Python server IP or URL</label><input name='server' placeholder='192.168.1.10 or http://192.168.1.10:5000' value='" + htmlEscape(pythonServerBaseUrl) + "' required>";
-  page += "<label>Parking area locationId</label><input name='locationId' placeholder='area_sit_main_lot' value='" + htmlEscape(defaultLocationId) + "' required>";
-  page += "<label>Camera type</label><select name='cameraType' style='width:100%;box-sizing:border-box;padding:11px;margin-top:6px;border:1px solid #9ca3af;border-radius:6px;font-size:16px;'>";
-  page += "<option value='entry'" + String(defaultCameraType == "entry" ? " selected" : "") + ">Entry Camera</option>";
-  page += "<option value='exit'" + String(defaultCameraType == "exit" ? " selected" : "") + ">Exit Camera</option>";
-  page += "</select>";
-  page += "<button type='submit'>Save and restart</button></form>";
-  page += "<a class='button' href='/status'>Status</a> ";
-  page += "<a class='button' href='/reset-config' onclick=\"return confirm('Clear saved config and restart setup mode?')\">Reset config</a>";
-  page += "</div></body></html>";
-  server.send(200, "text/html", page);
-}
-
-void handleRoot() {
-  sendConfigPage();
-}
-
-void handleSaveConfig() {
-  if (!server.hasArg("ssid") ||
-      !server.hasArg("server") ||
-      !server.hasArg("locationId")) {
-    server.send(400, "text/plain", "Missing required config fields.");
-    return;
-  }
-
-  saveConfig(
-    server.arg("ssid"),
-    server.arg("password"),
-    server.arg("server"),
-    server.arg("locationId"),
-    server.hasArg("cameraType") ? server.arg("cameraType") : "entry"
-  );
-
-  Serial.println("Saved new Park Here gate configuration. Restarting...");
-  server.send(200, "text/html", "<p>Configuration saved. Restarting gate...</p>");
-  delay(800);
-  ESP.restart();
-}
-
-void handleJsonConfig() {
-  String body = server.arg("plain");
-  if (body.length() == 0) {
-    server.send(400, "text/plain", "Missing JSON body.");
-    return;
-  }
-
-  String ssid = jsonStringValue(body, "ssid");
-  String password = jsonStringValue(body, "password");
-  String serverIp = jsonStringValue(body, "serverIp");
-  String locationId = jsonStringValue(body, "locationId");
-  String cameraType = jsonStringValue(body, "cameraType");
-
-  if (ssid.length() == 0 || serverIp.length() == 0 || locationId.length() == 0) {
-    server.send(400, "text/plain", "Missing ssid, serverIp, or locationId.");
-    return;
-  }
-
-  saveConfig(ssid, password, serverIp, locationId, cameraType);
-
-  Serial.println("Saved JSON config from Streamlit. Restarting...");
-  server.send(200, "text/plain", "CONFIG_SAVED_RESTARTING");
-  delay(800);
-  ESP.restart();
+  Serial.println("Config updated");
+  Serial.println("Server URL: " + pythonServerBaseUrl);
+  Serial.println("Location ID: " + currentLocationId);
+  beepSuccess();
+  server.send(200, "application/json", "{\"message\":\"Config Saved\"}");
 }
 
 void handleResetConfig() {
-  clearConfig();
-  const char* contentType = server.method() == HTTP_POST ? "text/plain" : "text/html";
-  const char* message = server.method() == HTTP_POST
-      ? "CONFIG_CLEARED_RESTARTING"
-      : "<p>Configuration cleared. Restarting setup mode...</p>";
-  server.send(200, contentType, message);
-  delay(800);
-  ESP.restart();
+  preferences.clear();
+  currentLocationId = DEFAULT_LOCATION_ID;
+  pythonServerBaseUrl = DEFAULT_SERVER_URL;
+  beepSuccess();
+  Serial.println("Config reset to defaults");
+  server.send(200, "application/json", "{\"message\":\"Config Reset\"}");
 }
 
-void handleStatus() {
-  String status = "mode=" + String(setupMode ? "setup_ap" : "gate") + "\n";
-  status += "wifiStatus=" + String(WiFi.status() == WL_CONNECTED ? "connected" : "not_connected") + "\n";
-  status += "ssid=" + (WiFi.status() == WL_CONNECTED ? WiFi.SSID() : wifiSsid) + "\n";
-  status += "localIp=" + String(setupMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString()) + "\n";
-  status += "server=" + pythonServerBaseUrl + "\n";
-  status += "locationId=" + defaultLocationId + "\n";
-  status += "cameraType=" + defaultCameraType + "\n";
-  server.send(200, "text/plain", status);
-}
-
-void handleHealth() {
-  server.send(200, "text/plain", "OK");
-}
-
+// --- Existing Cloud Verification ---
 void handleScan() {
-  if (setupMode || pythonServerBaseUrl.length() == 0) {
-    beepError();
-    server.send(503, "text/plain", "ERROR");
-    return;
-  }
+  String qrId = server.hasArg("id") ? server.arg("id") : "";
+  if (qrId.length() == 0) { beepError(); server.send(400, "text/plain", "INVALID"); return; }
 
-  String qrId = server.arg("id");
-  qrId.trim();
-  String locationId = server.arg("locationId");
-  locationId.trim();
-  if (locationId.length() == 0) {
-    locationId = defaultLocationId;
-  }
-  String cameraType = server.arg("cameraType");
-  cameraType.trim();
-  if (cameraType.length() == 0) {
-    cameraType = defaultCameraType;
-  }
-  cameraType = normalizeCameraType(cameraType);
+  String url = pythonServerBaseUrl + "/verify?id=" + urlEncode(qrId) + "&locationId=" + urlEncode(currentLocationId);
+  Serial.println("Checking Cloud: " + url);
 
-  if (qrId.length() == 0 || locationId.length() == 0) {
-    beepError();
-    server.send(400, "text/plain", "INVALID");
-    return;
-  }
-
-  String url = pythonServerBaseUrl + "/verify?id=" + urlEncode(qrId);
-  url += "&locationId=" + urlEncode(locationId);
-  url += "&cameraType=" + urlEncode(cameraType);
-
-  Serial.print("Verifying QR through Python server: ");
-  Serial.println(url);
-
-  HTTPClient http;
-  http.begin(url);
+  HTTPClient http; http.begin(url);
   int statusCode = http.GET();
   String result = statusCode > 0 ? http.getString() : "ERROR";
-  result.trim();
-  http.end();
-
-  Serial.print("Python verification result: ");
-  Serial.println(result);
+  result.trim(); http.end();
 
   if (result == "ENTRY") {
-    beepShort();
+    beepShort(); digitalWrite(internalLED, HIGH); entryState = 1;                  
   } else if (result == "EXIT") {
-    beepExit();
-  } else if (result == "BEFORE_TIME") {
-    beepLong();
+    beepExit(); digitalWrite(internalLED, HIGH); entryState = 1;                  
   } else {
-    beepError();
+    beepError(); 
   }
-
+  
   server.send(200, "text/plain", result);
 }
 
-void registerRoutes() {
-  server.on("/", HTTP_GET, handleRoot);
-  server.on("/save-config", HTTP_POST, handleSaveConfig);
-  server.on("/reset-config", HTTP_GET, handleResetConfig);
-  server.on("/reset-config", HTTP_POST, handleResetConfig);
-  server.on("/config", HTTP_POST, handleJsonConfig);
-  server.on("/status", HTTP_GET, handleStatus);
-  server.on("/health", HTTP_GET, handleHealth);
-  server.on("/scan", HTTP_GET, handleScan);
+bool readEntrySensorDebounced() {
+  bool read = digitalRead(ENTRY_SENSOR);
+  if (read == entryStableState) entryDebounceCount = 0;
+  else if (++entryDebounceCount > 3) { entryStableState = read; entryDebounceCount = 0; }
+  return entryStableState;
 }
 
 void setup() {
   Serial.begin(115200);
-  pinMode(BUZZER_PIN, OUTPUT);
-  digitalWrite(BUZZER_PIN, LOW);
+  pinMode(BUZZER_PIN, OUTPUT); 
+  pinMode(internalLED, OUTPUT); 
+  pinMode(ENTRY_SENSOR, INPUT_PULLUP);
 
-  Serial.println();
-  Serial.println("Starting Park Here ESP32 QR gate...");
-  loadConfig();
+  // Load Saved Memory
+  preferences.begin("gate-config", false);
+  loadSavedConfig();
+  
+  Serial.println("\nStarting SIT-SmartGate AP...");
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(AP_SSID, AP_PASS);
+  Serial.print("Gate AP Ready! IP: "); Serial.println(WiFi.softAPIP());
+  Serial.println("Server URL: " + pythonServerBaseUrl);
+  Serial.println("Location ID: " + currentLocationId);
 
-  if (hasRequiredConfig() && connectToSavedWifi()) {
-    setupMode = false;
-    Serial.println("Normal gate mode ready.");
-  } else {
-    startSetupAccessPoint();
-  }
-
-  registerRoutes();
+  // Register API Routes
+  server.on("/scan", HTTP_GET, handleScan);
+  server.on("/status", HTTP_GET, handleStatus);             // Streamlit ping
+  server.on("/update_config", HTTP_GET, handleUpdateConfig); // Streamlit push
+  server.on("/reset_config", HTTP_GET, handleResetConfig);
+  server.on("/reset-config", HTTP_GET, handleResetConfig);
+  
   server.begin();
-  Serial.println("HTTP server started.");
 }
 
 void loop() {
   server.handleClient();
+
+  // Physical Gate Logic
+  static bool lastEntryState = HIGH;
+  bool currentEntryState = readEntrySensorDebounced(); 
+  
+  if (entryState == 1 && lastEntryState == HIGH && currentEntryState == LOW) entryState = 2; 
+  if (entryState == 2 && lastEntryState == LOW && currentEntryState == HIGH) { entryCountdownTimer = millis(); entryState = 3; }
+  lastEntryState = currentEntryState; 
+
+  if (entryState == 3 && (millis() - entryCountdownTimer >= DELAY_TIME)) {
+    beepClose(); digitalWrite(internalLED, LOW); entryState = 0;                   
+  }
 }

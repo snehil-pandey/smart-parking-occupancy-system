@@ -1,0 +1,4 @@
+Build date: 2026-06-03 14:25:31 +05:30
+Addon branch commit: 676ae75
+Build source note: packaged from addon working tree after external-test preparation
+Purpose: Testing build for Streamlit + ESP32 + Firebase QR bridge

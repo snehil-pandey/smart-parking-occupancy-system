@@ -7,13 +7,15 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1 import transactional
-from google.cloud.firestore_v1.base_transaction import Transaction
+
+if TYPE_CHECKING:
+    from google.cloud.firestore_v1.transaction import Transaction
 
 
 RESULT_ENTRY = "ENTRY"

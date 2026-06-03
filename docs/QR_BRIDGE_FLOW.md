@@ -36,7 +36,7 @@ It must not contain JSON, user ids, admin ids, vehicle data, booking details, or
 
 | Result | Meaning |
 | --- | --- |
-| `BEFORE_TIME` | Exit camera scanned a QR that has not completed entry yet |
+| `BEFORE_TIME` | QR scanned before the currently allowed verification phase |
 | `ENTRY` | Entry accepted and booking moved to `active_parking` |
 | `USED` | Entry or exit for this phase has already been completed |
 | `EXIT` | Exit accepted and booking moved to `completed` |
@@ -47,13 +47,13 @@ It must not contain JSON, user ids, admin ids, vehicle data, booking details, or
 ## Entry Flow
 
 1. Streamlit selects a parking area from Firebase `parking_areas`, or ESP32 uses its saved `locationId`.
-2. Streamlit selects Entry Camera, or ESP32 uses saved `cameraType = entry`.
-3. ESP32 or Streamlit submits `qrId`, `locationId`, and `cameraType`.
+2. Streamlit scans a QR through the browser camera or accepts a manually entered `qrId`.
+3. ESP32 or Streamlit submits `qrId` and `locationId`.
 4. Python reads `/active_qr_tickets/{qrId}`.
 5. Python reads linked `/bookings/{bookingId}`.
 6. Python verifies location, ticket status, and scan phase.
 7. If ticket `areaId` or booking `areaId` does not match scanner `locationId`, Python returns `INVALID`.
-8. If `cameraType=entry` and `scanPhase = entry_pending`, Python transaction updates:
+8. If the backend accepts the current phase, Python transaction updates:
    - `active_qr_tickets.scannedOnce = true`
    - `active_qr_tickets.scanPhase = entered`
    - `active_qr_tickets.entryScannedAt = server timestamp`
@@ -66,9 +66,10 @@ The QR ticket stays `status = active` after entry so the same opaque `qrId` can 
 
 ## Exit Flow
 
-Python returns `EXIT` only when:
+The Flask verifier still contains optional `cameraType` support for future entry/exit testing, but the Streamlit tester UI hides camera-type controls until the full timing behavior is verified in deployed user app builds.
 
-- Streamlit or ESP32 uses `cameraType = exit`
+Python returns `EXIT` only when explicitly called with an exit-capable flow and:
+
 - ticket `scanPhase` is `entered` or `exit_pending`
 - the scan location matches the ticket/booking area
 
@@ -82,7 +83,7 @@ Exit updates:
 - `active_qr_tickets.completedAt = server timestamp`
 - `parking_areas.availableSpaces` increments by one
 
-If an exit camera scans a QR still in `entry_pending`, Python returns `BEFORE_TIME`. After exit, repeat scans return `USED`. Entry cameras never run exit updates, and exit cameras never run entry updates.
+After exit, repeat scans return `USED`. The current ESP32 firmware calls `/verify` without camera type, so it is primarily used for location-aware gate verification while Streamlit is used for development simulation.
 
 ## ESP32 Beep Mapping
 
@@ -98,24 +99,22 @@ If an exit camera scans a QR still in `entry_pending`, Python returns `BEFORE_TI
 Streamlit can configure an ESP32 already connected to the same network:
 
 ```text
-GET  http://<esp32-ip>/status
-POST http://<esp32-ip>/config
-POST http://<esp32-ip>/reset-config
+GET http://<esp32-ip>/status
+GET http://<esp32-ip>/update_config?serverIp=<python-ip>&locationId=<areaId>
+GET http://<esp32-ip>/reset_config
 ```
 
-`POST /config` body:
+The ESP32 runs as:
 
-```json
-{
-  "ssid": "Campus WiFi",
-  "password": "wifi-password",
-  "serverIp": "192.168.1.10",
-  "locationId": "area_sit_main_lot",
-  "cameraType": "entry"
-}
+```text
+SSID: SIT-SmartGate
+Password: parkhere123
+IP: 192.168.4.1
+Default Python server: http://192.168.4.2:5000
+Default locationId: loc_1779943110578
 ```
 
-The ESP32 saves the values to Preferences/NVS. Future calls to:
+The ESP32 saves `serverUrl` and `locationId` to Preferences/NVS. Future calls to:
 
 ```text
 GET /scan?id=<qrId>
@@ -124,7 +123,7 @@ GET /scan?id=<qrId>
 are forwarded as:
 
 ```text
-GET http://<python-server-ip>:5000/verify?id=<qrId>&locationId=<saved-locationId>&cameraType=<saved-cameraType>
+GET http://<python-server-ip>:5000/verify?id=<qrId>&locationId=<saved-locationId>
 ```
 
 ## Local Development
