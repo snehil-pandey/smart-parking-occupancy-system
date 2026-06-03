@@ -142,7 +142,7 @@ void main() {
     );
   });
 
-  test('same QR is shown again during exit window after entry', () {
+  test('same QR is shown again for exit after entry until booking end', () {
     final now = DateTime.now();
     final booking =
         _booking(
@@ -155,19 +155,18 @@ void main() {
           entryScannedAt: now.subtract(const Duration(minutes: 30)),
         );
     final ticket = _ticket(booking: booking, now: now).copyWith(
-      scannedOnce: true,
-      scanPhase: 'entered',
+      status: ActiveQrStatus.entryVerified,
       entryScannedAt: booking.entryScannedAt,
     );
 
     expect(booking.canShowEntryQr(ticket, now: now), isFalse);
-    expect(booking.canShowExitQr(ticket, now: now), isFalse);
+    expect(booking.canShowExitQr(ticket, now: now), isTrue);
     expect(
       booking.canShowExitQr(
         ticket,
-        now: booking.endTime.subtract(const Duration(minutes: 10)),
+        now: booking.endTime.add(const Duration(seconds: 1)),
       ),
-      isTrue,
+      isFalse,
     );
   });
 }

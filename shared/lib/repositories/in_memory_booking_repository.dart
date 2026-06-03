@@ -26,11 +26,9 @@ class InMemoryBookingRepository implements BookingRepository {
           areaId: booking.parkingLocationId,
           status: ActiveQrStatus.active,
           createdAt: booking.createdAt,
-          expiresAt: booking.endTime.add(const Duration(minutes: 10)),
+          expiresAt: booking.endTime,
           bookingStartAt: booking.startTime,
           bookingEndAt: booking.endTime,
-          scannedOnce: false,
-          scanPhase: 'entry_pending',
         ),
       );
     }
@@ -61,7 +59,7 @@ class InMemoryBookingRepository implements BookingRepository {
     final existing = _activeQrTickets.where((ticket) => ticket.qrId == qrId);
     if (existing.isNotEmpty) {
       final ticket = existing.first;
-      if (ticket.status == ActiveQrStatus.active) {
+      if (_isOpenQrStatus(ticket.status)) {
         return ticket;
       }
       throw StateError('QR ticket $qrId has already been consumed.');
@@ -74,11 +72,9 @@ class InMemoryBookingRepository implements BookingRepository {
       areaId: booking.parkingLocationId,
       status: ActiveQrStatus.active,
       createdAt: DateTime.now(),
-      expiresAt: booking.endTime.add(const Duration(minutes: 10)),
+      expiresAt: booking.endTime,
       bookingStartAt: booking.startTime,
       bookingEndAt: booking.endTime,
-      scannedOnce: false,
-      scanPhase: 'entry_pending',
     );
     _activeQrTickets.insert(0, ticket);
     _replaceBooking(booking.copyWith(qrId: qrId, updatedAt: DateTime.now()));
@@ -90,14 +86,13 @@ class InMemoryBookingRepository implements BookingRepository {
     final now = DateTime.now();
     final index = _activeQrTickets.indexWhere(
       (ticket) =>
-          ticket.bookingId == bookingId &&
-          ticket.status == ActiveQrStatus.active,
+          ticket.bookingId == bookingId && _isOpenQrStatus(ticket.status),
     );
     if (index == -1) {
       return null;
     }
     final ticket = _activeQrTickets[index];
-    if (ticket.exitClosesAt.isBefore(now)) {
+    if (ticket.bookingEndAt.isBefore(now)) {
       _activeQrTickets[index] = ticket.copyWith(status: ActiveQrStatus.expired);
       await updateStatus(bookingId: bookingId, status: BookingStatus.expired);
       return null;
@@ -115,12 +110,8 @@ class InMemoryBookingRepository implements BookingRepository {
     }
     final now = DateTime.now();
     final ticket = _activeQrTickets[index];
-    if (ticket.scannedOnce || ticket.scanPhase != 'entry_pending') {
-      throw StateError('QR ticket $qrId has already verified entry.');
-    }
     _activeQrTickets[index] = ticket.copyWith(
-      scannedOnce: true,
-      scanPhase: 'entered',
+      status: ActiveQrStatus.entryVerified,
       entryScannedAt: now,
     );
     _replaceBookingById(
@@ -169,8 +160,7 @@ class InMemoryBookingRepository implements BookingRepository {
     await _parkingRepository?.releaseSlot(booking.parkingLocationId);
     final qrIndex = _activeQrTickets.indexWhere(
       (ticket) =>
-          ticket.bookingId == bookingId &&
-          ticket.status == ActiveQrStatus.active,
+          ticket.bookingId == bookingId && _isOpenQrStatus(ticket.status),
     );
     if (qrIndex != -1) {
       _activeQrTickets[qrIndex] = _activeQrTickets[qrIndex].copyWith(
@@ -224,15 +214,14 @@ class InMemoryBookingRepository implements BookingRepository {
     );
     final qrIndex = _activeQrTickets.indexWhere(
       (ticket) =>
-          ticket.bookingId == bookingId &&
-          ticket.status == ActiveQrStatus.active,
+          ticket.bookingId == bookingId && _isOpenQrStatus(ticket.status),
     );
     if (qrIndex == -1) {
       return;
     }
     if (status == BookingStatus.completed) {
       _activeQrTickets[qrIndex] = _activeQrTickets[qrIndex].copyWith(
-        status: ActiveQrStatus.used,
+        status: ActiveQrStatus.completed,
       );
     } else if (status == BookingStatus.cancelled ||
         status == BookingStatus.expired) {
@@ -261,4 +250,7 @@ class InMemoryBookingRepository implements BookingRepository {
     }
     _bookings[index] = update(_bookings[index]);
   }
+
+  bool _isOpenQrStatus(ActiveQrStatus status) =>
+      status == ActiveQrStatus.active || status == ActiveQrStatus.entryVerified;
 }
