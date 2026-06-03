@@ -2,7 +2,7 @@ import 'package:park_here_shared/park_here_shared.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('active QR ticket can be consumed only once', () async {
+  test('active QR ticket uses status-only entry then exit lifecycle', () async {
     final repository = InMemoryBookingRepository();
     final now = DateTime.now();
     final qrId = const QrPayloadService().generateQrId();
@@ -28,26 +28,25 @@ void main() {
     expect(ticket.status, ActiveQrStatus.active);
     expect(ticket.bookingStartAt, booking.startTime);
     expect(ticket.bookingEndAt, booking.endTime);
-    expect(ticket.scannedOnce, isFalse);
-    expect(ticket.scanPhase, 'entry_pending');
     expect(await repository.getActiveQrForBooking(booking.id), isNotNull);
 
     await repository.consumeQrTicket(ticket.qrId);
 
     final enteredTicket = await repository.getActiveQrForBooking(booking.id);
     expect(enteredTicket, isNotNull);
-    expect(enteredTicket!.status, ActiveQrStatus.active);
-    expect(enteredTicket.scannedOnce, isTrue);
-    expect(enteredTicket.scanPhase, 'entered');
+    expect(enteredTicket!.status, ActiveQrStatus.entryVerified);
     final activeParking = (await repository.getForUser(booking.userId)).first;
     expect(activeParking.status, BookingStatus.activeParking);
     expect(activeParking.entryVerified, isTrue);
     expect(activeParking.entryScannedAt, isNotNull);
     expect(activeParking.qrUsedAt, isNull);
-    expect(
-      () => repository.consumeQrTicket(ticket.qrId),
-      throwsA(isA<StateError>()),
-    );
+
+    await repository.consumeQrTicket(ticket.qrId);
+
+    expect(await repository.getActiveQrForBooking(booking.id), isNull);
+    final completed = (await repository.getForUser(booking.userId)).first;
+    expect(completed.status, BookingStatus.completed);
+    expect(completed.exitScannedAt, isNotNull);
   });
 
   test('QR payload contains only an opaque live QR id', () {
@@ -62,7 +61,7 @@ void main() {
     expect(payload, isNot(contains('bookingId')));
   });
 
-  test('QR is hidden before unlock and visible within 5 minute window', () {
+  test('QR is visible immediately while ticket status is active', () {
     final now = DateTime.now();
     final booking = _booking(
       id: 'book_unlock',
@@ -76,17 +75,10 @@ void main() {
       expiresAt: booking.endTime,
     );
 
-    expect(booking.canShowEntryQr(ticket, now: now), isFalse);
-    expect(
-      booking.canShowEntryQr(
-        ticket,
-        now: booking.startTime.subtract(const Duration(minutes: 5)),
-      ),
-      isTrue,
-    );
+    expect(booking.canShowEntryQr(ticket), isTrue);
   });
 
-  test('QR waits after entry and reopens during exit window', () {
+  test('QR remains visible for exit after entry verification', () {
     final now = DateTime.now();
     final startTime = now.subtract(const Duration(minutes: 30));
     final booking =
@@ -105,20 +97,12 @@ void main() {
           createdAt: now,
           expiresAt: booking.endTime,
         ).copyWith(
-          scannedOnce: true,
-          scanPhase: 'entered',
+          status: ActiveQrStatus.entryVerified,
           entryScannedAt: booking.entryScannedAt,
         );
 
-    expect(booking.canShowEntryQr(ticket, now: now), isFalse);
-    expect(booking.canShowExitQr(ticket, now: now), isFalse);
-    expect(
-      booking.canShowExitQr(
-        ticket,
-        now: booking.endTime.subtract(const Duration(minutes: 10)),
-      ),
-      isTrue,
-    );
+    expect(booking.canShowEntryQr(ticket), isFalse);
+    expect(booking.canShowExitQr(ticket), isTrue);
     expect(booking.isParkingActive, isTrue);
   });
 
