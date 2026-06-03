@@ -36,11 +36,9 @@ It must not contain JSON, user ids, admin ids, vehicle data, booking details, or
 
 | Result | Meaning |
 | --- | --- |
-| `BEFORE_TIME` | Entry QR scanned before the five-minute unlock window |
 | `ENTRY` | Entry accepted and booking moved to `active_parking` |
-| `USED` | QR is closed in an unsupported legacy state |
 | `EXIT` | Exit accepted and booking moved to `completed` |
-| `EXPIRED` | Ticket or booking is expired |
+| `EXPIRED` | Ticket or booking is expired or already completed |
 | `INVALID` | QR, booking, status, or location does not pass validation |
 | `ERROR` | Server-side error; check Python logs |
 
@@ -51,9 +49,9 @@ It must not contain JSON, user ids, admin ids, vehicle data, booking details, or
 3. ESP32 or Streamlit submits `qrId` and `locationId`.
 4. Python reads `/active_qr_tickets/{qrId}`.
 5. Python reads linked `/bookings/{bookingId}`.
-6. Python verifies location, ticket status, booking status, and booking time.
+6. Python verifies location, ticket status, and booking status.
 7. If ticket `areaId` or booking `areaId` does not match scanner `locationId`, Python returns `INVALID`.
-8. If `active_qr_tickets.status = active` and entry is unlocked, Python transaction updates:
+8. If `active_qr_tickets.status = active`, Python transaction updates:
    - `active_qr_tickets.status = entry_verified`
    - `active_qr_tickets.entryScannedAt = server timestamp`
    - `bookings.status = active_parking`
@@ -71,7 +69,6 @@ Python returns `EXIT` only when:
 
 - ticket status is `entry_verified`
 - booking status is `active_parking`
-- current time is before `bookingEndAt`
 - the scan location matches the ticket/booking area
 
 Exit updates:
@@ -84,7 +81,7 @@ Exit updates:
 - `active_qr_tickets.completedAt = server timestamp`
 - `parking_areas.availableSpaces` increments by one
 
-If `now > bookingEndAt`, an `active` or `entry_verified` QR is marked `expired` and the booking is marked `expired`. After exit completion, repeat scans return `EXPIRED`.
+After exit completion, repeat scans return `EXPIRED`. Expiry is represented by Firebase status, not by a local time window in the bridge.
 
 ## ESP32 Beep Mapping
 
@@ -92,8 +89,7 @@ If `now > bookingEndAt`, an `active` or `entry_verified` QR is marked `expired` 
 | --- | --- |
 | `ENTRY` | one short beep |
 | `EXIT` | two short beeps |
-| `BEFORE_TIME` | one long beep |
-| `USED`, `EXPIRED`, `INVALID`, `ERROR` | long error beep |
+| `EXPIRED`, `INVALID`, `ERROR` | long error beep |
 
 ## ESP32 Configuration From Streamlit
 

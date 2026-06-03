@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
@@ -20,18 +20,14 @@ if TYPE_CHECKING:
 
 RESULT_ENTRY = "ENTRY"
 RESULT_EXIT = "EXIT"
-RESULT_BEFORE_TIME = "BEFORE_TIME"
 RESULT_INVALID = "INVALID"
-RESULT_USED = "USED"
 RESULT_EXPIRED = "EXPIRED"
 RESULT_ERROR = "ERROR"
 
 VALID_RESULTS = {
     RESULT_ENTRY,
     RESULT_EXIT,
-    RESULT_BEFORE_TIME,
     RESULT_INVALID,
-    RESULT_USED,
     RESULT_EXPIRED,
     RESULT_ERROR,
 }
@@ -180,38 +176,6 @@ def _verify_transaction(
     ticket_status = _normalize_ticket_status(ticket.get("status"))
     booking_status = str(booking.get("status") or "")
     user_id = str(ticket.get("userId") or booking.get("userId") or "")
-    now = datetime.now(timezone.utc)
-    try:
-        booking_start_at = _field_time(
-            ticket,
-            booking,
-            "bookingStartAt",
-            "startTime",
-            "reservationStartAt",
-        )
-        booking_end_at = _field_time(
-            ticket,
-            booking,
-            "bookingEndAt",
-            "endTime",
-            "reservationEndAt",
-            "expiresAt",
-        )
-    except Exception:
-        _log_scan(
-            transaction,
-            qr_id=qr_id,
-            booking_id=str(booking_id),
-            user_id=user_id,
-            area_id=area_id,
-            result=RESULT_INVALID,
-            location_id=location_id,
-            source=source,
-            message="Booking start/end timestamps are missing or invalid.",
-        )
-        return RESULT_INVALID
-
-    entry_unlock_at = booking_start_at - timedelta(minutes=5)
 
     if ticket_status == QR_STATUS_CANCELLED or booking_status == "cancelled":
         _log_scan(
@@ -267,44 +231,6 @@ def _verify_transaction(
             message=f"Unsupported ticket status: {ticket_status}",
         )
         return RESULT_INVALID
-
-    if now > booking_end_at:
-        transaction.update(ticket_ref, {
-            "status": "expired",
-            "expiredAt": firestore.SERVER_TIMESTAMP,
-            "updatedAt": firestore.SERVER_TIMESTAMP,
-        })
-        transaction.update(booking_ref, {
-            "status": "expired",
-            "expiredAt": firestore.SERVER_TIMESTAMP,
-            "updatedAt": firestore.SERVER_TIMESTAMP,
-        })
-        _log_scan(
-            transaction,
-            qr_id=qr_id,
-            booking_id=str(booking_id),
-            user_id=user_id,
-            area_id=area_id,
-            result=RESULT_EXPIRED,
-            location_id=location_id,
-            source=source,
-            message="Booking time has expired.",
-        )
-        return RESULT_EXPIRED
-
-    if ticket_status == QR_STATUS_ACTIVE and now < entry_unlock_at:
-        _log_scan(
-            transaction,
-            qr_id=qr_id,
-            booking_id=str(booking_id),
-            user_id=user_id,
-            area_id=area_id,
-            result=RESULT_BEFORE_TIME,
-            location_id=location_id,
-            source=source,
-            message="QR unlocks five minutes before booking start.",
-        )
-        return RESULT_BEFORE_TIME
 
     if ticket_status == QR_STATUS_ACTIVE:
         if booking_status != "confirmed":
@@ -478,16 +404,6 @@ def _normalize_ticket_status(value: Any) -> str:
     if status in {"used"}:
         return QR_STATUS_COMPLETED
     return status
-
-
-def _field_time(ticket: dict[str, Any], booking: dict[str, Any], *names: str) -> datetime:
-    for name in names:
-        value = ticket.get(name)
-        if value is None:
-            value = booking.get(name)
-        if value is not None:
-            return _to_utc(value)
-    return datetime.now(timezone.utc)
 
 
 def _to_utc(value: Any) -> datetime:

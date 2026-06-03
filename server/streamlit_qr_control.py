@@ -9,13 +9,11 @@ import requests
 import streamlit as st
 
 from firebase_service import (
-    RESULT_BEFORE_TIME,
     RESULT_ENTRY,
     RESULT_ERROR,
     RESULT_EXIT,
     RESULT_EXPIRED,
     RESULT_INVALID,
-    RESULT_USED,
     firebase_project_id,
     get_ticket_debug_summary,
     latest_scan_logs,
@@ -27,8 +25,6 @@ from firebase_service import (
 RESULT_HELP = {
     RESULT_ENTRY: "Entry accepted. Booking is now active parking.",
     RESULT_EXIT: "Exit accepted. Booking is now completed.",
-    RESULT_BEFORE_TIME: "QR is valid, but entry is not unlocked yet.",
-    RESULT_USED: "QR is closed in a legacy state.",
     RESULT_EXPIRED: "Parking session is completed or the QR/booking has expired.",
     RESULT_INVALID: "QR, booking, status, or scanner location did not pass validation.",
     RESULT_ERROR: "Verification failed. Check server logs and Firebase config.",
@@ -170,9 +166,7 @@ def _show_result(result: str) -> None:
     message = RESULT_HELP.get(result, "Unknown verifier response.")
     if result in {RESULT_ENTRY, RESULT_EXIT}:
         st.success(f"{result}: {message}")
-    elif result == RESULT_BEFORE_TIME:
-        st.warning(f"{result}: {message}")
-    elif result in {RESULT_USED, RESULT_EXPIRED, RESULT_INVALID}:
+    elif result in {RESULT_EXPIRED, RESULT_INVALID}:
         st.error(f"{result}: {message}")
     else:
         st.error(f"{RESULT_ERROR}: {message}")
@@ -189,7 +183,7 @@ def _show_phase_summary(summary: dict) -> None:
     if ticket_status == "active":
         st.info("Status: active. Next valid scan is ENTRY.")
     elif ticket_status == "entry_verified":
-        st.info("Status: entry verified. Next valid scan is EXIT before booking end.")
+        st.info("Status: entry verified. Next valid scan is EXIT.")
     elif ticket_status == "completed" or status == "completed" or exit_at:
         st.success("Phase: parking session completed.")
     elif ticket_status == "expired" or status == "expired":

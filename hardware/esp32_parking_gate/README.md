@@ -132,8 +132,7 @@ Then use `http://192.168.4.1/status` to confirm the defaults.
 | --- | --- | --- |
 | `ENTRY` | Entry verified | One short beep |
 | `EXIT` | Parking completed | Two short beeps |
-| `BEFORE_TIME` | QR scanned too early | One long beep |
-| `INVALID` / `USED` / `EXPIRED` / `ERROR` | Denied | Long error beep |
+| `INVALID` / `EXPIRED` / `ERROR` | Denied | Long error beep |
 
 ## Notes
 
@@ -142,7 +141,6 @@ Then use `http://192.168.4.1/status` to confirm the defaults.
 - There is no camera requirement in this sketch. A serial QR reader, test client, or future hardware reader can call `/scan?id=<qrId>`.
 - During development, use `server/streamlit_qr_control.py` to simulate scans before testing ESP32 hardware.
 - Scans are location-aware. A QR for one parking area is rejected when scanned at a different saved `locationId`.
-- The same QR cannot open entry twice.
+- The same QR performs entry first, then exit on the next valid scan.
 - The current ESP32 `/scan` flow is location-based and does not pass camera type.
-- The Flask verifier still accepts optional `cameraType` for future entry/exit testing.
 - The current hardware path uses only a buzzer. Servo/gate motor control can be added later without changing the QR verification endpoint.

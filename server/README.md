@@ -49,7 +49,7 @@ Features:
 - simulate the same Firebase key/value update path used by ESP32
 - call the same `verify_qr_scan` logic used by Flask
 - reject scans where the QR ticket or booking belongs to another parking area
-- show `ENTRY`, `EXIT`, `BEFORE_TIME`, `USED`, `EXPIRED`, `INVALID`, or `ERROR`
+- show `ENTRY`, `EXIT`, `EXPIRED`, `INVALID`, or `ERROR`
 - show a safe ticket/booking summary
 - show recent `/qr_scan_logs`
 - configure ESP32 Python server IP and saved location over HTTP
@@ -94,9 +94,7 @@ Responses are plain text only:
 ```text
 ENTRY
 EXIT
-BEFORE_TIME
 INVALID
-USED
 EXPIRED
 ERROR
 ```
@@ -119,7 +117,7 @@ Firestore transactions prevent double entry scans and race conditions when two d
 - `active_qr_tickets.status = active` means the next valid scan is entry.
 - Entry changes ticket status to `entry_verified` and booking status to `active_parking`.
 - `active_qr_tickets.status = entry_verified` means the next valid scan is exit.
-- Exit is allowed any time before `bookingEndAt`.
+- Exit is allowed whenever the ticket status remains `entry_verified`.
 - Exit marks the booking `completed`, closes the QR ticket with `status = completed`, and increments `parking_areas.availableSpaces`.
 - Repeat scans after exit return `EXPIRED`.
 - Expired/cancelled tickets return `EXPIRED` or `INVALID`.

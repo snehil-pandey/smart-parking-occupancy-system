@@ -114,8 +114,6 @@ Returned plain-text commands:
 ```text
 ENTRY
 EXIT
-BEFORE_TIME
-USED
 EXPIRED
 INVALID
 ERROR
@@ -181,11 +179,15 @@ streamlit run streamlit_qr_control.py
 5. Scan the QR through the browser camera or paste/type the booking `qrId`.
 6. Click `Simulate Scan`.
 7. Verify the Firebase-backed result.
-9. Check Firebase:
+8. Check Firebase:
    - `active_qr_tickets/{qrId}.status = entry_verified`
    - `active_qr_tickets/{qrId}.entryScannedAt` is set
    - `bookings/{bookingId}.status = active_parking`
    - `bookings/{bookingId}.entryVerified = true`
+9. Scan the same QR again to complete exit:
+   - `active_qr_tickets/{qrId}.status = completed`
+   - `bookings/{bookingId}.status = completed`
+   - `bookings/{bookingId}.exitScannedAt` is set
 10. To test the ESP32 endpoint directly, call:
 
 ```text
@@ -222,27 +224,11 @@ Cause: QR is empty, malformed, missing in Firebase, or has no linked booking.
 
 Fix: use the opaque `qrId` from an active booking.
 
-### BEFORE_TIME
-
-Result: `BEFORE_TIME`
-
-Cause: The QR was scanned before the active verification window, or backend phase logic rejected the current phase.
-
-Fix: confirm booking time/status and retry in the allowed window.
-
-### USED
-
-Result: `USED`
-
-Cause: The entry/exit phase has already been completed or the ticket is closed.
-
-Fix: create a new booking for a new QR lifecycle.
-
 ### EXPIRED
 
 Result: `EXPIRED`
 
-Cause: The ticket or linked booking is marked expired.
+Cause: The ticket or linked booking is marked expired or completed.
 
 Fix: create a new booking or inspect the booking status in Firebase.
 
