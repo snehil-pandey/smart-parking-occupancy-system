@@ -118,10 +118,7 @@ class InMemoryBookingRepository implements BookingRepository {
         ),
       );
     } else {
-      _activeQrTickets[index] = ticket.copyWith(
-        status: ActiveQrStatus.completed,
-        exitScannedAt: now,
-      );
+      _activeQrTickets.removeAt(index);
       _replaceBookingById(
         ticket.bookingId,
         (booking) => booking.copyWith(
@@ -171,9 +168,7 @@ class InMemoryBookingRepository implements BookingRepository {
           ticket.bookingId == bookingId && _isOpenQrStatus(ticket.status),
     );
     if (qrIndex != -1) {
-      _activeQrTickets[qrIndex] = _activeQrTickets[qrIndex].copyWith(
-        status: ActiveQrStatus.cancelled,
-      );
+      _activeQrTickets.removeAt(qrIndex);
     }
     return updated;
   }
@@ -228,17 +223,11 @@ class InMemoryBookingRepository implements BookingRepository {
       return;
     }
     if (status == BookingStatus.completed) {
-      _activeQrTickets[qrIndex] = _activeQrTickets[qrIndex].copyWith(
-        status: ActiveQrStatus.completed,
-      );
+      _activeQrTickets.removeAt(qrIndex);
     } else if (status == BookingStatus.cancelled) {
-      _activeQrTickets[qrIndex] = _activeQrTickets[qrIndex].copyWith(
-        status: ActiveQrStatus.cancelled,
-      );
+      _activeQrTickets.removeAt(qrIndex);
     } else if (status == BookingStatus.expired) {
-      _activeQrTickets[qrIndex] = _activeQrTickets[qrIndex].copyWith(
-        status: ActiveQrStatus.expired,
-      );
+      _activeQrTickets.removeAt(qrIndex);
     }
   }
 

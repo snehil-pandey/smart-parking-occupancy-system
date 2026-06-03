@@ -118,21 +118,18 @@ The current lifecycle uses one field only:
 active_qr_tickets.status
 ```
 
-Allowed statuses:
+Live active QR statuses:
 
 - `active`: booking exists; QR is visible and the next valid scan performs entry.
 - `entry_verified`: entry scan is done; the same QR remains available for exit until the ticket reaches a final status.
-- `completed`: exit scan is done; QR is no longer active.
-- `expired`: booking time expired; QR is no longer active.
-- `cancelled`: booking was cancelled; QR is no longer active.
 
-The user app uses `active_qr_tickets.status` as the only QR lifecycle source.
+The user app uses `active_qr_tickets.status` as the only live QR lifecycle source. Completed, expired, and cancelled states are read from `/bookings` after the live QR document is removed.
 
 QR visibility:
 
 - `active`: QR visible immediately, labeled `Scan at entry gate`.
 - `entry_verified`: same QR visible, labeled for exit.
-- `completed`, `expired`, or `cancelled`: QR hidden from the active booking section.
+- Missing active QR with booking `completed`, `expired`, or `cancelled`: QR hidden from the active booking section.
 - Expired status overrides entry display because `Booking.isParkingActive` only treats `active_parking` as active.
 
 ## 8. Booking History Flow
@@ -145,7 +142,7 @@ The Bookings tab shows:
 - cancellation fine when recorded
 - entry and exit timestamps when present
 
-Completed and expired bookings remain in `/bookings`; QR lifecycle changes do not delete booking history.
+Completed, expired, and cancelled bookings remain in `/bookings`; QR lifecycle completion deletes only the temporary live QR document.
 
 ## 9. Notifications Flow
 
@@ -175,7 +172,7 @@ Runtime user app repositories use Firebase by default:
 - `/parking_areas/{areaId}`: bookable parking area data, geometry, slots, price, gates, ratings.
 - `/parking_area_images`: thumbnails/previews for parking details.
 - `/bookings/{bookingId}`: booking lifecycle and history.
-- `/active_qr_tickets/{qrId}`: active QR status and entry/exit timestamps.
+- `/active_qr_tickets/{qrId}`: temporary live QR status and entry/exit timestamps while a QR is usable.
 - `/reviews/{reviewId}`: ratings and comments.
 - `/issue_reports/{issueId}`: user-submitted issues.
 - `/notifications/{notificationId}`: in-app updates.
@@ -204,7 +201,7 @@ The user app does not use `/regions` as bookable data.
 - A second active booking is blocked.
 - QR is visible immediately when the active ticket status is `active`.
 - After scanner entry sets `entry_verified`, the same QR remains visible for exit.
-- After scanner exit sets `completed`, QR disappears and history shows completion.
-- If backend marks booking/ticket `expired`, QR disappears and history shows expired status.
+- After scanner exit sets booking `completed` and removes the live QR doc, QR disappears and history shows completion.
+- If backend marks booking `expired` and removes the live QR doc, QR disappears and history shows expired status.
 - Updates tab shows booking/QR/availability messages.
 - Profile edits save and logout returns to login.

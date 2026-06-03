@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### fix(user): remove legacy QR scan fields from active tickets
+- Active QR documents are now live-only records with `status = active` or `entry_verified`.
+- Completed, expired, and cancelled QR lifecycle endings delete `/active_qr_tickets/{qrId}` while preserving `/bookings/{bookingId}` history.
+- Added `demo/cleanup_qr_schema.py` to remove legacy `scanPhase` and `scannedOnce` fields from existing live QR documents and delete inactive live QR docs.
+
 ### refactor(user): use status-only QR lifecycle
 - QR visibility is now immediate after a confirmed booking creates an `active` ticket.
 - The same QR stays visible after entry verification, and the next valid scan completes the booking through `entry_verified -> completed`.
@@ -12,7 +17,7 @@
 - Updated QR/schema/architecture docs to match the current single-status QR lifecycle.
 
 ### fix(user): simplify QR display lifecycle and expiry handling
-- Active QR UI now uses `active_qr_tickets.status` values `active`, `entry_verified`, `completed`, `expired`, and `cancelled`.
+- Active QR UI now uses live `active_qr_tickets.status` values `active` and `entry_verified`, then falls back to booking history after the live QR doc is removed.
 - Removed documentation and UI assumptions around redundant scan-state fields; expired/completed/cancelled status hides the QR from the active booking section while booking history remains preserved.
 - After entry verification, the same QR stays available for exit until the ticket status becomes `completed`, `cancelled`, or `expired`.
 

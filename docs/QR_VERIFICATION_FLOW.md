@@ -49,26 +49,23 @@ stateDiagram-v2
   entry_verified --> expired: backend marks expired
   active --> cancelled: booking cancelled
   entry_verified --> cancelled: booking cancelled
-  completed --> [*]
-  expired --> [*]
-  cancelled --> [*]
+  completed --> [*]: delete live QR doc
+  expired --> [*]: delete live QR doc
+  cancelled --> [*]: delete live QR doc
 ```
 
-Allowed `active_qr_tickets.status` values:
+Allowed live `active_qr_tickets.status` values:
 
 - `active`: booking exists and the next valid scan performs entry.
 - `entry_verified`: entry scan is done; the same QR remains linked for exit.
-- `completed`: exit scan is done; QR is no longer active.
-- `expired`: booking time expired; QR is no longer active.
-- `cancelled`: booking was cancelled; QR is no longer active.
 
-The active QR status is the single source of truth for scan lifecycle.
+The active QR status is the single source of truth while the QR is live. Final states are stored on `/bookings/{bookingId}` and the live QR document is deleted.
 
 ## User QR Visibility
 
 - `active`: show the QR immediately with entry-gate guidance.
 - `entry_verified`: show the same QR with exit-gate guidance.
-- `completed`, `expired`, or `cancelled`: hide the QR from the active booking section and show the booking in history.
+- Missing active QR with booking `completed`, `expired`, or `cancelled`: hide the QR from the active booking section and show the booking in history.
 - Expired status takes precedence over entry-verified display.
 
 ## Verifier Rules
@@ -77,15 +74,16 @@ The verifier should use a Firestore transaction so two scanners cannot update th
 
 1. Read `/active_qr_tickets/{qrId}`.
 2. Read the linked `/bookings/{bookingId}`.
-3. Reject if the QR is missing, cancelled, completed, expired, or scanned at the wrong `areaId`.
+3. Reject if the QR is missing or scanned at the wrong `areaId`.
 4. If ticket status is `active`, this is entry: set ticket `status = entry_verified`, set booking `status = active_parking`, and write `entryVerified`/`entryScannedAt`.
-5. If ticket status is `entry_verified`, this is exit: set ticket `status = completed`, set booking `status = completed`, and write `exitScannedAt`/`completedAt`.
+5. If ticket status is `entry_verified`, this is exit: set booking `status = completed`, write `exitScannedAt`/`completedAt`, and delete `/active_qr_tickets/{qrId}`.
+6. If the live QR is missing, a verifier may inspect `/bookings` by `qrId` for diagnostics, but it must not recreate the active QR.
 
 Expected plain-text verifier commands:
 
 - `ENTRY`: entry verification succeeded.
 - `EXIT`: exit verification succeeded and booking completed.
-- `EXPIRED`: booking/QR is expired or already completed.
+- `EXPIRED`: booking/QR is expired, already completed, or no longer live.
 - `INVALID`: QR is malformed, missing, cancelled, or belongs to another parking area.
 - `ERROR`: verifier or Firebase failure.
 
