@@ -24,7 +24,7 @@ def verify() -> Response:
     camera_type = (
         request.args.get("cameraType")
         or request.args.get("mode")
-        or "entry"
+        or ""
     ).strip().lower()
 
     if not qr_id:

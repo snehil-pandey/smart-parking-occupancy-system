@@ -27,9 +27,9 @@ from firebase_service import (
 RESULT_HELP = {
     RESULT_ENTRY: "Entry accepted. Booking is now active parking.",
     RESULT_EXIT: "Exit accepted. Booking is now completed.",
-    RESULT_BEFORE_TIME: "QR is valid, but the booking unlock window has not started.",
-    RESULT_USED: "QR was already used or the entry phase is no longer pending.",
-    RESULT_EXPIRED: "QR or booking has expired.",
+    RESULT_BEFORE_TIME: "QR is valid, but the current entry/exit scan window is not open yet.",
+    RESULT_USED: "QR cannot be used for this phase again.",
+    RESULT_EXPIRED: "Parking session is completed or the QR/booking has expired.",
     RESULT_INVALID: "QR, booking, status, or scanner location did not pass validation.",
     RESULT_ERROR: "Verification failed. Check server logs and Firebase config.",
 }
@@ -113,7 +113,9 @@ def _scan_panel(selected_area_id: str) -> None:
         )
     _show_result(result)
     st.subheader("Ticket / booking summary")
-    st.json(get_ticket_debug_summary(qr_id), expanded=False)
+    summary = get_ticket_debug_summary(qr_id)
+    _show_phase_summary(summary)
+    st.json(summary, expanded=False)
 
 
 def _esp32_config_panel(selected_area_id: str) -> None:
@@ -174,6 +176,31 @@ def _show_result(result: str) -> None:
         st.error(f"{result}: {message}")
     else:
         st.error(f"{RESULT_ERROR}: {message}")
+
+
+def _show_phase_summary(summary: dict) -> None:
+    phase = summary.get("scanPhase")
+    status = summary.get("bookingStatus")
+    entry_at = summary.get("entryScannedAt")
+    exit_at = summary.get("exitScannedAt")
+    if not summary.get("ticketExists"):
+        return
+
+    if phase == "entry_pending":
+        st.info("Phase: entry pending.")
+    elif phase == "entered" and status == "active_parking" and not exit_at:
+        st.info("Phase: entry verified; waiting for the exit scan window.")
+    elif phase == "exited" or status == "completed" or exit_at:
+        st.success("Phase: parking session completed.")
+    elif status == "expired":
+        st.warning("Phase: expired.")
+    else:
+        st.info(f"Phase: {phase or 'unknown'}")
+
+    if entry_at:
+        st.caption(f"Entry scanned at: {entry_at}")
+    if exit_at:
+        st.caption(f"Exit scanned at: {exit_at}")
 
 
 def _esp_base_url(esp_ip: str) -> str:

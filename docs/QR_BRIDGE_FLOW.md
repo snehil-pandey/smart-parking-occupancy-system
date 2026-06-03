@@ -38,7 +38,7 @@ It must not contain JSON, user ids, admin ids, vehicle data, booking details, or
 | --- | --- |
 | `BEFORE_TIME` | QR scanned before the currently allowed verification phase |
 | `ENTRY` | Entry accepted and booking moved to `active_parking` |
-| `USED` | Entry or exit for this phase has already been completed |
+| `USED` | QR is closed in an unsupported legacy state |
 | `EXIT` | Exit accepted and booking moved to `completed` |
 | `EXPIRED` | Ticket or booking is expired |
 | `INVALID` | QR, booking, status, or location does not pass validation |
@@ -66,11 +66,13 @@ The QR ticket stays `status = active` after entry so the same opaque `qrId` can 
 
 ## Exit Flow
 
-The Flask verifier still contains optional `cameraType` support for future entry/exit testing, but the Streamlit tester UI hides camera-type controls until the full timing behavior is verified in deployed user app builds.
+The default Flask/ESP path does not require `cameraType`. It infers entry or exit from booking status, `scanPhase`, timestamps, and the booking time window.
 
-Python returns `EXIT` only when explicitly called with an exit-capable flow and:
+Python returns `EXIT` only when:
 
 - ticket `scanPhase` is `entered` or `exit_pending`
+- booking status is `active_parking`
+- `bookingEndAt - 10 minutes <= now <= bookingEndAt + 10 minutes`
 - the scan location matches the ticket/booking area
 
 Exit updates:
@@ -78,12 +80,12 @@ Exit updates:
 - `bookings.status = completed`
 - `bookings.exitScannedAt = server timestamp`
 - `active_qr_tickets.scanPhase = exited`
-- `active_qr_tickets.status = used`
+- `active_qr_tickets.status = expired`
 - `active_qr_tickets.exitScannedAt = server timestamp`
 - `active_qr_tickets.completedAt = server timestamp`
 - `parking_areas.availableSpaces` increments by one
 
-After exit, repeat scans return `USED`. The current ESP32 firmware calls `/verify` without camera type, so it is primarily used for location-aware gate verification while Streamlit is used for development simulation.
+Before the exit window, repeat scans after entry return `BEFORE_TIME`. After exit, repeat scans return `EXPIRED`.
 
 ## ESP32 Beep Mapping
 

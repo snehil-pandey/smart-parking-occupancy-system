@@ -119,9 +119,9 @@ Firestore transactions prevent double entry scans and race conditions when two d
 - QR payload is only the opaque `qrId`.
 - Scanner `locationId` must match both the active QR ticket area and the linked booking area when those fields are present.
 - Streamlit intentionally hides camera-type controls in this testing build.
-- `cameraType=entry` only processes `scanPhase = entry_pending` when explicitly passed by advanced clients.
 - Entry keeps the same QR active for the booking, sets `scannedOnce = true`, and moves `scanPhase = entered`.
-- `cameraType=exit` only processes `scanPhase = entered` or `exit_pending`.
-- Exit marks the booking `completed`, closes the QR ticket with `status = used`, and increments `parking_areas.availableSpaces`.
-- Exit camera scans before entry return `BEFORE_TIME`; repeat closed scans return `USED`.
+- A second scan before the exit window returns `BEFORE_TIME`, not `USED`.
+- During the exit window, the same QR returns `EXIT`.
+- Exit marks the booking `completed`, closes the QR ticket with `status = expired`, and increments `parking_areas.availableSpaces`.
+- Repeat scans after exit return `EXPIRED`.
 - Expired/cancelled tickets return `EXPIRED` or `INVALID`.
