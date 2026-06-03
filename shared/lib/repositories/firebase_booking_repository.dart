@@ -156,16 +156,6 @@ class FirebaseBookingRepository implements BookingRepository {
     final ticket = _activeTickets(
       snapshot,
     ).where((ticket) => _isOpenQrStatus(ticket.status)).firstOrNull;
-    if (ticket == null) {
-      return null;
-    }
-    if (ticket.bookingEndAt.isBefore(DateTime.now())) {
-      await updateStatus(bookingId: bookingId, status: BookingStatus.expired);
-      await _activeQrTickets.doc(ticket.qrId).update({
-        'status': ActiveQrStatus.expired.name,
-      });
-      return null;
-    }
     return ticket;
   }
 
@@ -190,21 +180,36 @@ class FirebaseBookingRepository implements BookingRepository {
         throw StateError('QR ticket $qrId is not active.');
       }
       final ticket = FirestoreModelMapper.activeQrFromDoc(ticketDoc);
-      if (ticket.status != ActiveQrStatus.active) {
+      if (!_isOpenQrStatus(ticket.status)) {
         throw StateError('QR ticket $qrId is not active.');
       }
       final now = DateTime.now();
-      transaction.update(ticketRef, {
-        'status': 'entry_verified',
-        'entryScannedAt': Timestamp.fromDate(now),
-        'updatedAt': Timestamp.fromDate(now),
-      });
-      transaction.update(_bookings.doc(ticket.bookingId), {
-        'status': 'active_parking',
-        'entryVerified': true,
-        'entryScannedAt': Timestamp.fromDate(now),
-        'updatedAt': Timestamp.fromDate(now),
-      });
+      if (ticket.status == ActiveQrStatus.active) {
+        transaction.update(ticketRef, {
+          'status': 'entry_verified',
+          'entryScannedAt': Timestamp.fromDate(now),
+          'updatedAt': Timestamp.fromDate(now),
+        });
+        transaction.update(_bookings.doc(ticket.bookingId), {
+          'status': 'active_parking',
+          'entryVerified': true,
+          'entryScannedAt': Timestamp.fromDate(now),
+          'updatedAt': Timestamp.fromDate(now),
+        });
+      } else {
+        transaction.update(ticketRef, {
+          'status': ActiveQrStatus.completed.name,
+          'exitScannedAt': Timestamp.fromDate(now),
+          'completedAt': Timestamp.fromDate(now),
+          'updatedAt': Timestamp.fromDate(now),
+        });
+        transaction.update(_bookings.doc(ticket.bookingId), {
+          'status': BookingStatus.completed.name,
+          'exitScannedAt': Timestamp.fromDate(now),
+          'completedAt': Timestamp.fromDate(now),
+          'updatedAt': Timestamp.fromDate(now),
+        });
+      }
     });
   }
 
@@ -264,9 +269,12 @@ class FirebaseBookingRepository implements BookingRepository {
         return;
       }
       await _activeQrTickets.doc(active.qrId).update({
-        'status': status == BookingStatus.completed
-            ? ActiveQrStatus.completed.name
-            : ActiveQrStatus.expired.name,
+        'status': switch (status) {
+          BookingStatus.completed => ActiveQrStatus.completed.name,
+          BookingStatus.cancelled => ActiveQrStatus.cancelled.name,
+          BookingStatus.expired => ActiveQrStatus.expired.name,
+          _ => active.status.name,
+        },
       });
     }
   }

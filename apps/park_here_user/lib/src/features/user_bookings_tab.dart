@@ -79,13 +79,11 @@ class _ActiveBookingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
     final parkingActive = booking.isParkingActive;
-    final canShowEntryQr = booking.canShowEntryQr(activeQrTicket, now: now);
-    final canShowExitQr = booking.canShowExitQr(activeQrTicket, now: now);
+    final canShowEntryQr = booking.canShowEntryQr(activeQrTicket);
+    final canShowExitQr = booking.canShowExitQr(activeQrTicket);
     final canShowQr = canShowEntryQr || canShowExitQr;
     final qrLabel = canShowExitQr ? 'Scan at exit gate' : 'Scan at entry gate';
-    final qrValidUntil = booking.endTime;
     return Material(
       color: const Color(0xFFFFF9E2),
       borderRadius: BorderRadius.circular(8),
@@ -113,7 +111,7 @@ class _ActiveBookingCard extends StatelessWidget {
                   else if (parkingActive)
                     const _ParkingActiveBadge()
                   else
-                    _QrLockedBadge(unlockAt: booking.qrUnlockAt),
+                    const _QrWaitingBadge(),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
@@ -137,7 +135,7 @@ class _ActiveBookingCard extends StatelessWidget {
                             Text('Exit at ${_dateTime(booking.exitScannedAt!)}')
                           else if (canShowExitQr)
                             const Text(
-                              'Entry verified. Scan again at exit gate before booking ends.',
+                              'Entry verified. Scan again at exit gate anytime.',
                             )
                           else
                             const Text(
@@ -150,14 +148,9 @@ class _ActiveBookingCard extends StatelessWidget {
                               message: 'Loading QR...',
                             ),
                           )
-                        else if (!canShowQr) ...[
-                          const Text(
-                            'QR will unlock 5 minutes before your booking time.',
-                          ),
-                          _UnlockCountdown(unlockAt: booking.qrUnlockAt),
-                        ] else ...[
+                        else if (canShowQr) ...[
                           Text(qrLabel),
-                          Text('Valid until ${_time(qrValidUntil)}'),
+                          const Text('Ready now for gate scanning.'),
                         ],
                       ],
                     ),
@@ -189,8 +182,10 @@ class _ActiveBookingCard extends StatelessWidget {
       '${value.day}/${value.month} ${_time(value)}';
 
   void _openQrViewer(BuildContext context) {
-    if (!booking.canShowEntryQr(activeQrTicket) &&
-        !booking.canShowExitQr(activeQrTicket)) {
+    final canShowQr =
+        booking.canShowEntryQr(activeQrTicket) ||
+        booking.canShowExitQr(activeQrTicket);
+    if (!canShowQr) {
       return;
     }
     showModalBottomSheet<void>(
@@ -254,10 +249,8 @@ class _ActiveBookingCard extends StatelessWidget {
   }
 }
 
-class _QrLockedBadge extends StatelessWidget {
-  const _QrLockedBadge({required this.unlockAt});
-
-  final DateTime unlockAt;
+class _QrWaitingBadge extends StatelessWidget {
+  const _QrWaitingBadge();
 
   @override
   Widget build(BuildContext context) {
@@ -271,12 +264,12 @@ class _QrLockedBadge extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.lock_clock, color: Colors.white, size: 36),
+          const Icon(Icons.qr_code_2, color: Colors.white, size: 36),
           const SizedBox(height: 8),
-          Text(
-            'QR unlocks\n${unlockAt.hour.toString().padLeft(2, '0')}:${unlockAt.minute.toString().padLeft(2, '0')}',
+          const Text(
+            'QR\nloading',
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w800,
               height: 1.1,
@@ -284,32 +277,6 @@ class _QrLockedBadge extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _UnlockCountdown extends StatelessWidget {
-  const _UnlockCountdown({required this.unlockAt});
-
-  final DateTime unlockAt;
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<int>(
-      stream: Stream.periodic(const Duration(seconds: 1), (_) => 0),
-      builder: (context, _) {
-        final remaining = unlockAt.difference(DateTime.now());
-        if (remaining.isNegative) {
-          return const Text('QR is unlocking now.');
-        }
-        final hours = remaining.inHours;
-        final minutes = remaining.inMinutes.remainder(60);
-        final seconds = remaining.inSeconds.remainder(60);
-        final text = hours > 0
-            ? 'Unlocks in ${hours}h ${minutes}m'
-            : 'Unlocks in ${minutes}m ${seconds}s';
-        return Text(text);
-      },
     );
   }
 }

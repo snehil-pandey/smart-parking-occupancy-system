@@ -101,11 +101,10 @@ flowchart TD
 ```mermaid
 stateDiagram-v2
   [*] --> active: booking confirmed
-  active --> active: before unlock, QR locked in UI
   active --> entry_verified: entry scan
-  entry_verified --> completed: exit scan before bookingEndAt
-  active --> expired: now > bookingEndAt
-  entry_verified --> expired: now > bookingEndAt
+  entry_verified --> completed: exit scan
+  active --> expired: backend marks expired
+  entry_verified --> expired: backend marks expired
   active --> cancelled: booking cancelled
   entry_verified --> cancelled: booking cancelled
   completed --> [*]
@@ -121,19 +120,18 @@ active_qr_tickets.status
 
 Allowed statuses:
 
-- `active`: booking exists; QR can unlock for entry.
-- `entry_verified`: entry scan is done; the same QR remains available for exit until `bookingEndAt`.
+- `active`: booking exists; QR is visible and the next valid scan performs entry.
+- `entry_verified`: entry scan is done; the same QR remains available for exit until the ticket reaches a final status.
 - `completed`: exit scan is done; QR is no longer active.
 - `expired`: booking time expired; QR is no longer active.
 - `cancelled`: booking was cancelled; QR is no longer active.
 
-The user app no longer relies on `scanPhase` or `scannedOnce`.
+The user app uses `active_qr_tickets.status` as the only QR lifecycle source.
 
 QR visibility:
 
-- Before `bookingStartAt - 5 minutes`: locked countdown.
-- `active` during unlock window: QR visible, labeled `Scan at entry gate`.
-- `entry_verified`: same QR visible, labeled for exit before booking end.
+- `active`: QR visible immediately, labeled `Scan at entry gate`.
+- `entry_verified`: same QR visible, labeled for exit.
 - `completed`, `expired`, or `cancelled`: QR hidden from the active booking section.
 - Expired status overrides entry display because `Booking.isParkingActive` only treats `active_parking` as active.
 
@@ -189,7 +187,7 @@ The user app does not use `/regions` as bookable data.
 - Firebase configuration is required; without it the app shows setup guidance.
 - The app has local in-memory repositories for tests, but runtime providers use Firebase repositories.
 - Routing uses OSRM with a SIT Tumkur road-graph fallback.
-- QR expiry is reflected through Firebase/backend state; the UI can show countdowns but should not be treated as the authority for final expiry.
+- QR expiry is reflected through Firebase/backend status; the UI does not apply local clock-window rules.
 - Local notifications are best-effort and platform-dependent.
 - Images are loaded lazily from Firestore image records and may show placeholders if unavailable.
 
@@ -204,8 +202,7 @@ The user app does not use `/regions` as bookable data.
 - Details screen shows price, slots, ratings, routes, gates, reviews, issue reporting, and booking action.
 - Booking a bookable area creates a confirmed booking and active QR ticket.
 - A second active booking is blocked.
-- QR is locked before the five-minute entry unlock.
-- QR is visible for entry when active and unlocked.
+- QR is visible immediately when the active ticket status is `active`.
 - After scanner entry sets `entry_verified`, the same QR remains visible for exit.
 - After scanner exit sets `completed`, QR disappears and history shows completion.
 - If backend marks booking/ticket `expired`, QR disappears and history shows expired status.

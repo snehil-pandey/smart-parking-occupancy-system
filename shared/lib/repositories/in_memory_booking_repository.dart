@@ -83,7 +83,6 @@ class InMemoryBookingRepository implements BookingRepository {
 
   @override
   Future<ActiveQrTicket?> getActiveQrForBooking(String bookingId) async {
-    final now = DateTime.now();
     final index = _activeQrTickets.indexWhere(
       (ticket) =>
           ticket.bookingId == bookingId && _isOpenQrStatus(ticket.status),
@@ -91,38 +90,47 @@ class InMemoryBookingRepository implements BookingRepository {
     if (index == -1) {
       return null;
     }
-    final ticket = _activeQrTickets[index];
-    if (ticket.bookingEndAt.isBefore(now)) {
-      _activeQrTickets[index] = ticket.copyWith(status: ActiveQrStatus.expired);
-      await updateStatus(bookingId: bookingId, status: BookingStatus.expired);
-      return null;
-    }
-    return ticket;
+    return _activeQrTickets[index];
   }
 
   @override
   Future<void> consumeQrTicket(String qrId) async {
     final index = _activeQrTickets.indexWhere(
-      (ticket) => ticket.qrId == qrId && ticket.status == ActiveQrStatus.active,
+      (ticket) => ticket.qrId == qrId && _isOpenQrStatus(ticket.status),
     );
     if (index == -1) {
       throw StateError('QR ticket $qrId is not active.');
     }
     final now = DateTime.now();
     final ticket = _activeQrTickets[index];
-    _activeQrTickets[index] = ticket.copyWith(
-      status: ActiveQrStatus.entryVerified,
-      entryScannedAt: now,
-    );
-    _replaceBookingById(
-      ticket.bookingId,
-      (booking) => booking.copyWith(
-        status: BookingStatus.activeParking,
-        entryVerified: true,
+    if (ticket.status == ActiveQrStatus.active) {
+      _activeQrTickets[index] = ticket.copyWith(
+        status: ActiveQrStatus.entryVerified,
         entryScannedAt: now,
-        updatedAt: now,
-      ),
-    );
+      );
+      _replaceBookingById(
+        ticket.bookingId,
+        (booking) => booking.copyWith(
+          status: BookingStatus.activeParking,
+          entryVerified: true,
+          entryScannedAt: now,
+          updatedAt: now,
+        ),
+      );
+    } else {
+      _activeQrTickets[index] = ticket.copyWith(
+        status: ActiveQrStatus.completed,
+        exitScannedAt: now,
+      );
+      _replaceBookingById(
+        ticket.bookingId,
+        (booking) => booking.copyWith(
+          status: BookingStatus.completed,
+          exitScannedAt: now,
+          updatedAt: now,
+        ),
+      );
+    }
   }
 
   @override
@@ -164,7 +172,7 @@ class InMemoryBookingRepository implements BookingRepository {
     );
     if (qrIndex != -1) {
       _activeQrTickets[qrIndex] = _activeQrTickets[qrIndex].copyWith(
-        status: ActiveQrStatus.expired,
+        status: ActiveQrStatus.cancelled,
       );
     }
     return updated;
@@ -223,8 +231,11 @@ class InMemoryBookingRepository implements BookingRepository {
       _activeQrTickets[qrIndex] = _activeQrTickets[qrIndex].copyWith(
         status: ActiveQrStatus.completed,
       );
-    } else if (status == BookingStatus.cancelled ||
-        status == BookingStatus.expired) {
+    } else if (status == BookingStatus.cancelled) {
+      _activeQrTickets[qrIndex] = _activeQrTickets[qrIndex].copyWith(
+        status: ActiveQrStatus.cancelled,
+      );
+    } else if (status == BookingStatus.expired) {
       _activeQrTickets[qrIndex] = _activeQrTickets[qrIndex].copyWith(
         status: ActiveQrStatus.expired,
       );

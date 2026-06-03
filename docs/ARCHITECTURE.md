@@ -194,8 +194,8 @@ stateDiagram-v2
   [*] --> active: booking created
   active --> entry_verified: entry scan
   entry_verified --> completed: exit scan before bookingEndAt
-  active --> expired: bookingEndAt passes
-  entry_verified --> expired: bookingEndAt passes
+  active --> expired: backend marks expired
+  entry_verified --> expired: backend marks expired
   active --> cancelled: booking cancelled
   completed --> [*]
   expired --> [*]

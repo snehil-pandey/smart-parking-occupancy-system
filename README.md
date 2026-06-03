@@ -16,7 +16,7 @@ The system is built around:
 - OpenStreetMap rendering through `flutter_map`
 - Realtime occupancy tracking
 - Region-controlled admin management
-- QR verification for booking lifecycle checks
+- Status-only QR verification for booking lifecycle checks
 
 Admins first register a controlled region, define its polygon boundary, and then create parking areas only inside that region. Users can browse realtime parking availability, inspect parking details, navigate toward an area, book parking, and use QR verification during entry/exit flows.
 
@@ -32,7 +32,7 @@ Park Here addresses this by making occupancy visible in realtime and by giving a
 - Admin-controlled geographic regions
 - Parking area polygons with boundary validation
 - Gate-based parking access points
-- QR booking lifecycle and privacy-aware ticket display
+- Status-only QR booking lifecycle and privacy-aware ticket display
 - Realtime occupancy and booking updates through Firestore
 - Admin analytics and metrics views
 - Firebase-backed persistence for runtime data

@@ -198,9 +198,8 @@ QR privacy rule: QR images should encode only the opaque `qrId`, for example `qr
 User QR rules:
 
 - The user app allows only one active parking booking at a time. `confirmed` and `active_parking` are active user sessions.
-- Entry QR is visible only when the booking is `confirmed`, the linked ticket is `active`, and the current time is at least five minutes before `bookingStartAt`.
-- Before the entry unlock window, the user app shows a countdown instead of the QR.
-- After scanner verification writes `bookings.status = active_parking`, `entryVerified = true`, `entryScannedAt`, and `active_qr_tickets.status = entry_verified`, the user app shows the same QR for exit until `bookingEndAt`.
+- Entry QR is visible immediately when the booking is `confirmed` and the linked ticket is `active`.
+- After scanner verification writes `bookings.status = active_parking`, `entryVerified = true`, `entryScannedAt`, and `active_qr_tickets.status = entry_verified`, the user app shows the same QR for exit until the ticket status becomes `completed`, `cancelled`, or `expired`.
 - After exit, the verifier writes `bookings.status = completed`, `bookings.exitScannedAt`, `active_qr_tickets.status = completed`, and optional `completedAt`.
 - If time passes `bookingEndAt` before exit, the verifier/backend should mark the booking and active QR ticket `expired`; the user app hides the active QR and keeps the booking in history.
 - New QR ids are generated only for new bookings. Completed, expired, or cancelled QR ids must never be reactivated.

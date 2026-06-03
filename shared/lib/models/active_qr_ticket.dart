@@ -29,19 +29,13 @@ class ActiveQrTicket {
   final DateTime? entryScannedAt;
   final DateTime? exitScannedAt;
 
-  DateTime get unlockAt => bookingStartAt.subtract(const Duration(minutes: 5));
+  bool get canScanEntry => status == ActiveQrStatus.active;
 
-  bool isEntryUnlockedAt(DateTime now) =>
-      !now.isBefore(unlockAt) &&
-      now.isBefore(bookingEndAt) &&
-      status == ActiveQrStatus.active;
+  bool get canScanExit =>
+      status == ActiveQrStatus.entryVerified && exitScannedAt == null;
 
-  bool isExitUnlockedAt(DateTime now) =>
-      now.isBefore(bookingEndAt) &&
-      status == ActiveQrStatus.entryVerified &&
-      exitScannedAt == null;
-
-  bool isUnlockedAt(DateTime now) => isEntryUnlockedAt(now);
+  bool get isOpen =>
+      status == ActiveQrStatus.active || status == ActiveQrStatus.entryVerified;
 
   ActiveQrTicket copyWith({
     String? qrId,

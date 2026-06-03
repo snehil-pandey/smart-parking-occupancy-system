@@ -2,17 +2,22 @@
 
 ## Unreleased
 
+### refactor(user): use status-only QR lifecycle
+- QR visibility is now immediate after a confirmed booking creates an `active` ticket.
+- The same QR stays visible after entry verification, and the next valid scan completes the booking through `entry_verified -> completed`.
+- Removed timing-window UI and redundant scan-state wording from user-facing documentation.
+
 ### docs(user): document actual user app flow
 - Added `docs/USER_APP_FLOW.md` with source-aligned startup, map, Explore, booking, QR, notifications, profile, Firebase collection, limitation, and manual test notes.
 - Updated QR/schema/architecture docs to match the current single-status QR lifecycle.
 
 ### fix(user): simplify QR display lifecycle and expiry handling
 - Active QR UI now uses `active_qr_tickets.status` values `active`, `entry_verified`, `completed`, `expired`, and `cancelled`.
-- Removed documentation and UI assumptions around `scanPhase` and `scannedOnce`; expired/completed/cancelled status hides the QR from the active booking section while booking history remains preserved.
-- After entry verification, the same QR stays available for exit until `bookingEndAt`; expiry overrides the entry-verified display.
+- Removed documentation and UI assumptions around redundant scan-state fields; expired/completed/cancelled status hides the QR from the active booking section while booking history remains preserved.
+- After entry verification, the same QR stays available for exit until the ticket status becomes `completed`, `cancelled`, or `expired`.
 
-### fix(user): enforce QR unlock and single active booking rules
-- User bookings now start as `confirmed`, expose their QR only during the five-minute pre-entry unlock window, and switch to `active_parking` after scanner verification.
+### fix(user): enforce single active booking rules
+- User bookings now start as `confirmed`, expose their QR immediately, and switch to `active_parking` after scanner verification.
 - Active QR tickets store `bookingStartAt`, `bookingEndAt`, one canonical `status`, and scan timestamps so the verifier and user app share one lifecycle.
 - The user app blocks a second active booking while a `confirmed` or `active_parking` booking exists and shows a friendly message instead.
 
