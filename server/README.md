@@ -109,6 +109,7 @@ The server reads/writes:
 - `/qr_scan_logs/{scanId}`
 
 Firestore transactions prevent double entry scans and race conditions when two devices scan the same QR at the same time.
+`/bookings/{bookingId}` is permanent history. `/active_qr_tickets/{qrId}` is temporary/live only.
 
 ## QR Rules
 
@@ -118,6 +119,6 @@ Firestore transactions prevent double entry scans and race conditions when two d
 - Entry changes ticket status to `entry_verified` and booking status to `active_parking`.
 - `active_qr_tickets.status = entry_verified` means the next valid scan is exit.
 - Exit is allowed whenever the ticket status remains `entry_verified`.
-- Exit marks the booking `completed`, closes the QR ticket with `status = completed`, and increments `parking_areas.availableSpaces`.
+- Exit marks the booking `completed`, deletes `/active_qr_tickets/{qrId}`, and increments `parking_areas.availableSpaces`.
 - Repeat scans after exit return `EXPIRED`.
-- Expired/cancelled tickets return `EXPIRED` or `INVALID`.
+- Expired/cancelled bookings remove the live QR doc and return `EXPIRED` or `INVALID`.

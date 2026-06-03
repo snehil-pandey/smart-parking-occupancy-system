@@ -89,6 +89,7 @@ selected location -> qrId -> Firebase transaction
 ```
 
 The Python endpoint uses `active_qr_tickets.status` to decide whether the scan is entry or exit, so no camera type selector is needed.
+The active QR document is temporary. After exit, expiry, or cancellation, the booking remains in `/bookings` and the live `/active_qr_tickets/{qrId}` document is deleted.
 
 ## Run Flask Server
 
@@ -185,7 +186,7 @@ streamlit run streamlit_qr_control.py
    - `bookings/{bookingId}.status = active_parking`
    - `bookings/{bookingId}.entryVerified = true`
 9. Scan the same QR again to complete exit:
-   - `active_qr_tickets/{qrId}.status = completed`
+   - `active_qr_tickets/{qrId}` is deleted
    - `bookings/{bookingId}.status = completed`
    - `bookings/{bookingId}.exitScannedAt` is set
 10. To test the ESP32 endpoint directly, call:

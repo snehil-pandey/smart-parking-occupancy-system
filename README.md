@@ -38,7 +38,9 @@ docs/
 2. The user app creates `/bookings/{bookingId}` and `/active_qr_tickets/{qrId}` in Firebase.
 3. ESP32 or Streamlit submits only the opaque `qrId` and selected parking area `locationId`.
 4. Python verifies the QR through Firestore in a transaction.
-5. Python returns a plain command:
+5. Entry updates the live QR status to `entry_verified`.
+6. Exit completes the permanent booking record and deletes the live QR document.
+7. Python returns a plain command:
 
 ```text
 ENTRY
@@ -86,6 +88,7 @@ GET http://<python-server>:5000/verify?id=<qrId>&locationId=<areaId>
 The Python verifier rejects scans when the QR ticket or linked booking belongs to a different `areaId` than the scanner `locationId`.
 
 The Flask endpoint uses the ticket status to decide whether a scan is entry or exit; no camera type is required.
+The `/bookings/{bookingId}` document is permanent history. `/active_qr_tickets/{qrId}` is live-only and is deleted after exit, expiry, or cancellation.
 
 ## Firebase Setup
 

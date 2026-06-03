@@ -178,6 +178,12 @@ def _show_phase_summary(summary: dict) -> None:
     entry_at = summary.get("entryScannedAt")
     exit_at = summary.get("exitScannedAt")
     if not summary.get("ticketExists"):
+        if status in {"completed", "expired"}:
+            st.warning(f"No live QR ticket. Booking history status: {status}.")
+        elif status == "cancelled":
+            st.warning("No live QR ticket. Booking was cancelled.")
+        else:
+            st.info("No live QR ticket found for this QR id.")
         return
 
     if ticket_status == "active":

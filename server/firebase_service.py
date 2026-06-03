@@ -128,7 +128,31 @@ def _verify_transaction(
     ticket_ref = db.collection("active_qr_tickets").document(qr_id)
     ticket_snapshot = ticket_ref.get(transaction=transaction)
     if not ticket_snapshot.exists:
-        _log_scan(transaction, qr_id=qr_id, result=RESULT_INVALID, location_id=location_id, source=source)
+        booking_snapshot = _booking_by_qr_id(db, qr_id, transaction)
+        if booking_snapshot is not None:
+            booking = booking_snapshot.to_dict() or {}
+            status = str(booking.get("status") or "")
+            result = RESULT_EXPIRED if status in {"completed", "expired"} else RESULT_INVALID
+            _log_scan(
+                transaction,
+                qr_id=qr_id,
+                booking_id=str(booking.get("bookingId") or booking_snapshot.id),
+                user_id=str(booking.get("userId") or ""),
+                area_id=str(booking.get("areaId") or booking.get("parkingLocationId") or ""),
+                result=result,
+                location_id=location_id,
+                source=source,
+                message=f"No live QR document; booking status is {status or 'unknown'}.",
+            )
+            return result
+        _log_scan(
+            transaction,
+            qr_id=qr_id,
+            result=RESULT_INVALID,
+            location_id=location_id,
+            source=source,
+            message="Live QR document missing.",
+        )
         return RESULT_INVALID
 
     ticket = ticket_snapshot.to_dict() or {}
@@ -178,6 +202,7 @@ def _verify_transaction(
     user_id = str(ticket.get("userId") or booking.get("userId") or "")
 
     if ticket_status == QR_STATUS_CANCELLED or booking_status == "cancelled":
+        transaction.delete(ticket_ref)
         _log_scan(
             transaction,
             qr_id=qr_id,
@@ -191,6 +216,7 @@ def _verify_transaction(
         return RESULT_INVALID
 
     if ticket_status == QR_STATUS_EXPIRED or booking_status == "expired":
+        transaction.delete(ticket_ref)
         _log_scan(
             transaction,
             qr_id=qr_id,
@@ -205,6 +231,7 @@ def _verify_transaction(
         return RESULT_EXPIRED
 
     if ticket_status == QR_STATUS_COMPLETED or booking_status == "completed":
+        transaction.delete(ticket_ref)
         _log_scan(
             transaction,
             qr_id=qr_id,
@@ -286,12 +313,7 @@ def _verify_transaction(
             )
             return RESULT_INVALID
 
-        transaction.update(ticket_ref, {
-            "status": QR_STATUS_COMPLETED,
-            "exitScannedAt": firestore.SERVER_TIMESTAMP,
-            "completedAt": firestore.SERVER_TIMESTAMP,
-            "updatedAt": firestore.SERVER_TIMESTAMP,
-        })
+        transaction.delete(ticket_ref)
         transaction.update(booking_ref, {
             "status": "completed",
             "exitScannedAt": firestore.SERVER_TIMESTAMP,
@@ -330,7 +352,23 @@ def get_ticket_debug_summary(qr_id: str) -> dict[str, Any]:
     db = get_firestore_client()
     ticket_snapshot = db.collection("active_qr_tickets").document(qr_id).get()
     if not ticket_snapshot.exists:
-        return {"validQrId": True, "ticketExists": False}
+        booking_snapshot = _booking_by_qr_id(db, qr_id)
+        if booking_snapshot is None:
+            return {"validQrId": True, "ticketExists": False}
+        booking = booking_snapshot.to_dict() or {}
+        return {
+            "validQrId": True,
+            "ticketExists": False,
+            "qrId": qr_id,
+            "bookingId": booking.get("bookingId") or booking_snapshot.id,
+            "bookingExists": True,
+            "bookingStatus": booking.get("status"),
+            "areaId": booking.get("areaId") or booking.get("parkingLocationId"),
+            "bookingStartAt": _display_time(booking.get("bookingStartAt") or booking.get("startTime")),
+            "bookingEndAt": _display_time(booking.get("bookingEndAt") or booking.get("endTime")),
+            "entryScannedAt": _display_time(booking.get("entryScannedAt")),
+            "exitScannedAt": _display_time(booking.get("exitScannedAt")),
+        }
 
     ticket = ticket_snapshot.to_dict() or {}
     booking_id = str(ticket.get("bookingId") or "")
@@ -387,6 +425,16 @@ def latest_scan_logs(limit: int = 20) -> list[dict[str, Any]]:
             }
         )
     return logs
+
+
+def _booking_by_qr_id(
+    db: firestore.Client,
+    qr_id: str,
+    transaction: Transaction | None = None,
+) -> Any | None:
+    query = db.collection("bookings").where("qrId", "==", qr_id).limit(1)
+    snapshots = list(query.stream(transaction=transaction))
+    return snapshots[0] if snapshots else None
 
 
 def _is_valid_qr_id(qr_id: str) -> bool:

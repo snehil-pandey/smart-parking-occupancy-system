@@ -15,6 +15,7 @@ User app -> Firebase -> Python bridge -> ESP32 buzzer
 - Python reads Firebase through Admin SDK and updates scan state transactionally.
 - ESP32 sends QR ids to Python and plays beep feedback.
 - Streamlit simulates QR scans without physical QR hardware and can configure ESP32 gates.
+- `/bookings/{bookingId}` is permanent history; `/active_qr_tickets/{qrId}` is live-only and is deleted after exit, expiry, or cancellation.
 
 ## QR Privacy
 
@@ -76,12 +77,10 @@ Exit updates:
 - `bookings.status = completed`
 - `bookings.exitScannedAt = server timestamp`
 - `bookings.completedAt = server timestamp`
-- `active_qr_tickets.status = completed`
-- `active_qr_tickets.exitScannedAt = server timestamp`
-- `active_qr_tickets.completedAt = server timestamp`
+- delete `/active_qr_tickets/{qrId}`
 - `parking_areas.availableSpaces` increments by one
 
-After exit completion, repeat scans return `EXPIRED`. Expiry is represented by Firebase status, not by a local time window in the bridge.
+After exit completion, repeat scans return `EXPIRED` when booking history can be found by `qrId`; otherwise they return `INVALID`. Expiry/cancellation also removes the live QR doc.
 
 ## ESP32 Beep Mapping
 
