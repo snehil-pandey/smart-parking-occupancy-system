@@ -214,14 +214,14 @@ QR codes are privacy-preserving: rendered QR data is only `qr_live_...`. User id
 
 ```mermaid
 flowchart TD
-  ActiveQR["Active QR stream"] --> Countdown["In-app countdown"]
+  ActiveQR["Active QR stream"] --> StatusUI["In-app QR status"]
   ActiveQR --> Local["Best-effort local notifications"]
   ActiveQR --> FirestoreNotif["/notifications/{notificationId}"]
   FirestoreNotif --> UpdatesTab["User Updates tab"]
   BookingCancel["Booking cancelled/completed"] --> CancelLocal["Cancel scheduled local alerts"]
 ```
 
-The app schedules QR expiry alerts at 10 minutes, 2 minutes, and expiry where platform APIs allow it. Web may ignore local notifications or screen brightness changes, so the Updates tab and QR countdown remain the reliable in-app path.
+The app reflects QR state from Firestore snapshots. Web may ignore local notifications or screen brightness changes, so the Updates tab and live booking state remain the reliable in-app path.
 
 ## Client Cache Strategy
 

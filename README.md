@@ -150,6 +150,17 @@ firebase.json          # Firebase project configuration
 
 For deeper environment notes, see [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md).
 
+## Release APKs
+
+Local release APK deliverables are generated into the ignored `release/` folder:
+
+```text
+release/ParkHere-User-v1.apk
+release/ParkHere-Admin-v1.apk
+```
+
+APK files are build artifacts and are not committed to Git.
+
 ## Demo Data
 
 Demo data is loaded through Firebase seed scripts. The apps do not rely on hardcoded runtime demo repositories or local fake regions.

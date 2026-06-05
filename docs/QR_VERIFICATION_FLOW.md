@@ -89,4 +89,4 @@ Expected plain-text verifier commands:
 
 ## Notifications
 
-The user app shows QR countdowns in the booking QR viewer and writes in-app notification records before expiry. It also schedules best-effort local notifications at 10 minutes, 2 minutes, and expiry where the platform/plugin supports it. Web and some desktop targets may ignore brightness or local notification APIs; the Updates tab remains the reliable in-app fallback.
+The user app shows live QR status in the booking QR viewer and writes in-app notification records for booking/QR updates. Web and some desktop targets may ignore brightness or local notification APIs; the Updates tab remains the reliable in-app fallback.

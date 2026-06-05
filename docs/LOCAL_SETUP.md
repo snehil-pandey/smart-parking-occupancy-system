@@ -301,12 +301,12 @@ Sensitive booking/user/vehicle details stay in Firestore under `/active_qr_ticke
 
 The Bookings tab opens a full-screen QR viewer when the active ticket is tapped. It enlarges the QR and attempts to raise screen brightness while open. Brightness control is best-effort and may be ignored by web or desktop platforms.
 
-QR expiry alerts are supported in two layers:
+QR status updates are supported in two layers:
 
 - In-app Updates tab notifications from `/notifications`.
-- Best-effort local notifications via `flutter_local_notifications` at 10 minutes, 2 minutes, and expiry.
+- Best-effort local notifications via `flutter_local_notifications` where the platform supports them.
 
-Android/iOS notification permission behavior depends on OS version. Web support is limited; keep the app open for the in-app countdown and Updates tab.
+Android/iOS notification permission behavior depends on OS version. Web support is limited; keep the app open for the live QR status and Updates tab.
 
 ## Client Caching
 

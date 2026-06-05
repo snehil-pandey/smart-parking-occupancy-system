@@ -58,7 +58,7 @@ Intentional demo credentials remain documented for `@parkhere.demo` accounts. Th
 - New QR payload generation uses opaque `qrId` only through `QrPayloadService.buildPayload`.
 - Tests assert new QR payloads do not contain `userId`, vehicle data, or `bookingId`.
 - Legacy JSON QR parsing remains migration-safe, but new generation does not emit booking JSON.
-- Booking creation stores QR state in Firestore and active QR documents include `scannedOnce` and `scanPhase`.
+- Booking creation stores QR state in Firestore and active QR documents use one live `status` field: `active` or `entry_verified`.
 - QR consumption uses Firestore transactions in `FirebaseBookingRepository.consumeQrTicket`.
 - Slot reservation/release and review/image writes use Firestore transactions where consistency matters.
 - User-facing Firebase errors are routed through `FirebaseErrorMessages.friendlyMessage`, including index-building errors.
