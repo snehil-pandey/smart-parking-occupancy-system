@@ -15,6 +15,8 @@ User app -> Firebase -> Python bridge -> ESP32 buzzer
 - Python reads Firebase through Admin SDK and updates scan state transactionally.
 - ESP32 sends QR ids to Python and plays beep feedback.
 - Streamlit simulates QR scans without physical QR hardware and can configure ESP32 gates.
+- Streamlit can trigger the ESP32 `/scan` endpoint for physical buzzer/LED testing.
+- `camera/qr_camera_reader.py` can read QR ids from a laptop webcam and forward them to ESP32.
 - `/bookings/{bookingId}` is permanent history; `/active_qr_tickets/{qrId}` is live-only and is deleted after exit, expiry, or cancellation.
 
 ## QR Privacy
@@ -132,3 +134,11 @@ python parking_server.py
 ```
 
 Use Streamlit first to verify Firebase connectivity and QR lifecycle before flashing/testing ESP32 hardware.
+
+For a webcam-driven hardware demo:
+
+```powershell
+python camera/qr_camera_reader.py --esp32-url http://192.168.4.1/scan
+```
+
+The camera reader forwards decoded QR ids to ESP32. ESP32 forwards the id and saved `locationId` to Flask, then plays the matching beep pattern.

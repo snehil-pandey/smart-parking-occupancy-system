@@ -23,6 +23,9 @@ server/
   .env.example
   README.md
 
+camera/
+  qr_camera_reader.py
+
 hardware/
   esp32_parking_gate/
     park_here_gate.ino
@@ -63,7 +66,7 @@ copy .env.example .env
 streamlit run streamlit_qr_control.py
 ```
 
-Use Streamlit when you do not have a physical QR reader yet. It lets you scan a QR using the browser camera or paste a `qrId`, choose a Firebase parking area, and simulate the same Firebase verification path used by the ESP32 bridge.
+Use Streamlit when you do not have a physical QR reader yet. It lets you scan a QR using the browser camera or paste a `qrId`, choose a Firebase parking area, and simulate the same Firebase verification path used by the ESP32 bridge. It can also trigger the ESP32 `/scan` endpoint so the buzzer/LED path can be tested from the browser.
 
 Streamlit also includes an **ESP32 Gate Configuration** section. Connect the laptop to `SIT-SmartGate`, enter the ESP32 IP address, Python server IP, and parking area `locationId`, then use:
 
@@ -117,5 +120,15 @@ Default locationId: loc_1779943110578
 ```
 
 Configure Python server IP and parking area `locationId` from Streamlit or the ESP32 HTTP endpoints. Values are saved permanently in ESP32 Preferences/NVS.
+
+## Optional Laptop Camera Reader
+
+For a physical-looking demo without dedicated QR hardware, run:
+
+```powershell
+python camera/qr_camera_reader.py --esp32-url http://192.168.4.1/scan
+```
+
+The camera reader decodes QR ids from the laptop webcam and forwards them to the ESP32. The ESP32 still calls the Flask verifier, so Firebase transaction behavior remains centralized.
 
 See [hardware/esp32_parking_gate/README.md](hardware/esp32_parking_gate/README.md).

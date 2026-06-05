@@ -81,6 +81,7 @@ Use it to:
 - view safe ticket/booking debug details
 - view latest scan logs
 - configure a reachable ESP32 gate
+- trigger the physical ESP32 gate from the browser
 
 Scan flow:
 
@@ -195,6 +196,16 @@ streamlit run streamlit_qr_control.py
 http://192.168.4.1/scan?id=<qrId>
 ```
 
+## Optional Camera Reader
+
+The `camera/qr_camera_reader.py` script uses the laptop webcam and forwards decoded QR ids to the ESP32 `/scan` endpoint:
+
+```powershell
+python camera/qr_camera_reader.py --esp32-url http://192.168.4.1/scan
+```
+
+Press `SPACEBAR` to pause/resume the camera and `Q` to quit. The ESP32 still calls the Flask server, so the Firebase transaction path remains the same.
+
 ## Troubleshooting
 
 ### Firebase connection issues
@@ -239,3 +250,4 @@ Fix: create a new booking or inspect the booking status in Firebase.
 - Do not put user, admin, vehicle, or booking JSON into the QR.
 - Firebase is the source of truth.
 - ESP32 only plays beep patterns; no servo or gate motor is controlled yet.
+- ESP32 aborts a stale open state after 30 seconds if no vehicle crosses the sensor.

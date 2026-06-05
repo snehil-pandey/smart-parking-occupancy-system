@@ -46,7 +46,8 @@ On boot, the ESP32:
 1. Reads saved server/location config from NVS.
 2. Starts the `SIT-SmartGate` access point.
 3. Starts the QR gate HTTP server at `192.168.4.1`.
-4. Uses defaults when no saved config exists:
+4. Aborts a stale open state after 30 seconds if no vehicle crosses the sensor.
+5. Uses defaults when no saved config exists:
 
 ```text
 serverUrl: http://192.168.4.2:5000
@@ -144,3 +145,4 @@ Then use `http://192.168.4.1/status` to confirm the defaults.
 - The same QR performs entry first, then exit on the next valid scan.
 - The current ESP32 `/scan` flow is location-based and does not pass camera type.
 - The current hardware path uses only a buzzer. Servo/gate motor control can be added later without changing the QR verification endpoint.
+- If a QR opens the gate but no sensor crossing happens within 30 seconds, the ESP32 plays the error beep, turns off the LED, and resets to waiting.

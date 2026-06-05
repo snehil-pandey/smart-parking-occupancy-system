@@ -53,6 +53,7 @@ Features:
 - show a safe ticket/booking summary
 - show recent `/qr_scan_logs`
 - configure ESP32 Python server IP and saved location over HTTP
+- trigger the ESP32 `/scan` endpoint for buzzer/LED testing from the browser
 
 The Streamlit **Select Scanner Location** section loads `parking_areas` from Firebase. The selected `areaId` is used as `locationId` for scan simulation, matching a physical gate installed at that parking area.
 
@@ -110,6 +111,16 @@ The server reads/writes:
 
 Firestore transactions prevent double entry scans and race conditions when two devices scan the same QR at the same time.
 `/bookings/{bookingId}` is permanent history. `/active_qr_tickets/{qrId}` is temporary/live only.
+
+## Optional Camera Reader
+
+The addon also includes `camera/qr_camera_reader.py`. It opens the laptop webcam, decodes QR ids, and forwards them to:
+
+```text
+http://192.168.4.1/scan?id=<qrId>
+```
+
+Use it when you want the ESP32 buzzer/LED path without dedicated QR-reader hardware.
 
 ## QR Rules
 
