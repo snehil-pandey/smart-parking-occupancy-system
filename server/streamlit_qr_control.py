@@ -88,9 +88,16 @@ def _scan_panel(selected_area_id: str) -> None:
             st.warning("Camera image captured, but no QR code was detected.")
 
     qr_id = st.text_input("QR id", value=decoded_qr, placeholder="qr_live_...")
-    submitted = st.button("Simulate Scan", type="primary")
+    col1, col2 = st.columns(2)
+    submitted = col1.button("Simulate Scan (Cloud Only)", type="secondary")
+    hardware_trigger = col2.button("Trigger Physical Gate", type="primary")
+    esp_ip = st.text_input(
+        "ESP32 IP for hardware trigger",
+        value="192.168.4.1",
+        help="Laptop must be connected to SIT-SmartGate WiFi or the ESP32 network.",
+    )
 
-    if not submitted:
+    if not submitted and not hardware_trigger:
         st.caption("Scan flow: selected parking area -> qrId -> Firebase verification.")
         return
 
@@ -101,12 +108,16 @@ def _scan_panel(selected_area_id: str) -> None:
         st.error("Enter a QR id first.")
         return
 
-    with st.spinner("Verifying QR through Firebase transaction..."):
-        result = verify_qr_scan(
-            qr_id=qr_id,
-            location_id=selected_area_id,
-            source="streamlit_simulator",
-        )
+    if hardware_trigger:
+        with st.spinner("Sending QR to ESP32 gate..."):
+            result = _trigger_esp32_scan(esp_ip, qr_id)
+    else:
+        with st.spinner("Verifying QR through Firebase transaction..."):
+            result = verify_qr_scan(
+                qr_id=qr_id,
+                location_id=selected_area_id,
+                source="streamlit_simulator",
+            )
     _show_result(result)
     st.subheader("Ticket / booking summary")
     summary = get_ticket_debug_summary(qr_id)
@@ -263,12 +274,30 @@ def _reset_esp32_config(esp_ip: str) -> None:
         st.caption(str(exc))
 
 
+def _trigger_esp32_scan(esp_ip: str, qr_id: str) -> str:
+    try:
+        response = requests.get(
+            f"{_esp_base_url(esp_ip)}/scan",
+            params={"id": qr_id.strip()},
+            timeout=10,
+        )
+        if response.ok:
+            st.success("ESP32 gate triggered. Check buzzer/LED feedback.")
+            return response.text.strip() or RESULT_ERROR
+        st.error(f"ESP32 returned {response.status_code}: {response.text}")
+        return RESULT_ERROR
+    except requests.RequestException as exc:
+        st.error("Could not reach ESP32. Confirm WiFi and gate IP.")
+        st.caption(str(exc))
+        return RESULT_ERROR
+
+
 def _decode_qr_from_camera(camera_image: BytesIO) -> str:
     try:
         import cv2
         import numpy as np
     except ImportError:
-        st.warning("Install opencv-python-headless to decode camera QR images.")
+        st.warning("Install opencv-python to decode camera QR images.")
         return ""
 
     image_bytes = camera_image.getvalue()

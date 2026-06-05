@@ -23,7 +23,9 @@ const int BUZZER_PIN = 25;
 // --- Hardware States ---
 int entryState = 0; 
 unsigned long entryCountdownTimer = 0;
+unsigned long entryTimeoutTimer = 0;
 const int DELAY_TIME = 10000; 
+const int TIMEOUT_TIME = 30000;
 int entryDebounceCount = 0;
 bool entryStableState = HIGH;
 
@@ -111,9 +113,9 @@ void handleScan() {
   result.trim(); http.end();
 
   if (result == "ENTRY") {
-    beepShort(); digitalWrite(internalLED, HIGH); entryState = 1;                  
+    beepShort(); digitalWrite(internalLED, HIGH); entryState = 1; entryTimeoutTimer = millis();
   } else if (result == "EXIT") {
-    beepExit(); digitalWrite(internalLED, HIGH); entryState = 1;                  
+    beepExit(); digitalWrite(internalLED, HIGH); entryState = 1; entryTimeoutTimer = millis();
   } else {
     beepError(); 
   }
@@ -168,5 +170,11 @@ void loop() {
 
   if (entryState == 3 && (millis() - entryCountdownTimer >= DELAY_TIME)) {
     beepClose(); digitalWrite(internalLED, LOW); entryState = 0;                   
+  }
+
+  if (entryState == 1 && (millis() - entryTimeoutTimer >= TIMEOUT_TIME)) {
+    beepError();
+    digitalWrite(internalLED, LOW);
+    entryState = 0;
   }
 }
