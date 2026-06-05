@@ -9,6 +9,8 @@ build/
 **/coverage/
 apks/
 apk/
+release/
+report/
 *.apk
 *.aab
 apk/*.apk
