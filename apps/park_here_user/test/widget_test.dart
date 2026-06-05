@@ -122,7 +122,7 @@ void main() {
     );
   });
 
-  test('entry QR is locked before 5 minute unlock window', () {
+  test('entry QR is visible immediately for active tickets', () {
     final now = DateTime.now();
     final booking = _booking(
       id: 'book_future',
@@ -132,17 +132,10 @@ void main() {
     );
     final ticket = _ticket(booking: booking, now: now);
 
-    expect(booking.canShowEntryQr(ticket, now: now), isFalse);
-    expect(
-      booking.canShowEntryQr(
-        ticket,
-        now: booking.startTime.subtract(const Duration(minutes: 5)),
-      ),
-      isTrue,
-    );
+    expect(booking.canShowEntryQr(ticket), isTrue);
   });
 
-  test('same QR is shown again during exit window after entry', () {
+  test('same QR is shown again for exit after entry verification', () {
     final now = DateTime.now();
     final booking =
         _booking(
@@ -155,20 +148,12 @@ void main() {
           entryScannedAt: now.subtract(const Duration(minutes: 30)),
         );
     final ticket = _ticket(booking: booking, now: now).copyWith(
-      scannedOnce: true,
-      scanPhase: 'entered',
+      status: ActiveQrStatus.entryVerified,
       entryScannedAt: booking.entryScannedAt,
     );
 
-    expect(booking.canShowEntryQr(ticket, now: now), isFalse);
-    expect(booking.canShowExitQr(ticket, now: now), isFalse);
-    expect(
-      booking.canShowExitQr(
-        ticket,
-        now: booking.endTime.subtract(const Duration(minutes: 10)),
-      ),
-      isTrue,
-    );
+    expect(booking.canShowEntryQr(ticket), isFalse);
+    expect(booking.canShowExitQr(ticket), isTrue);
   });
 }
 

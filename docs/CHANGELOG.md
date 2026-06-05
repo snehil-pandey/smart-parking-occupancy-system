@@ -7,15 +7,34 @@
 - Parking area geometry now requires at least one non-duplicate gate inside the parking polygon before Save is enabled.
 - Shared parking repositories validate gate requirements before final geometry writes or opening an area, keeping Firebase writes aligned with the admin UI.
 
-### fix(user): enforce QR unlock and single active booking rules
-- User bookings now start as `confirmed`, expose their QR only during the five-minute pre-entry unlock window, and switch to `active_parking` after scanner verification.
-- Active QR tickets now store `bookingStartAt`, `bookingEndAt`, `scannedOnce`, `scanPhase`, and scan timestamps so the ESP32/Python verifier and user app share one lifecycle.
+### fix(user): remove legacy QR scan fields from active tickets
+- Active QR documents are now live-only records with `status = active` or `entry_verified`.
+- Completed, expired, and cancelled QR lifecycle endings delete `/active_qr_tickets/{qrId}` while preserving `/bookings/{bookingId}` history.
+- Added `demo/cleanup_qr_schema.py` to remove legacy `scanPhase` and `scannedOnce` fields from existing live QR documents and delete inactive live QR docs.
+
+### refactor(user): use status-only QR lifecycle
+- QR visibility is now immediate after a confirmed booking creates an `active` ticket.
+- The same QR stays visible after entry verification, and the next valid scan completes the booking through `entry_verified -> completed`.
+- Removed timing-window UI and redundant scan-state wording from user-facing documentation.
+
+### docs(user): document actual user app flow
+- Added `docs/USER_APP_FLOW.md` with source-aligned startup, map, Explore, booking, QR, notifications, profile, Firebase collection, limitation, and manual test notes.
+- Updated QR/schema/architecture docs to match the current single-status QR lifecycle.
+
+### fix(user): simplify QR display lifecycle and expiry handling
+- Active QR UI now uses live `active_qr_tickets.status` values `active` and `entry_verified`, then falls back to booking history after the live QR doc is removed.
+- Removed documentation and UI assumptions around redundant scan-state fields; expired/completed/cancelled status hides the QR from the active booking section while booking history remains preserved.
+- After entry verification, the same QR stays available for exit until the ticket status becomes `completed`, `cancelled`, or `expired`.
+
+### fix(user): enforce single active booking rules
+- User bookings now start as `confirmed`, expose their QR immediately, and switch to `active_parking` after scanner verification.
+- Active QR tickets store `bookingStartAt`, `bookingEndAt`, one canonical `status`, and scan timestamps so the verifier and user app share one lifecycle.
 - The user app blocks a second active booking while a `confirmed` or `active_parking` booking exists and shows a friendly message instead.
 
 ### fix(user): align QR UI with entry exit scan lifecycle
 - User QR UI now keeps the same opaque `qrId` for entry and exit instead of treating entry as permanent QR closure.
-- After entry verification, bookings show `Parking Active`, entry time, and an exit countdown until the ten-minute pre-exit window opens.
-- During the exit window, the same QR is shown as `Scan at exit gate`; completed/expired bookings leave active state and remain in history.
+- After entry verification, bookings show `Parking Active`, entry time, and the same QR with exit-gate guidance until the booking end time.
+- Completed/expired bookings leave active state and remain in history with their final timestamps/status.
 
 ## 0.1.0
 

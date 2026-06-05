@@ -189,20 +189,24 @@ sequenceDiagram
   App-->>User: Shows QR with opaque id only
   Gate->>Firestore: Looks up active QR by opaque id
   Firestore-->>Gate: Active ticket + booking
-  Gate->>Firestore: Consumes QR once
-  Firestore->>Firestore: Marks ticket used and booking completed
+  Gate->>Firestore: Verifies entry or exit by status
+  Firestore->>Firestore: Marks entry_verified, completed, or expired
 ```
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Active: booking created
-  Active --> Used: consumeQrTicket
-  Active --> Expired: expiresAt passes
-  Used --> [*]
-  Expired --> [*]
+  [*] --> active: booking created
+  active --> entry_verified: entry scan
+  entry_verified --> completed: exit scan before bookingEndAt
+  active --> expired: backend marks expired
+  entry_verified --> expired: backend marks expired
+  active --> cancelled: booking cancelled
+  completed --> [*]
+  expired --> [*]
+  cancelled --> [*]
 ```
 
-Booking history is never deleted. Active QR records are operational and may be marked `used` or expired.
+Booking history is never deleted. Active QR records are operational and move through `active`, `entry_verified`, `completed`, `expired`, or `cancelled`.
 
 QR codes are privacy-preserving: rendered QR data is only `qr_live_...`. User id, vehicle number, booking id, admin id, and area id are looked up through Firebase by the future gate/API, not exposed inside the QR image.
 

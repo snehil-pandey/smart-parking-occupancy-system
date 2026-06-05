@@ -1,4 +1,4 @@
-enum ActiveQrStatus { active, used, expired, cancelled }
+enum ActiveQrStatus { active, entryVerified, completed, expired, cancelled }
 
 class ActiveQrTicket {
   const ActiveQrTicket({
@@ -12,8 +12,6 @@ class ActiveQrTicket {
     required this.expiresAt,
     required this.bookingStartAt,
     required this.bookingEndAt,
-    this.scannedOnce = false,
-    this.scanPhase = 'entry_pending',
     this.entryScannedAt,
     this.exitScannedAt,
   });
@@ -28,35 +26,16 @@ class ActiveQrTicket {
   final DateTime expiresAt;
   final DateTime bookingStartAt;
   final DateTime bookingEndAt;
-  final bool scannedOnce;
-  final String scanPhase;
   final DateTime? entryScannedAt;
   final DateTime? exitScannedAt;
 
-  DateTime get unlockAt => bookingStartAt.subtract(const Duration(minutes: 5));
+  bool get canScanEntry => status == ActiveQrStatus.active;
 
-  DateTime get exitUnlockAt =>
-      bookingEndAt.subtract(const Duration(minutes: 10));
+  bool get canScanExit =>
+      status == ActiveQrStatus.entryVerified && exitScannedAt == null;
 
-  DateTime get exitClosesAt => bookingEndAt.add(const Duration(minutes: 10));
-
-  bool isEntryUnlockedAt(DateTime now) =>
-      !now.isBefore(unlockAt) &&
-      now.isBefore(bookingEndAt) &&
-      status == ActiveQrStatus.active &&
-      !scannedOnce &&
-      scanPhase == 'entry_pending';
-
-  bool isExitUnlockedAt(DateTime now) =>
-      !now.isBefore(exitUnlockAt) &&
-      !now.isAfter(exitClosesAt) &&
-      status == ActiveQrStatus.active &&
-      scannedOnce &&
-      entryScannedAt != null &&
-      exitScannedAt == null &&
-      scanPhase == 'entered';
-
-  bool isUnlockedAt(DateTime now) => isEntryUnlockedAt(now);
+  bool get isOpen =>
+      status == ActiveQrStatus.active || status == ActiveQrStatus.entryVerified;
 
   ActiveQrTicket copyWith({
     String? qrId,
@@ -69,8 +48,6 @@ class ActiveQrTicket {
     DateTime? expiresAt,
     DateTime? bookingStartAt,
     DateTime? bookingEndAt,
-    bool? scannedOnce,
-    String? scanPhase,
     DateTime? entryScannedAt,
     DateTime? exitScannedAt,
   }) {
@@ -85,8 +62,6 @@ class ActiveQrTicket {
       expiresAt: expiresAt ?? this.expiresAt,
       bookingStartAt: bookingStartAt ?? this.bookingStartAt,
       bookingEndAt: bookingEndAt ?? this.bookingEndAt,
-      scannedOnce: scannedOnce ?? this.scannedOnce,
-      scanPhase: scanPhase ?? this.scanPhase,
       entryScannedAt: entryScannedAt ?? this.entryScannedAt,
       exitScannedAt: exitScannedAt ?? this.exitScannedAt,
     );
@@ -98,13 +73,13 @@ class ActiveQrTicket {
     'userId': userId,
     'adminId': adminId,
     'areaId': areaId,
-    'status': status.name,
+    'status': status == ActiveQrStatus.entryVerified
+        ? 'entry_verified'
+        : status.name,
     'createdAt': createdAt.toIso8601String(),
     'expiresAt': expiresAt.toIso8601String(),
     'bookingStartAt': bookingStartAt.toIso8601String(),
     'bookingEndAt': bookingEndAt.toIso8601String(),
-    'scannedOnce': scannedOnce,
-    'scanPhase': scanPhase,
     'entryScannedAt': entryScannedAt?.toIso8601String(),
     'exitScannedAt': exitScannedAt?.toIso8601String(),
   };

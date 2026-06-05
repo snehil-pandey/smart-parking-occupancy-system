@@ -62,34 +62,22 @@ class Booking {
   bool get isAwaitingEntry =>
       status == BookingStatus.active || status == BookingStatus.confirmed;
 
-  bool get isParkingActive =>
-      status == BookingStatus.activeParking || entryVerified;
+  bool get isParkingActive => status == BookingStatus.activeParking;
 
   bool get isCurrentSession => isAwaitingEntry || isParkingActive;
 
-  DateTime get qrUnlockAt => startTime.subtract(const Duration(minutes: 5));
-
-  DateTime get exitQrUnlockAt => endTime.subtract(const Duration(minutes: 10));
-
-  DateTime get exitQrClosesAt => endTime.add(const Duration(minutes: 10));
-
-  bool isQrUnlockedAt(DateTime now) =>
-      !now.isBefore(qrUnlockAt) && now.isBefore(endTime);
-
-  bool canShowEntryQr(ActiveQrTicket? ticket, {DateTime? now}) {
-    final currentTime = now ?? DateTime.now();
+  bool canShowEntryQr(ActiveQrTicket? ticket) {
     return status == BookingStatus.confirmed &&
         ticket != null &&
-        ticket.isEntryUnlockedAt(currentTime);
+        ticket.canScanEntry;
   }
 
-  bool canShowExitQr(ActiveQrTicket? ticket, {DateTime? now}) {
-    final currentTime = now ?? DateTime.now();
+  bool canShowExitQr(ActiveQrTicket? ticket) {
     return status == BookingStatus.activeParking &&
         entryVerified &&
         exitScannedAt == null &&
         ticket != null &&
-        ticket.isExitUnlockedAt(currentTime);
+        ticket.canScanExit;
   }
 
   Booking copyWith({

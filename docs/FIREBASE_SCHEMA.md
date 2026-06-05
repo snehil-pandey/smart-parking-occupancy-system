@@ -174,7 +174,7 @@ Recommended query pattern:
 | `endTime` | timestamp/string | Booking end |
 | `bookingEndAt` | timestamp/string | Canonical reserved end time used by scanner/ESP32 verification |
 | `price` | number | Calculated booking amount |
-| `status` | string | `pending`, `confirmed`, `active`, `active_parking`, `completed`, `cancelled`, `expired` |
+| `status` | string | Canonical values: `confirmed`, `active_parking`, `completed`, `cancelled`, `expired` |
 | `qrPayload` | string | Opaque QR id only, same value as `qrId` for new bookings |
 | `cancellationFine` | number | `10` when area `pricePerHour > 10`, otherwise `0` |
 | `cancelledAt` | timestamp/string/null | Set when user cancels |
@@ -185,7 +185,7 @@ Recommended query pattern:
 
 ## `/active_qr_tickets/{qrId}`
 
-Active QR documents are short-lived operational records. Do not delete the booking record when a QR is used.
+Active QR documents are temporary live records for the current booking lifecycle. The permanent booking/history record is `/bookings/{bookingId}`. When the QR lifecycle ends, delete `/active_qr_tickets/{qrId}` and keep the booking record.
 
 | Field | Type | Notes |
 | --- | --- | --- |
@@ -194,27 +194,24 @@ Active QR documents are short-lived operational records. Do not delete the booki
 | `userId` | string | Driver id |
 | `adminId` | string | Parking owner id |
 | `areaId` | string | Parking area id |
-| `status` | string | `active`, `used`, `expired`, or `cancelled` |
+| `status` | string | `active` or `entry_verified` only |
 | `createdAt` | timestamp/string | Ticket creation time |
-| `expiresAt` | timestamp/string | End of QR validity window, normally `bookingEndAt + 10 minutes` |
+| `expiresAt` | timestamp/string | Informational end time copied from the booking; not a scan-window gate |
 | `bookingStartAt` | timestamp/string | Reserved start time copied from the booking |
 | `bookingEndAt` | timestamp/string | Reserved end time copied from the booking |
-| `scannedOnce` | boolean | `false` until a successful entry scan; prevents duplicate entry |
-| `scanPhase` | string | `entry_pending`, `entered`, `exit_pending`, or `exited` |
 | `entryScannedAt` | timestamp/string/null | Entry scan timestamp |
-| `exitScannedAt` | timestamp/string/null | Exit scan timestamp when supported |
+| `exitScannedAt` | timestamp/string/null | Exit scan timestamp when the session is completed |
 
 QR privacy rule: QR images should encode only the opaque `qrId`, for example `qr_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`. They must not encode `userId`, `adminId`, `areaId`, vehicle number, booking JSON, or timestamps. Those fields are resolved from Firestore by the standalone scanner, ESP32 flow, or a future gate/API.
 
 User QR rules:
 
 - The user app allows only one active parking booking at a time. `confirmed` and `active_parking` are active user sessions.
-- Entry QR is visible only when the booking is `confirmed`, the linked ticket is `active`, and the current time is at least five minutes before `bookingStartAt`.
-- Before the entry unlock window, the user app shows a countdown instead of the QR.
-- After the ESP32/Python bridge writes `active_parking`, `entryVerified`, and `entryScannedAt`, the user app shows `Parking Active` from Firestore snapshots.
-- The same `qrId` is shown again for exit only from `bookingEndAt - 10 minutes` through `bookingEndAt + 10 minutes` while the booking is `active_parking`.
-- After exit, the bridge writes `bookings.status = completed`, `bookings.exitScannedAt`, `active_qr_tickets.scanPhase = exited`, and `active_qr_tickets.status = used`.
-- New QR ids are generated only for new bookings. Used QR ids must never be reactivated.
+- Entry QR is visible immediately when the booking is `confirmed` and the linked ticket is `active`.
+- After scanner verification writes `bookings.status = active_parking`, `entryVerified = true`, `entryScannedAt`, and `active_qr_tickets.status = entry_verified`, the user app shows the same QR for exit while the live QR document exists.
+- After exit, the verifier writes `bookings.status = completed`, `bookings.exitScannedAt`, optional `completedAt`, then deletes `/active_qr_tickets/{qrId}`.
+- If a booking expires or is cancelled, the booking stores the final status/timestamps and `/active_qr_tickets/{qrId}` is deleted.
+- New QR ids are generated only for new bookings. Completed, expired, or cancelled QR ids must never be reactivated.
 
 ## `/notifications/{notificationId}`
 
@@ -376,5 +373,5 @@ The app should continue using `ImageRepository`, swapping `FirestoreImageReposit
 - Demo reset clears the supported demo collections, including metrics and QR scan logs, but does not delete or rebuild Firestore composite indexes.
 - Firestore indexes are managed through the root `firestore.indexes.json` file and `firebase deploy --only firestore:indexes` from the project root.
 - Images are not stored on parking area documents; parking areas store image ids only.
-- Active QR tickets are operational records. Booking history remains in `/bookings`.
-- Cancellation never deletes booking history. It marks `/bookings/{bookingId}.status = cancelled`, stores fine metadata, expires the active QR if present, and releases the reserved slot once.
+- Active QR tickets are live-only records. Booking history remains in `/bookings`.
+- Cancellation never deletes booking history. It marks `/bookings/{bookingId}.status = cancelled`, stores fine metadata, deletes the active QR doc if present, and releases the reserved slot once.

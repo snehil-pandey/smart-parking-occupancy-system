@@ -60,3 +60,6 @@ local.properties
 
 # Temporary logs
 *.log
+
+# Local report working files
+report/

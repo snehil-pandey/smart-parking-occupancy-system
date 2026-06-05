@@ -96,10 +96,8 @@ class FirebaseBookingRepository implements BookingRepository {
           activeQrDoc.exists &&
           activeQrDoc.data() != null) {
         final active = FirestoreModelMapper.activeQrFromDoc(activeQrDoc);
-        if (active.status == ActiveQrStatus.active) {
-          transaction.update(_activeQrTickets.doc(active.qrId), {
-            'status': ActiveQrStatus.expired.name,
-          });
+        if (_isOpenQrStatus(active.status)) {
+          transaction.delete(_activeQrTickets.doc(active.qrId));
         }
       }
       return updated;
@@ -129,11 +127,9 @@ class FirebaseBookingRepository implements BookingRepository {
         areaId: booking.parkingLocationId,
         status: ActiveQrStatus.active,
         createdAt: now,
-        expiresAt: booking.endTime.add(const Duration(minutes: 10)),
+        expiresAt: booking.endTime,
         bookingStartAt: booking.startTime,
         bookingEndAt: booking.endTime,
-        scannedOnce: false,
-        scanPhase: 'entry_pending',
       );
       transaction.set(
         ticketRef,
@@ -157,17 +153,7 @@ class FirebaseBookingRepository implements BookingRepository {
         .get();
     final ticket = _activeTickets(
       snapshot,
-    ).where((ticket) => ticket.status == ActiveQrStatus.active).firstOrNull;
-    if (ticket == null) {
-      return null;
-    }
-    if (ticket.exitClosesAt.isBefore(DateTime.now())) {
-      await updateStatus(bookingId: bookingId, status: BookingStatus.expired);
-      await _activeQrTickets.doc(ticket.qrId).update({
-        'status': ActiveQrStatus.expired.name,
-      });
-      return null;
-    }
+    ).where((ticket) => _isOpenQrStatus(ticket.status)).firstOrNull;
     return ticket;
   }
 
@@ -177,9 +163,9 @@ class FirebaseBookingRepository implements BookingRepository {
         .where('bookingId', isEqualTo: bookingId)
         .snapshots()
         .map(
-          (snapshot) => _activeTickets(snapshot)
-              .where((ticket) => ticket.status == ActiveQrStatus.active)
-              .firstOrNull,
+          (snapshot) => _activeTickets(
+            snapshot,
+          ).where((ticket) => _isOpenQrStatus(ticket.status)).firstOrNull,
         );
   }
 
@@ -192,25 +178,31 @@ class FirebaseBookingRepository implements BookingRepository {
         throw StateError('QR ticket $qrId is not active.');
       }
       final ticket = FirestoreModelMapper.activeQrFromDoc(ticketDoc);
-      if (ticket.status != ActiveQrStatus.active) {
+      if (!_isOpenQrStatus(ticket.status)) {
         throw StateError('QR ticket $qrId is not active.');
       }
-      if (ticket.scannedOnce || ticket.scanPhase != 'entry_pending') {
-        throw StateError('QR ticket $qrId has already verified entry.');
-      }
       final now = DateTime.now();
-      transaction.update(ticketRef, {
-        'scannedOnce': true,
-        'scanPhase': 'entered',
-        'entryScannedAt': Timestamp.fromDate(now),
-        'updatedAt': Timestamp.fromDate(now),
-      });
-      transaction.update(_bookings.doc(ticket.bookingId), {
-        'status': 'active_parking',
-        'entryVerified': true,
-        'entryScannedAt': Timestamp.fromDate(now),
-        'updatedAt': Timestamp.fromDate(now),
-      });
+      if (ticket.status == ActiveQrStatus.active) {
+        transaction.update(ticketRef, {
+          'status': 'entry_verified',
+          'entryScannedAt': Timestamp.fromDate(now),
+          'updatedAt': Timestamp.fromDate(now),
+        });
+        transaction.update(_bookings.doc(ticket.bookingId), {
+          'status': 'active_parking',
+          'entryVerified': true,
+          'entryScannedAt': Timestamp.fromDate(now),
+          'updatedAt': Timestamp.fromDate(now),
+        });
+      } else {
+        transaction.delete(ticketRef);
+        transaction.update(_bookings.doc(ticket.bookingId), {
+          'status': BookingStatus.completed.name,
+          'exitScannedAt': Timestamp.fromDate(now),
+          'completedAt': Timestamp.fromDate(now),
+          'updatedAt': Timestamp.fromDate(now),
+        });
+      }
     });
   }
 
@@ -260,11 +252,7 @@ class FirebaseBookingRepository implements BookingRepository {
       if (active == null) {
         return;
       }
-      await _activeQrTickets.doc(active.qrId).update({
-        'status': status == BookingStatus.completed
-            ? ActiveQrStatus.used.name
-            : ActiveQrStatus.expired.name,
-      });
+      await _activeQrTickets.doc(active.qrId).delete();
     }
   }
 
@@ -274,7 +262,7 @@ class FirebaseBookingRepository implements BookingRepository {
         .get();
     return _activeTickets(
       snapshot,
-    ).where((ticket) => ticket.status == ActiveQrStatus.active).firstOrNull;
+    ).where((ticket) => _isOpenQrStatus(ticket.status)).firstOrNull;
   }
 
   CollectionReference<Map<String, dynamic>> get _bookings =>
@@ -297,4 +285,7 @@ class FirebaseBookingRepository implements BookingRepository {
     return snapshot.docs.map(FirestoreModelMapper.activeQrFromDoc).toList()
       ..sort((a, b) => a.expiresAt.compareTo(b.expiresAt));
   }
+
+  bool _isOpenQrStatus(ActiveQrStatus status) =>
+      status == ActiveQrStatus.active || status == ActiveQrStatus.entryVerified;
 }

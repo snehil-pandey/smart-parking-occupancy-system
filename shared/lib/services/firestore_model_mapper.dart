@@ -26,6 +26,8 @@ class FirestoreModelMapper {
     'entryScannedAt',
     'exitScannedAt',
     'usedAt',
+    'completedAt',
+    'expiredAt',
     'cancelledAt',
   };
 
@@ -159,8 +161,6 @@ class FirestoreModelMapper {
         json['bookingStartAt'] ?? json['createdAt'],
       ),
       bookingEndAt: _requiredDate(json['bookingEndAt'] ?? json['expiresAt']),
-      scannedOnce: json['scannedOnce'] as bool? ?? false,
-      scanPhase: json['scanPhase'] as String? ?? 'entry_pending',
       entryScannedAt: _nullableDate(json['entryScannedAt']),
       exitScannedAt: _nullableDate(json['exitScannedAt']),
     );
